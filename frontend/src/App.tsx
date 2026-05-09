@@ -265,6 +265,11 @@ function App() {
       <section className="card">
         <h2>Where to Play</h2>
         <h3>Sonos Speakers</h3>
+        <p className="hint">
+          If this list is empty while using Docker, set <code>SONOS_SEED_IPS</code> on the API to the LAN IP of any Sonos
+          player (comma-separated for retries). Multicast discovery rarely works from a bridge network.
+        </p>
+        {speakers.length === 0 ? <p className="hint">No speakers returned yet — check API logs and SONOS_SEED_IPS.</p> : null}
         {speakers.map((speaker) => (
           <label key={speaker.id} className="checkboxRow">
             <input type="checkbox" checked={selectedSpeakers.includes(speaker.id)} onChange={() => toggleSpeaker(speaker.id)} />

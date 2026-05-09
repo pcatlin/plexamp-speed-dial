@@ -36,6 +36,30 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("plex_ssl_verify", "PLEX_SSL_VERIFY"),
     )
 
+    # Sonos / SoCo: multicast discovery often fails in Docker; use SONOS_SEED_IPS (LAN IP of any player).
+    sonos_discover_timeout: int = Field(
+        default=10,
+        ge=2,
+        le=60,
+        validation_alias=AliasChoices("sonos_discover_timeout", "SONOS_DISCOVER_TIMEOUT"),
+    )
+    sonos_seed_ips: str = Field(
+        default="",
+        validation_alias=AliasChoices("sonos_seed_ips", "SONOS_SEED_IPS"),
+    )
+    sonos_allow_network_scan: bool = Field(
+        default=True,
+        validation_alias=AliasChoices("sonos_allow_network_scan", "SONOS_ALLOW_NETWORK_SCAN"),
+    )
+    sonos_interface_addr: str = Field(
+        default="",
+        validation_alias=AliasChoices("sonos_interface_addr", "SONOS_INTERFACE_ADDR"),
+    )
+    sonos_demo_fallback: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("sonos_demo_fallback", "SONOS_DEMO_FALLBACK"),
+    )
+
     model_config = SettingsConfigDict(
         env_file=_DOTENV_FILES if _DOTENV_FILES else None,
         env_file_encoding="utf-8",

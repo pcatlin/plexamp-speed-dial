@@ -172,4 +172,5 @@ npm test
 - If you get **401** from Plex, ensure **Settings → Network → List of IP addresses allowed without auth** covers the subnet of the Docker host/API (or Plex will reject APIs that do not behave like a LAN client session).
 - For **HTTPS** to Plex with a self-signed certificate, try plain **`http://...:32400`**, or set **`PLEX_SSL_VERIFY=false`** on the backend (trusted LAN only).
 - Media lists require at least one **Music** library on the Plex server that your account can read.
-- Sonos discovery may still fall back to placeholder speakers when no units are reachable from the API host.
+- **Sonos in Docker:** discovery uses SSDP multicast, which usually **does not cross Docker’s default bridge**. Set **`SONOS_SEED_IPS`** to the LAN IP of **one** Sonos speaker; the API opens TCP to that device and lists **all players** in the household via `visible_zones`. On **Linux** you can alternatively run the API with **`network_mode: host`** (not supported the same way on Docker Desktop for Mac).
+- Optional **`SONOS_DEMO_FALLBACK=true`** restores fake “Living Room / Kitchen” entries for UI testing only.
