@@ -86,8 +86,13 @@ class PlaybackService:
                 )
             library_key = station.key
         else:
-            libtype = getattr(item, "type", None) or ""
-            library_key = append_type_if_missing(item.key or "", libtype)
+            libtype = (getattr(item, "type", None) or "").lower()
+            raw_key = item.key or ""
+            # Playlists: keep `/playlist/{id}` as-is; do not append search type=15 (breaks Plexamp).
+            if libtype == "playlist":
+                library_key = raw_key
+            else:
+                library_key = append_type_if_missing(raw_key, libtype)
 
         uri = build_server_playback_uri(
             machine_identifier=pms.machineIdentifier,

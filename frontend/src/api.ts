@@ -89,7 +89,6 @@ export const api = {
   runtimeSettings: () => request<RuntimeSettings>("/settings/runtime"),
   saveRuntimeSettings: (payload: RuntimeSettingsPayload) =>
     request<RuntimeSettings>("/settings/runtime", { method: "PUT", body: JSON.stringify(payload) }),
-  health: () => request<{ status: string }>("/health"),
   authStatus: () => request<{ connected: boolean; username?: string }>("/auth/plex/status"),
   startAuth: () => request<{ pin_id: string; code: string; auth_url: string }>("/auth/plex/start", { method: "POST" }),
   pollPlexPin: (pinId: string) =>

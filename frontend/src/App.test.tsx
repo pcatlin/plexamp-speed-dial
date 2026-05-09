@@ -1,4 +1,3 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
@@ -33,12 +32,7 @@ globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
 
 describe("App", () => {
   it("renders and executes play action", async () => {
-    const client = new QueryClient();
-    render(
-      <QueryClientProvider client={client}>
-        <App />
-      </QueryClientProvider>,
-    );
+    render(<App />);
 
     await waitFor(() => expect(screen.getByText("Plexamp Sonos Speed Dial")).toBeInTheDocument());
     const playButton = screen.getByRole("button", { name: "Play now" });

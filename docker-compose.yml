@@ -35,18 +35,12 @@ services:
     command: sh -c "python -m app.db.init_db && uvicorn app.main:app --host 0.0.0.0 --port 8000"
     ports:
       - "8000:8000"
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
 
   web:
     build:
       context: ./frontend
     depends_on:
-      api:
-        condition: service_healthy
+      - api
     ports:
       - "3000:80"
 

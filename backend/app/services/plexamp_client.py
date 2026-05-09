@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
-from urllib.parse import quote, urlencode, urlparse
+import logging
+import re
+from urllib.parse import urlencode, urlparse
 
 import requests
+
+_log = logging.getLogger(__name__)
 
 
 def sanitize_plexamp_base(player_url: str) -> str:
@@ -38,13 +42,15 @@ def parse_pms_host_port_protocol(server_url: str) -> tuple[str, int, str]:
 
 def build_server_playback_uri(machine_identifier: str, library_identifier: str, library_key: str) -> str:
     """
-    Build `server://{machine}/{identifier}{encoded_key}` used by Plexamp createPlayQueue.
+    Build `server://{machine}/{identifier}{path}` for Plexamp createPlayQueue.
 
-    library_key should be the PMS-relative path + optional query (e.g. `/library/metadata/123` or
-    artist radio `/library/metadata/…/station/…?type=10`).
+    Must match plexapi PlayQueue.create: literal slashes in the path, not slash-encoded (%2F).
+    library_key is e.g. `/playlist/123`, `/library/metadata/456`, or station paths with `?type=10`.
     """
-    encoded = quote(library_key, safe="")
-    return f"server://{machine_identifier}/{library_identifier}{encoded}"
+    path = (library_key or "").strip()
+    if path and not path.startswith("/"):
+        path = "/" + path
+    return f"server://{machine_identifier}/{library_identifier}{path}"
 
 
 def append_type_if_missing(library_key: str, libtype: str) -> str:
@@ -84,4 +90,12 @@ def create_play_queue(
         }
     )
     url = f"{base}/player/playback/createPlayQueue?{query}"
-    return requests.get(url, timeout=timeout)
+    safe = re.sub(r"token=[^&]*", "token=<redacted>", url)
+    _log.info("Plexamp createPlayQueue server_uri=%s", server_uri)
+    _log.info("Plexamp createPlayQueue GET %s", safe)
+    # Uvicorn often hides app.* INFO on stdout; duplicate so Docker logs always show playback debugging.
+    print(f"[plexamp] server_uri={server_uri}", flush=True)
+    print(f"[plexamp] createPlayQueue GET {safe}", flush=True)
+    resp = requests.get(url, timeout=timeout)
+    print(f"[plexamp] createPlayQueue HTTP {resp.status_code} body_len={len(resp.text or '')}", flush=True)
+    return resp

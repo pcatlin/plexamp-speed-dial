@@ -10,6 +10,19 @@ from app.services.runtime_setup import effective_plex_url, get_or_create_runtime
 
 _logger = logging.getLogger(__name__)
 
+
+def _configure_app_logging() -> None:
+    """Route app.* INFO logs to stderr (visible in `docker compose logs` alongside uvicorn access)."""
+    root_app = logging.getLogger("app")
+    root_app.setLevel(logging.INFO)
+    if not root_app.handlers:
+        h = logging.StreamHandler()
+        h.setFormatter(logging.Formatter("%(levelname)s %(name)s: %(message)s"))
+        root_app.addHandler(h)
+
+
+_configure_app_logging()
+
 app = FastAPI(title=settings.app_name, version="0.1.0")
 app.add_middleware(
     CORSMiddleware,
