@@ -1,0 +1,776 @@
+openapi: 3.1.0
+info:
+  title: Plexamp Sonos Speed Dial API
+  version: 0.1.0
+paths:
+  /api/v1/health:
+    get:
+      summary: Health
+      operationId: health_api_v1_health_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+  /api/v1/auth/plex/start:
+    post:
+      summary: Plex Start
+      operationId: plex_start_api_v1_auth_plex_start_post
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlexAuthStartResponse'
+  /api/v1/auth/plex/pin/{pin_id}:
+    get:
+      summary: Plex Poll Pin
+      description: Poll OAuth PIN; when login completes, persist token and return
+        connected.
+      operationId: plex_poll_pin_api_v1_auth_plex_pin__pin_id__get
+      parameters:
+      - name: pin_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Pin Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlexPinPollResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/auth/plex/complete:
+    post:
+      summary: Plex Complete
+      description: Dev escape hatch (mock token) or single-shot PIN poll if the token
+        is ready.
+      operationId: plex_complete_api_v1_auth_plex_complete_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlexAuthCompleteRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlexAuthStatusResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/auth/plex/status:
+    get:
+      summary: Plex Status
+      operationId: plex_status_api_v1_auth_plex_status_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlexAuthStatusResponse'
+  /api/v1/auth/plex/server-test:
+    get:
+      summary: Plex Server Test
+      operationId: plex_server_test_api_v1_auth_plex_server_test_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlexServerTestResponse'
+  /api/v1/media/playlists:
+    get:
+      summary: Media Playlists
+      operationId: media_playlists_api_v1_media_playlists_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+  /api/v1/media/artists:
+    get:
+      summary: Media Artists
+      operationId: media_artists_api_v1_media_artists_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+  /api/v1/media/albums:
+    get:
+      summary: Media Albums
+      operationId: media_albums_api_v1_media_albums_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+  /api/v1/media/tracks:
+    get:
+      summary: Media Tracks
+      operationId: media_tracks_api_v1_media_tracks_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+  /api/v1/media/collections:
+    get:
+      summary: Media Collections
+      operationId: media_collections_api_v1_media_collections_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+  /api/v1/media/random-album:
+    get:
+      summary: Media Random Album
+      operationId: media_random_album_api_v1_media_random_album_get
+      parameters:
+      - name: collection_id
+        in: query
+        required: true
+        schema:
+          type: string
+          title: Collection Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/sonos/speakers:
+    get:
+      summary: Sonos Speakers
+      operationId: sonos_speakers_api_v1_sonos_speakers_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/SonosSpeaker'
+                type: array
+                title: Response Sonos Speakers Api V1 Sonos Speakers Get
+  /api/v1/sonos/group-presets:
+    get:
+      summary: Get Presets
+      operationId: get_presets_api_v1_sonos_group_presets_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/SonosGroupPresetRead'
+                type: array
+                title: Response Get Presets Api V1 Sonos Group Presets Get
+    post:
+      summary: Create Preset
+      operationId: create_preset_api_v1_sonos_group_presets_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SonosGroupPresetCreate'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IdResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/sonos/group-presets/{preset_id}:
+    delete:
+      summary: Delete Preset
+      operationId: delete_preset_api_v1_sonos_group_presets__preset_id__delete
+      parameters:
+      - name: preset_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Preset Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+                title: Response Delete Preset Api V1 Sonos Group Presets  Preset Id  Delete
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/players:
+    get:
+      summary: Players
+      operationId: players_api_v1_players_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/PlayerRead'
+                type: array
+                title: Response Players Api V1 Players Get
+    post:
+      summary: Create Player
+      operationId: create_player_api_v1_players_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlayerCreate'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IdResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/players/{player_id}:
+    delete:
+      summary: Delete Player
+      operationId: delete_player_api_v1_players__player_id__delete
+      parameters:
+      - name: player_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Player Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+                title: Response Delete Player Api V1 Players  Player Id  Delete
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/play:
+    post:
+      summary: Play
+      operationId: play_api_v1_play_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlayRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlayResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/speed-dial:
+    get:
+      summary: Speed Dial
+      operationId: speed_dial_api_v1_speed_dial_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/SpeedDialRead'
+                type: array
+                title: Response Speed Dial Api V1 Speed Dial Get
+    post:
+      summary: Create Speed Dial
+      operationId: create_speed_dial_api_v1_speed_dial_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SpeedDialCreate'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IdResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/speed-dial/{favorite_id}:
+    delete:
+      summary: Delete Speed Dial
+      operationId: delete_speed_dial_api_v1_speed_dial__favorite_id__delete
+      parameters:
+      - name: favorite_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Favorite Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+                title: Response Delete Speed Dial Api V1 Speed Dial  Favorite Id  Delete
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+components:
+  schemas:
+    HTTPValidationError:
+      properties:
+        detail:
+          items:
+            $ref: '#/components/schemas/ValidationError'
+          type: array
+          title: Detail
+      type: object
+      title: HTTPValidationError
+    HealthResponse:
+      properties:
+        status:
+          type: string
+          title: Status
+          default: ok
+      type: object
+      title: HealthResponse
+    IdResponse:
+      properties:
+        id:
+          type: integer
+          minimum: 1.0
+          title: Id
+      type: object
+      required:
+      - id
+      title: IdResponse
+    PlayRequest:
+      properties:
+        media_type:
+          type: string
+          enum:
+          - playlist
+          - album
+          - artist
+          - track
+          - random_album
+          title: Media Type
+        media_id:
+          type: string
+          title: Media Id
+        player_id:
+          type: integer
+          title: Player Id
+        speaker_ids:
+          items:
+            type: string
+          type: array
+          title: Speaker Ids
+        preset_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Preset Id
+      type: object
+      required:
+      - media_type
+      - media_id
+      - player_id
+      title: PlayRequest
+    PlayResponse:
+      properties:
+        status:
+          type: string
+          title: Status
+        details:
+          type: string
+          title: Details
+      type: object
+      required:
+      - status
+      - details
+      title: PlayResponse
+    PlayerCreate:
+      properties:
+        name:
+          type: string
+          title: Name
+        host:
+          type: string
+          title: Host
+        port:
+          type: integer
+          title: Port
+          default: 32500
+        is_active:
+          type: boolean
+          title: Is Active
+          default: true
+      type: object
+      required:
+      - name
+      - host
+      title: PlayerCreate
+    PlayerRead:
+      properties:
+        name:
+          type: string
+          title: Name
+        host:
+          type: string
+          title: Host
+        port:
+          type: integer
+          title: Port
+          default: 32500
+        is_active:
+          type: boolean
+          title: Is Active
+          default: true
+        id:
+          type: integer
+          title: Id
+      type: object
+      required:
+      - name
+      - host
+      - id
+      title: PlayerRead
+    PlexAuthCompleteRequest:
+      properties:
+        pin_id:
+          type: string
+          title: Pin Id
+        code:
+          type: string
+          title: Code
+        mock_token:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Mock Token
+        username:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Username
+      type: object
+      required:
+      - pin_id
+      - code
+      title: PlexAuthCompleteRequest
+    PlexAuthStartResponse:
+      properties:
+        pin_id:
+          type: string
+          title: Pin Id
+        code:
+          type: string
+          title: Code
+        auth_url:
+          type: string
+          title: Auth Url
+      type: object
+      required:
+      - pin_id
+      - code
+      - auth_url
+      title: PlexAuthStartResponse
+    PlexAuthStatusResponse:
+      properties:
+        connected:
+          type: boolean
+          title: Connected
+        username:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Username
+      type: object
+      required:
+      - connected
+      title: PlexAuthStatusResponse
+    PlexPinPollResponse:
+      properties:
+        status:
+          type: string
+          enum:
+          - pending
+          - connected
+          title: Status
+        username:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Username
+      type: object
+      required:
+      - status
+      title: PlexPinPollResponse
+    PlexServerTestResponse:
+      properties:
+        ok:
+          type: boolean
+          title: Ok
+        configured_url:
+          type: string
+          title: Configured Url
+          default: ''
+        friendly_name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Friendly Name
+        music_library_sections:
+          items:
+            type: string
+          type: array
+          title: Music Library Sections
+        ssl_verify_enabled:
+          type: boolean
+          title: Ssl Verify Enabled
+          default: true
+        error_detail:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Error Detail
+      type: object
+      required:
+      - ok
+      title: PlexServerTestResponse
+    SonosGroupPresetCreate:
+      properties:
+        name:
+          type: string
+          title: Name
+        speaker_ids:
+          items:
+            type: string
+          type: array
+          title: Speaker Ids
+      type: object
+      required:
+      - name
+      title: SonosGroupPresetCreate
+    SonosGroupPresetRead:
+      properties:
+        name:
+          type: string
+          title: Name
+        speaker_ids:
+          items:
+            type: string
+          type: array
+          title: Speaker Ids
+        id:
+          type: integer
+          title: Id
+      type: object
+      required:
+      - name
+      - id
+      title: SonosGroupPresetRead
+    SonosSpeaker:
+      properties:
+        id:
+          type: string
+          title: Id
+        name:
+          type: string
+          title: Name
+        ip:
+          type: string
+          title: Ip
+      type: object
+      required:
+      - id
+      - name
+      - ip
+      title: SonosSpeaker
+    SpeedDialCreate:
+      properties:
+        label:
+          type: string
+          title: Label
+        media_type:
+          type: string
+          enum:
+          - playlist
+          - album
+          - artist
+          - track
+          - random_album
+          title: Media Type
+        media_id:
+          type: string
+          title: Media Id
+        player_id:
+          type: integer
+          title: Player Id
+        speaker_ids:
+          items:
+            type: string
+          type: array
+          title: Speaker Ids
+        preset_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Preset Id
+      type: object
+      required:
+      - label
+      - media_type
+      - media_id
+      - player_id
+      title: SpeedDialCreate
+    SpeedDialRead:
+      properties:
+        label:
+          type: string
+          title: Label
+        media_type:
+          type: string
+          enum:
+          - playlist
+          - album
+          - artist
+          - track
+          - random_album
+          title: Media Type
+        media_id:
+          type: string
+          title: Media Id
+        player_id:
+          type: integer
+          title: Player Id
+        speaker_ids:
+          items:
+            type: string
+          type: array
+          title: Speaker Ids
+        preset_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Preset Id
+        id:
+          type: integer
+          title: Id
+      type: object
+      required:
+      - label
+      - media_type
+      - media_id
+      - player_id
+      - id
+      title: SpeedDialRead
+    ValidationError:
+      properties:
+        loc:
+          items:
+            anyOf:
+            - type: string
+            - type: integer
+          type: array
+          title: Location
+        msg:
+          type: string
+          title: Message
+        type:
+          type: string
+          title: Error Type
+        input:
+          title: Input
+        ctx:
+          type: object
+          title: Context
+      type: object
+      required:
+      - loc
+      - msg
+      - type
+      title: ValidationError

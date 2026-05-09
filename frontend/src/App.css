@@ -1,0 +1,90 @@
+.container {
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 1rem;
+}
+
+.card {
+  background: #ffffff;
+  border: 1px solid #d7d7d7;
+  border-radius: 12px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+.tabRow {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+
+.checkboxRow {
+  display: block;
+  margin-bottom: 0.5rem;
+}
+
+button {
+  padding: 0.55rem 0.8rem;
+  border-radius: 10px;
+  border: 1px solid #b0b0b0;
+  background: #f5f5f5;
+}
+
+button.active {
+  background: #111827;
+  color: #fff;
+}
+
+button.primary {
+  background: #2d6cdf;
+  color: #fff;
+}
+
+button.danger {
+  background: #fff;
+  color: #b00020;
+}
+
+select {
+  width: 100%;
+  padding: 0.55rem;
+  border-radius: 10px;
+  margin-bottom: 0.75rem;
+}
+
+.grid {
+  display: grid;
+  gap: 0.5rem;
+  grid-template-columns: 1fr;
+}
+
+.favorite {
+  border: 1px solid #ddd;
+  border-radius: 10px;
+  padding: 0.6rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.sticky {
+  position: sticky;
+  bottom: 0.5rem;
+  background: #fff;
+}
+
+.message {
+  font-size: 0.95rem;
+  color: #444;
+}
+
+.hint {
+  font-size: 0.85rem;
+  color: #525252;
+}
+
+.hint code {
+  font-size: 0.85em;
+}
