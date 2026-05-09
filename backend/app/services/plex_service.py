@@ -14,6 +14,7 @@ from plexapi.server import PlexServer
 
 from app.core.config import settings
 from app.schemas.domain import CollectionItem, MediaItem, PlexAuthStartResponse, PlexServerTestResponse
+from app.services.runtime_setup import PlexConn
 
 
 class PlexTvHttpError(RuntimeError):
@@ -22,11 +23,10 @@ class PlexTvHttpError(RuntimeError):
 
 class PlexService:
     def __init__(self) -> None:
-        self._server_url = settings.plex_server_url.strip().rstrip("/")
         self._media_limit = settings.plex_media_limit
 
-    def _make_server_session(self) -> requests.Session:
-        if not settings.plex_ssl_verify:
+    def _make_server_session(self, ssl_verify: bool) -> requests.Session:
+        if not ssl_verify:
             try:
                 import urllib3
 
@@ -34,7 +34,7 @@ class PlexService:
             except Exception:  # noqa: BLE001
                 pass
         session = requests.Session()
-        session.verify = settings.plex_ssl_verify
+        session.verify = ssl_verify
         return session
 
     def _plex_tv_headers(self) -> dict[str, str]:
@@ -91,14 +91,15 @@ class PlexService:
         except Exception:  # noqa: BLE001
             return None
 
-    def connect_server(self, token: str) -> PlexServer:
-        if not self._server_url:
+    def connect_server(self, token: str, conn: PlexConn) -> PlexServer:
+        base = conn.base_url.strip().rstrip("/")
+        if not base:
             raise ValueError(
-                "PLEX_SERVER_URL is empty. Configure the Plex Media Server base URL on the backend.",
+                "Plex Media Server URL is empty. Set it under Setup (or PLEX_SERVER_URL in the environment).",
             )
-        session = self._make_server_session()
+        session = self._make_server_session(conn.ssl_verify)
         try:
-            return PlexServer(self._server_url, token, session=session)
+            return PlexServer(base, token, session=session)
         except Unauthorized as exc:
             raise ValueError(
                 "Plex Media Server rejected the token (HTTP 401). "
@@ -107,38 +108,40 @@ class PlexService:
             ) from exc
         except requests_exc.SSLError as exc:
             raise ValueError(
-                f"TLS/SSL error to {self._server_url!r}: {exc}. "
-                "Use http:// if Plex is plain HTTP on your LAN; for self-signed HTTPS set PLEX_SSL_VERIFY=false.",
+                f"TLS/SSL error to {base!r}: {exc}. "
+                "Use http:// if Plex is plain HTTP on your LAN; or disable TLS verification in Setup for insecure HTTPS.",
             ) from exc
         except requests_exc.Timeout as exc:
             raise ValueError(
-                f"Timeout connecting to {self._server_url!r}: {exc}. "
+                f"Timeout connecting to {base!r}: {exc}. "
                 "Verify the URL, port (usually 32400), and firewall rules.",
             ) from exc
         except requests_exc.ConnectionError as exc:
             raise ValueError(
-                f"Cannot open a TCP connection to {self._server_url!r}: {exc}. "
+                f"Cannot open a TCP connection to {base!r}: {exc}. "
                 "If the API runs in Docker, the hostname must resolve inside the container (try the server's LAN IP). "
                 "On Linux Docker, host.docker.internal is not always defined unless you enable it.",
             ) from exc
         except Exception as exc:  # noqa: BLE001
             raise ValueError(
-                f"Unexpected Plex error for {self._server_url!r}: {type(exc).__name__}: {exc}",
+                f"Unexpected Plex error for {base!r}: {type(exc).__name__}: {exc}",
             ) from exc
 
-    def probe_server_connection(self, token: str) -> PlexServerTestResponse:
+    def probe_server_connection(self, token: str, conn: PlexConn) -> PlexServerTestResponse:
         """Return structured diagnostics without raising (for troubleshooting)."""
-        url = settings.plex_server_url.strip().rstrip("/")
-        ssl_on = settings.plex_ssl_verify
+        url = conn.base_url.strip().rstrip("/")
+        ssl_on = conn.ssl_verify
         if not url:
             return PlexServerTestResponse(
                 ok=False,
                 configured_url="",
                 ssl_verify_enabled=ssl_on,
-                error_detail="PLEX_SERVER_URL is empty. Set it in the backend environment (.env / docker-compose).",
+                error_detail=(
+                    "Plex Media Server URL is empty. Set it under Setup, or configure PLEX_SERVER_URL for the API process."
+                ),
             )
 
-        session = self._make_server_session()
+        session = self._make_server_session(conn.ssl_verify)
         try:
             server = PlexServer(url, token, session=session)
         except Unauthorized:
@@ -157,7 +160,7 @@ class PlexService:
                 configured_url=url,
                 ssl_verify_enabled=ssl_on,
                 error_detail=(
-                    f"SSL error: {exc}. Prefer http:// for LAN Plex, or set PLEX_SSL_VERIFY=false for insecure HTTPS."
+                    f"SSL error: {exc}. Prefer http:// for LAN Plex, or turn off TLS verification in Setup for insecure HTTPS."
                 ),
             )
         except requests_exc.Timeout as exc:
@@ -240,8 +243,8 @@ class PlexService:
                 sections.append(section)
         return sections
 
-    def get_media(self, media_kind: str, token: str) -> list[MediaItem]:
-        server = self.connect_server(token)
+    def get_media(self, media_kind: str, token: str, conn: PlexConn) -> list[MediaItem]:
+        server = self.connect_server(token, conn)
         kind = media_kind.lower()
         if kind == "playlist":
             playlists = server.playlists(playlistType="audio") or []
@@ -271,8 +274,8 @@ class PlexService:
                     return items
         return items
 
-    def get_collections(self, token: str) -> list[CollectionItem]:
-        server = self.connect_server(token)
+    def get_collections(self, token: str, conn: PlexConn) -> list[CollectionItem]:
+        server = self.connect_server(token, conn)
         sections = self._music_sections(server)
         if not sections:
             raise ValueError("No Plex music libraries found.")
@@ -297,8 +300,8 @@ class PlexService:
                 continue
         return cols
 
-    def get_random_album(self, collection_id: str, token: str) -> MediaItem:
-        server = self.connect_server(token)
+    def get_random_album(self, collection_id: str, token: str, conn: PlexConn) -> MediaItem:
+        server = self.connect_server(token, conn)
         try:
             coll = server.fetchItem(int(collection_id))
         except (ValueError, NotFound) as exc:

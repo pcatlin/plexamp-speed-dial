@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import "./App.css";
 import { api, MediaItem, MediaType, Player, Speaker, SpeedDial } from "./api";
+import { SetupModal } from "./SetupModal";
 
 const mediaTabs: Array<{ label: string; kind: "playlists" | "albums" | "artists" | "tracks"; mediaType: MediaType }> = [
   { label: "Playlist", kind: "playlists", mediaType: "playlist" },
@@ -23,6 +24,7 @@ function App() {
   const [message, setMessage] = useState("Ready.");
   const [collections, setCollections] = useState<{ id: string; title: string }[]>([]);
   const [selectedCollectionId, setSelectedCollectionId] = useState("");
+  const [setupOpen, setSetupOpen] = useState(false);
 
   const selectedPlayerName = useMemo(
     () => players.find((player) => player.id === selectedPlayer)?.name ?? "No player selected",
@@ -68,14 +70,22 @@ function App() {
     }
   }, []);
 
+  const reloadPlayersSelection = async (nextPlayers: Player[]) => {
+    setPlayers(nextPlayers);
+    setSelectedPlayer((current) => {
+      if (!nextPlayers.length) return null;
+      if (current && nextPlayers.some((p) => p.id === current)) return current;
+      return nextPlayers[0]?.id ?? null;
+    });
+  };
+
   const refreshAll = async () => {
     const authStatus = await api.authStatus();
     setAuthConnected(authStatus.connected);
     setUsername(authStatus.username ?? "");
     const [speakerRows, playerRows, speedDialRows] = await Promise.all([api.speakers(), api.players(), api.speedDial()]);
     setSpeakers(speakerRows);
-    setPlayers(playerRows);
-    setSelectedPlayer((existing) => existing ?? playerRows[0]?.id ?? null);
+    await reloadPlayersSelection(playerRows);
     setSpeedDial(speedDialRows);
     await reloadCollections(authStatus.connected);
     await reloadMediaTab(currentTab.kind, authStatus.connected);
@@ -131,92 +141,61 @@ function App() {
     setMessage("Saved to speed dial.");
   };
 
+  const refreshPlexAuthFromApi = useCallback(async () => {
+    const authStatus = await api.authStatus();
+    setAuthConnected(authStatus.connected);
+    setUsername(authStatus.username ?? "");
+    await reloadCollections(authStatus.connected);
+    await reloadMediaTab(currentTab.kind, authStatus.connected);
+  }, [currentTab.kind, reloadCollections, reloadMediaTab]);
+
+  const reloadSpeakersOnly = async () => {
+    try {
+      setSpeakers(await api.speakers());
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : String(err));
+    }
+  };
+
   const deleteSpeedDial = async (id: number) => {
     await api.deleteSpeedDial(id);
     setSpeedDial(await api.speedDial());
     setMessage("Removed from speed dial.");
   };
 
-  const addDemoPlayer = async () => {
-    await api.createPlayer({
-      name: `Player ${players.length + 1}`,
-      host: "plexamp.local",
-      port: 32500,
-      is_active: true,
-    });
-    const updated = await api.players();
-    setPlayers(updated);
-    if (!selectedPlayer && updated[0]) {
-      setSelectedPlayer(updated[0].id);
-    }
-  };
-
   return (
     <div className="container">
-      <h1>Plexamp Sonos Speed Dial</h1>
-      <section className="card">
-        <h2>Plex Auth</h2>
-        <p>{authConnected ? `Connected as ${username || "owner"}` : "Not connected"}</p>
-        <p className="hint">
-          Put <code>PLEX_SERVER_URL</code> in the repo-root <code>.env</code> or <code>backend/.env</code> too (otherwise media returns 503 if you start uvicorn from <code>backend/</code>). Use LAN IP / <code>host.docker.internal:32400</code> when the API is in Docker.
-        </p>
-        <button
-          type="button"
-          onClick={async () => {
-            try {
-              const r = await api.plexServerTest();
-              const libs = r.music_library_sections.join(", ") || "(none)";
-              setMessage(
-                r.ok
-                  ? `Plex OK — ${r.friendly_name ?? "server"} @ ${r.configured_url}. Music libs: ${libs}. ${r.error_detail ?? ""}`.trim()
-                  : `Plex check failed (${r.configured_url || "no URL"}): ${r.error_detail ?? "unknown"} (ssl_verify=${r.ssl_verify_enabled})`,
-              );
-            } catch (err) {
-              setMessage(err instanceof Error ? err.message : String(err));
-            }
-          }}
-        >
-          Test Plex server (API)
+      <header className="headerRow">
+        <h1>Plexamp Sonos Speed Dial</h1>
+        <button type="button" className="ghost" onClick={() => setSetupOpen(true)}>
+          Setup
         </button>
-        <button
-          type="button"
-          onClick={async () => {
-            setMessage("Opening Plex sign-in — approve this app in the browser window…");
-            try {
-              const start = await api.startAuth();
-              window.open(start.auth_url, "_blank", "noopener,noreferrer");
-              let finished = false;
-              for (let i = 0; i < 90; i += 1) {
-                await new Promise((r) => setTimeout(r, 2000));
-                const st = await api.pollPlexPin(start.pin_id);
-                if (st.status === "connected") {
-                  finished = true;
-                  setAuthConnected(true);
-                  setUsername(st.username ?? "");
-                  setMessage("Plex linked. Loading your library…");
-                  await reloadCollections(true);
-                  await reloadMediaTab(currentTab.kind, true);
-                  setMessage(`Plex linked as ${st.username ?? "account"}`);
-                  break;
-                }
-              }
-              if (!finished) {
-                const last = await api.authStatus();
-                if (!last.connected) {
-                  setMessage("Still waiting for Plex approval, or sign-in timed out. Try Connect again.");
-                }
-              }
-            } catch (e) {
-              setMessage(String(e));
-            }
-          }}
-        >
-          {authConnected ? "Reconnect Plex" : "Connect Plex"}
-        </button>
-      </section>
+      </header>
+
+      <SetupModal
+        open={setupOpen}
+        onClose={() => setSetupOpen(false)}
+        onPlayersUpdated={async () => {
+          const plist = await api.players();
+          await reloadPlayersSelection(plist);
+        }}
+        afterRuntimeSaved={reloadSpeakersOnly}
+        onPlexAuthRefresh={refreshPlexAuthFromApi}
+        onToast={(t) => setMessage(t)}
+      />
 
       <section className="card">
         <h2>Pick Music</h2>
+        {!authConnected ? (
+          <p className="hint">
+            Open <strong>Setup</strong> to configure your Plex server URL (or rely on backend env), then link your Plex account to
+            load your library.
+          </p>
+        ) : (
+          <p className="hint">
+            Signed in as <strong>{username || "owner"}</strong>. Re-link from <strong>Setup</strong> if authorization fails or the library is empty.
+          </p>
+        )}
         <div className="tabRow">
           {mediaTabs.map((tab) => (
             <button key={tab.kind} className={tab.kind === currentTab.kind ? "active" : ""} onClick={() => setCurrentTab(tab)}>
@@ -266,10 +245,12 @@ function App() {
         <h2>Where to Play</h2>
         <h3>Sonos Speakers</h3>
         <p className="hint">
-          If this list is empty while using Docker, set <code>SONOS_SEED_IPS</code> on the API to the LAN IP of any Sonos
-          player (comma-separated for retries). Multicast discovery rarely works from a bridge network.
+          Tune Sonos discovery (seed IPs, timeouts) under Setup, then reload speakers here after saving if needed.
         </p>
-        {speakers.length === 0 ? <p className="hint">No speakers returned yet — check API logs and SONOS_SEED_IPS.</p> : null}
+        <button type="button" className="smallBtn" onClick={() => reloadSpeakersOnly().catch(() => undefined)}>
+          Refresh speakers
+        </button>
+        {speakers.length === 0 ? <p className="hint">No speakers yet — enter seed IPs under Setup when using Docker/VLAN.</p> : null}
         {speakers.map((speaker) => (
           <label key={speaker.id} className="checkboxRow">
             <input type="checkbox" checked={selectedSpeakers.includes(speaker.id)} onChange={() => toggleSpeaker(speaker.id)} />
@@ -285,7 +266,7 @@ function App() {
             </option>
           ))}
         </select>
-        <button onClick={addDemoPlayer}>Add Plexamp Player</button>
+        <p className="hint">Add or remove Plexamp headless endpoints under Setup.</p>
       </section>
 
       <section className="card sticky">

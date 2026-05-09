@@ -1,3 +1,15 @@
-from app.models.entities import PlexCredential, PlexampPlayer, SonosGroupPreset, SpeedDialFavorite
+from app.models.entities import (
+    PlexCredential,
+    PlexampPlayer,
+    RuntimeSetup,
+    SonosGroupPreset,
+    SpeedDialFavorite,
+)
 
-__all__ = ["PlexCredential", "PlexampPlayer", "SonosGroupPreset", "SpeedDialFavorite"]
+__all__ = [
+    "PlexCredential",
+    "PlexampPlayer",
+    "RuntimeSetup",
+    "SonosGroupPreset",
+    "SpeedDialFavorite",
+]

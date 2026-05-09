@@ -100,3 +100,28 @@ class SpeedDialCreate(BaseModel):
 
 class SpeedDialRead(SpeedDialCreate):
     id: int
+
+
+class RuntimeSetupUpdate(BaseModel):
+    """Editable fields from the Setup modal (stored in DB)."""
+
+    plex_server_url: str = Field(default="", description="PMS base URL, e.g. http://192.168.1.10:32400. Empty uses PLEX_SERVER_URL from the environment.")
+    plex_ssl_verify: bool = True
+    sonos_seed_ips: str = Field(
+        default="",
+        description="Comma-separated LAN IPs of any Sonos speaker (helps Docker / no multicast).",
+    )
+    sonos_discover_timeout: int = Field(default=10, ge=2, le=60)
+    sonos_allow_network_scan: bool = True
+    sonos_interface_addr: str = Field(
+        default="",
+        description="Optional interface address for SSDP (advanced).",
+    )
+    sonos_demo_fallback: bool = False
+
+
+class RuntimeSetupRead(RuntimeSetupUpdate):
+    plex_server_url_effective: str = Field(
+        default="",
+        description="URL the API will actually use (DB value, or env fallback if DB is blank).",
+    )

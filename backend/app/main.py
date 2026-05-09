@@ -5,6 +5,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import router
 from app.core.config import settings
+from app.db.database import SessionLocal
+from app.services.runtime_setup import effective_plex_url, get_or_create_runtime_setup
 
 _logger = logging.getLogger(__name__)
 
@@ -21,8 +23,14 @@ app.include_router(router, prefix=settings.api_prefix)
 
 @app.on_event("startup")
 def _startup_plex_url_check() -> None:
-    if not settings.plex_server_url.strip():
+    db = SessionLocal()
+    try:
+        row = get_or_create_runtime_setup(db)
+        eff = effective_plex_url(row.plex_server_url)
+    finally:
+        db.close()
+    if not eff.strip():
         _logger.warning(
-            "PLEX_SERVER_URL is unset; /api/v1/media/* and /auth/plex/server-test will return "
-            "503 until you set it (repo .env or backend/.env)."
+            "Plex Media Server URL is unset (Setup modal + env). "
+            "/api/v1/media/* will return 503 until a URL is configured."
         )

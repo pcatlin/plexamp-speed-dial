@@ -3,6 +3,23 @@ from sqlalchemy import JSON, Boolean, Column, DateTime, Integer, String, Text, f
 from app.db.database import Base
 
 
+class RuntimeSetup(Base):
+    """Single-row persisted settings editable from the frontend Setup modal."""
+
+    __tablename__ = "runtime_setup"
+
+    id = Column(Integer, primary_key=True, index=True)
+    plex_server_url = Column(Text, nullable=False, default="")
+    plex_ssl_verify = Column(Boolean, nullable=False, default=True)
+    sonos_seed_ips = Column(Text, nullable=False, default="")
+    sonos_discover_timeout = Column(Integer, nullable=False, default=10)
+    sonos_allow_network_scan = Column(Boolean, nullable=False, default=True)
+    sonos_interface_addr = Column(String(255), nullable=False, default="")
+    sonos_demo_fallback = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now(), server_default=func.now(), nullable=False)
+
+
 class PlexCredential(Base):
     __tablename__ = "plex_credentials"
 

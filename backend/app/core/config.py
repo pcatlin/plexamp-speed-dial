@@ -35,6 +35,15 @@ class Settings(BaseSettings):
         default=True,
         validation_alias=AliasChoices("plex_ssl_verify", "PLEX_SSL_VERIFY"),
     )
+    plexamp_request_timeout_seconds: float = Field(
+        default=15.0,
+        ge=2.0,
+        le=120.0,
+        validation_alias=AliasChoices(
+            "plexamp_request_timeout_seconds",
+            "PLEXAMP_REQUEST_TIMEOUT_SECONDS",
+        ),
+    )
 
     # Sonos / SoCo: multicast discovery often fails in Docker; use SONOS_SEED_IPS (LAN IP of any player).
     sonos_discover_timeout: int = Field(

@@ -29,6 +29,20 @@ export interface Player {
   is_active: boolean;
 }
 
+export interface RuntimeSettings {
+  plex_server_url: string;
+  plex_ssl_verify: boolean;
+  sonos_seed_ips: string;
+  sonos_discover_timeout: number;
+  sonos_allow_network_scan: boolean;
+  sonos_interface_addr: string;
+  sonos_demo_fallback: boolean;
+  plex_server_url_effective: string;
+}
+
+/** Same fields as persisted to the API — omit computed effective URL when saving. */
+export type RuntimeSettingsPayload = Omit<RuntimeSettings, "plex_server_url_effective">;
+
 export interface SpeedDial {
   id: number;
   label: string;
@@ -72,6 +86,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  runtimeSettings: () => request<RuntimeSettings>("/settings/runtime"),
+  saveRuntimeSettings: (payload: RuntimeSettingsPayload) =>
+    request<RuntimeSettings>("/settings/runtime", { method: "PUT", body: JSON.stringify(payload) }),
   health: () => request<{ status: string }>("/health"),
   authStatus: () => request<{ connected: boolean; username?: string }>("/auth/plex/status"),
   startAuth: () => request<{ pin_id: string; code: string; auth_url: string }>("/auth/plex/start", { method: "POST" }),
@@ -101,6 +118,7 @@ export const api = {
     request<{ id: number }>("/sonos/group-presets", { method: "POST", body: JSON.stringify({ name, speaker_ids: speakerIds }) }),
   players: () => request<Player[]>("/players"),
   createPlayer: (payload: Omit<Player, "id">) => request<{ id: number }>("/players", { method: "POST", body: JSON.stringify(payload) }),
+  deletePlayer: (id: number) => request<{ message: string }>(`/players/${id}`, { method: "DELETE" }),
   speedDial: () => request<SpeedDial[]>("/speed-dial"),
   createSpeedDial: (payload: Omit<SpeedDial, "id">) =>
     request<{ id: number }>("/speed-dial", { method: "POST", body: JSON.stringify(payload) }),

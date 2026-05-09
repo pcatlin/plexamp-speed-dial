@@ -88,3 +88,178 @@ select {
 .hint code {
   font-size: 0.85em;
 }
+
+.headerRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.headerRow h1 {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+button.ghost,
+button.smallBtn {
+  background: transparent;
+  border-style: dashed;
+}
+
+button.smallBtn {
+  font-size: 0.85rem;
+  padding: 0.35rem 0.55rem;
+  margin-bottom: 0.65rem;
+}
+
+.modalBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(17, 24, 39, 0.45);
+  padding: 1rem;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  overflow-y: auto;
+}
+
+.modalPanel {
+  background: #fff;
+  border: 1px solid #c9c9c9;
+  border-radius: 14px;
+  max-width: 520px;
+  width: 100%;
+  padding: 1rem 1.1rem 1.25rem;
+  margin: 2rem auto;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
+}
+
+.modalHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.65rem;
+}
+
+.modalHeader h2 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.modalSection {
+  margin-top: 0.95rem;
+  padding-top: 0.95rem;
+  border-top: 1px solid #e5e7eb;
+}
+
+.modalSection:first-of-type {
+  border-top: none;
+  padding-top: 0;
+  margin-top: 0;
+}
+
+.modalSection h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+}
+
+.fieldLabel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-bottom: 0.65rem;
+  font-size: 0.92rem;
+}
+
+.fieldLabel.mb0 {
+  margin-bottom: 0;
+}
+
+.inlineGrow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.stretch {
+  flex: 1 1 200px;
+}
+
+.textInput {
+  width: 100%;
+  padding: 0.52rem 0.65rem;
+  border-radius: 10px;
+  border: 1px solid #bfc4cc;
+}
+
+.textInput.narrow {
+  max-width: 7rem;
+}
+
+.checkboxRow.slim {
+  margin-bottom: 0.55rem;
+  font-size: 0.92rem;
+}
+
+.checkboxRow.warning {
+  color: #7c2d12;
+}
+
+.modalActions {
+  margin-top: 1.1rem;
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.modalButtonRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.35rem;
+}
+
+.playerList {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+}
+
+.playerList li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.45rem 0;
+  border-bottom: 1px solid #efefef;
+}
+
+.playerMeta {
+  min-width: 0;
+  word-break: break-all;
+}
+
+.playerMeta strong {
+  display: inline;
+}
+
+.dim {
+  color: #6b7280;
+  font-size: 0.88rem;
+}
+
+button.nowrap {
+  white-space: nowrap;
+}
+
+@media (min-width: 480px) {
+  .modalPanel {
+    margin-top: min(15vh, 4rem);
+  }
+}

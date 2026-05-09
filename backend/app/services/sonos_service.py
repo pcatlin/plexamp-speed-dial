@@ -3,15 +3,15 @@ import logging
 from soco import SoCo
 from soco import discover
 
-from app.core.config import settings
 from app.schemas.domain import SonosSpeaker
+from app.services.runtime_setup import SonosRuntime
 
 _log = logging.getLogger(__name__)
 
 
 class SonosService:
-    def list_speakers(self) -> list[SonosSpeaker]:
-        seeds = [ip.strip() for ip in settings.sonos_seed_ips.split(",") if ip.strip()]
+    def list_speakers(self, runtime: SonosRuntime) -> list[SonosSpeaker]:
+        seeds = [ip.strip() for ip in runtime.seed_ips.split(",") if ip.strip()]
         zones: set | None = None
 
         if seeds:
@@ -29,12 +29,12 @@ class SonosService:
                 zones = set()
 
         if not seeds or not zones:
-            interface = settings.sonos_interface_addr.strip() or None
+            interface = runtime.interface_addr.strip() or None
             try:
                 kwargs: dict = {
-                    "timeout": settings.sonos_discover_timeout,
+                    "timeout": runtime.discover_timeout,
                     "include_invisible": False,
-                    "allow_network_scan": settings.sonos_allow_network_scan,
+                    "allow_network_scan": runtime.allow_network_scan,
                 }
                 if interface:
                     kwargs["interface_addr"] = interface
@@ -49,7 +49,7 @@ class SonosService:
             elif zones is None:
                 zones = set()
 
-        if not zones and settings.sonos_demo_fallback:
+        if not zones and runtime.demo_fallback:
             _log.warning("Sonos demo fallback enabled — returning placeholder speakers")
             return [
                 SonosSpeaker(id="demo-living-room", name="Living Room (demo)", ip="192.168.1.10"),

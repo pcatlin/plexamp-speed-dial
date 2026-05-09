@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_plex_creds
-from app.db.database import Base, engine, get_db
+from app.db.database import Base, SessionLocal, engine, get_db
 from app.models import PlexCredential, PlexampPlayer, SonosGroupPreset, SpeedDialFavorite
 from app.schemas.common import HealthResponse, IdResponse
 from app.schemas.domain import (
@@ -15,6 +15,8 @@ from app.schemas.domain import (
     PlexAuthStartResponse,
     PlexPinPollResponse,
     PlexServerTestResponse,
+    RuntimeSetupRead,
+    RuntimeSetupUpdate,
     SonosGroupPresetCreate,
     SonosGroupPresetRead,
     SonosSpeaker,
@@ -23,6 +25,7 @@ from app.schemas.domain import (
 )
 from app.services.playback_service import PlaybackService
 from app.services.plex_service import PlexService, PlexTvHttpError
+from app.services.runtime_setup import effective_plex_url, get_or_create_runtime_setup, resolve_plex_conn, resolve_sonos_runtime
 from app.services.sonos_service import SonosService
 
 router = APIRouter()
@@ -31,9 +34,49 @@ sonos_service = SonosService()
 playback_service = PlaybackService()
 
 
+def _serialize_runtime_setup_read(db: Session) -> RuntimeSetupRead:
+    row = get_or_create_runtime_setup(db)
+    return RuntimeSetupRead(
+        plex_server_url=row.plex_server_url or "",
+        plex_ssl_verify=row.plex_ssl_verify,
+        sonos_seed_ips=row.sonos_seed_ips or "",
+        sonos_discover_timeout=row.sonos_discover_timeout,
+        sonos_allow_network_scan=row.sonos_allow_network_scan,
+        sonos_interface_addr=row.sonos_interface_addr or "",
+        sonos_demo_fallback=row.sonos_demo_fallback,
+        plex_server_url_effective=effective_plex_url(row.plex_server_url),
+    )
+
+
 @router.on_event("startup")
 def startup() -> None:
     Base.metadata.create_all(bind=engine)
+    seed = SessionLocal()
+    try:
+        get_or_create_runtime_setup(seed)
+    finally:
+        seed.close()
+
+
+@router.get("/settings/runtime", response_model=RuntimeSetupRead)
+def get_runtime_settings(db: Session = Depends(get_db)) -> RuntimeSetupRead:
+    return _serialize_runtime_setup_read(db)
+
+
+@router.put("/settings/runtime", response_model=RuntimeSetupRead)
+def update_runtime_settings(payload: RuntimeSetupUpdate, db: Session = Depends(get_db)) -> RuntimeSetupRead:
+    row = get_or_create_runtime_setup(db)
+    data = payload.model_dump()
+    row.plex_server_url = data["plex_server_url"].strip()
+    row.plex_ssl_verify = data["plex_ssl_verify"]
+    row.sonos_seed_ips = data["sonos_seed_ips"].strip()
+    row.sonos_discover_timeout = data["sonos_discover_timeout"]
+    row.sonos_allow_network_scan = data["sonos_allow_network_scan"]
+    row.sonos_interface_addr = data["sonos_interface_addr"].strip()
+    row.sonos_demo_fallback = data["sonos_demo_fallback"]
+    db.commit()
+    db.refresh(row)
+    return _serialize_runtime_setup_read(db)
 
 
 @router.get("/health", response_model=HealthResponse)
@@ -107,68 +150,75 @@ def plex_status(db: Session = Depends(get_db)) -> PlexAuthStatusResponse:
 
 
 @router.get("/auth/plex/server-test", response_model=PlexServerTestResponse)
-def plex_server_test(creds: PlexCredential = Depends(require_plex_creds)) -> PlexServerTestResponse:
+def plex_server_test(
+    db: Session = Depends(get_db),
+    creds: PlexCredential = Depends(require_plex_creds),
+) -> PlexServerTestResponse:
     assert creds.auth_token
-    return plex_service.probe_server_connection(creds.auth_token)
+    return plex_service.probe_server_connection(creds.auth_token, resolve_plex_conn(db))
 
 
 @router.get("/media/playlists")
-def media_playlists(creds: PlexCredential = Depends(require_plex_creds)):
+def media_playlists(db: Session = Depends(get_db), creds: PlexCredential = Depends(require_plex_creds)):
     assert creds.auth_token
     try:
-        return plex_service.get_media("playlist", creds.auth_token)
+        return plex_service.get_media("playlist", creds.auth_token, resolve_plex_conn(db))
     except ValueError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
 @router.get("/media/artists")
-def media_artists(creds: PlexCredential = Depends(require_plex_creds)):
+def media_artists(db: Session = Depends(get_db), creds: PlexCredential = Depends(require_plex_creds)):
     assert creds.auth_token
     try:
-        return plex_service.get_media("artist", creds.auth_token)
+        return plex_service.get_media("artist", creds.auth_token, resolve_plex_conn(db))
     except ValueError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
 @router.get("/media/albums")
-def media_albums(creds: PlexCredential = Depends(require_plex_creds)):
+def media_albums(db: Session = Depends(get_db), creds: PlexCredential = Depends(require_plex_creds)):
     assert creds.auth_token
     try:
-        return plex_service.get_media("album", creds.auth_token)
+        return plex_service.get_media("album", creds.auth_token, resolve_plex_conn(db))
     except ValueError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
 @router.get("/media/tracks")
-def media_tracks(creds: PlexCredential = Depends(require_plex_creds)):
+def media_tracks(db: Session = Depends(get_db), creds: PlexCredential = Depends(require_plex_creds)):
     assert creds.auth_token
     try:
-        return plex_service.get_media("track", creds.auth_token)
+        return plex_service.get_media("track", creds.auth_token, resolve_plex_conn(db))
     except ValueError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
 @router.get("/media/collections")
-def media_collections(creds: PlexCredential = Depends(require_plex_creds)):
+def media_collections(db: Session = Depends(get_db), creds: PlexCredential = Depends(require_plex_creds)):
     assert creds.auth_token
     try:
-        return plex_service.get_collections(creds.auth_token)
+        return plex_service.get_collections(creds.auth_token, resolve_plex_conn(db))
     except ValueError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
 @router.get("/media/random-album")
-def media_random_album(collection_id: str, creds: PlexCredential = Depends(require_plex_creds)):
+def media_random_album(
+    collection_id: str,
+    db: Session = Depends(get_db),
+    creds: PlexCredential = Depends(require_plex_creds),
+):
     assert creds.auth_token
     try:
-        return plex_service.get_random_album(collection_id, creds.auth_token)
+        return plex_service.get_random_album(collection_id, creds.auth_token, resolve_plex_conn(db))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.get("/sonos/speakers", response_model=list[SonosSpeaker])
-def sonos_speakers() -> list[SonosSpeaker]:
-    return sonos_service.list_speakers()
+def sonos_speakers(db: Session = Depends(get_db)) -> list[SonosSpeaker]:
+    return sonos_service.list_speakers(resolve_sonos_runtime(db))
 
 
 @router.get("/sonos/group-presets", response_model=list[SonosGroupPresetRead])
@@ -222,8 +272,13 @@ def delete_player(player_id: int, db: Session = Depends(get_db)) -> dict[str, st
 
 
 @router.post("/play", response_model=PlayResponse)
-def play(payload: PlayRequest, db: Session = Depends(get_db)) -> PlayResponse:
-    response = playback_service.play(payload, db)
+def play(
+    payload: PlayRequest,
+    db: Session = Depends(get_db),
+    creds: PlexCredential = Depends(require_plex_creds),
+) -> PlayResponse:
+    assert creds.auth_token
+    response = playback_service.play(payload, db, auth_token=creds.auth_token)
     if response.status == "error":
         raise HTTPException(status_code=400, detail=response.details)
     return response

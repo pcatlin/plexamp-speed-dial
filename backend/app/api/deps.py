@@ -1,9 +1,9 @@
 from fastapi import Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.core.config import settings
 from app.db.database import get_db
 from app.models import PlexCredential
+from app.services.runtime_setup import resolve_plex_conn
 
 
 def require_plex_creds(db: Session = Depends(get_db)) -> PlexCredential:
@@ -14,16 +14,13 @@ def require_plex_creds(db: Session = Depends(get_db)) -> PlexCredential:
             status_code=401,
             detail="Plex is not linked. Complete Plex sign-in from the Plex Auth card.",
         )
-    url = settings.plex_server_url.strip().rstrip("/")
-    if not url:
+    conn = resolve_plex_conn(db)
+    if not conn.base_url.strip():
         raise HTTPException(
             status_code=503,
             detail=(
-                "PLEX_SERVER_URL is not set or empty. Set it before starting the API "
-                "(e.g. export PLEX_SERVER_URL=http://127.0.0.1:32400 for local Plex). "
-                "Use a repo-root .env or backend/.env so it loads even when cwd is backend/. "
-                "In Docker, set PLEX_SERVER_URL in your compose environment. "
-                "The URL must be reachable from wherever uvicorn runs (not localhost for a remote Plex host)."
+                "Plex Media Server URL is not configured. Open Setup and enter your PMS base URL "
+                "(e.g. http://127.0.0.1:32400), or set PLEX_SERVER_URL for the API if the DB setting is blank."
             ),
         )
     return creds
