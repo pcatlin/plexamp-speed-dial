@@ -81,6 +81,7 @@ def test_speed_dial_create_list_delete(client):
     listed = client.get("/api/v1/speed-dial")
     assert listed.status_code == 200
     assert len(listed.json()) == 1
+    assert listed.json()[0].get("has_cover_art") is False
 
     deleted = client.delete(f"/api/v1/speed-dial/{favorite_id}")
     assert deleted.status_code == 200
@@ -88,3 +89,50 @@ def test_speed_dial_create_list_delete(client):
     listed_after = client.get("/api/v1/speed-dial")
     assert listed_after.status_code == 200
     assert listed_after.json() == []
+
+
+def test_speed_dial_cover_thumb_saved_and_served(client, db_session, monkeypatch):
+    from app.models import PlexCredential
+
+    db_session.add(PlexCredential(auth_token="stub-token", is_connected=True))
+    db_session.commit()
+
+    import app.api.routes as routes_module
+
+    monkeypatch.setattr(
+        routes_module.plex_service,
+        "thumb_path_for_item",
+        lambda rk, token, conn: "/library/metadata/1/thumb",
+    )
+    monkeypatch.setattr(
+        routes_module.plex_service,
+        "fetch_thumb_bytes",
+        lambda stored, token, conn: (b"\xff\xd8\xff", "image/jpeg"),
+    )
+
+    player_id = client.post(
+        "/api/v1/players",
+        json={"name": "Kitchen", "host": "plexamp.local", "port": 32500, "is_active": True},
+    ).json()["id"]
+
+    created = client.post(
+        "/api/v1/speed-dial",
+        json={
+            "label": "With art",
+            "media_type": "album",
+            "media_id": "42",
+            "player_id": player_id,
+            "speaker_ids": [],
+            "preset_id": None,
+        },
+    )
+    assert created.status_code == 200
+    favorite_id = created.json()["id"]
+
+    listed = client.get("/api/v1/speed-dial")
+    assert listed.json()[0]["has_cover_art"] is True
+
+    cover = client.get(f"/api/v1/speed-dial/{favorite_id}/cover")
+    assert cover.status_code == 200
+    assert cover.headers.get("content-type", "").startswith("image/jpeg")
+    assert cover.content == b"\xff\xd8\xff"

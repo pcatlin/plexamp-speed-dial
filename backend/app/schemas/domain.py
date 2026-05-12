@@ -100,6 +100,7 @@ class SpeedDialCreate(BaseModel):
 
 class SpeedDialRead(SpeedDialCreate):
     id: int
+    has_cover_art: bool = False
 
 
 class RuntimeSetupUpdate(BaseModel):

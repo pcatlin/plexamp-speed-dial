@@ -1,9 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_plex_creds
 from app.db.database import Base, SessionLocal, engine, get_db
-from app.db.runtime_setup_migrate import ensure_runtime_setup_columns
+from app.db.runtime_setup_migrate import ensure_runtime_setup_columns, ensure_speed_dial_cover_column
 from app.models import PlexCredential, PlexampPlayer, SonosGroupPreset, SpeedDialFavorite
 from app.schemas.common import HealthResponse, IdResponse
 from app.schemas.domain import (
@@ -55,6 +55,7 @@ def _serialize_runtime_setup_read(db: Session) -> RuntimeSetupRead:
 def startup() -> None:
     Base.metadata.create_all(bind=engine)
     ensure_runtime_setup_columns(engine)
+    ensure_speed_dial_cover_column(engine)
     seed = SessionLocal()
     try:
         get_or_create_runtime_setup(seed)
@@ -302,18 +303,52 @@ def speed_dial(db: Session = Depends(get_db)) -> list[SpeedDialRead]:
             player_id=row.player_id,
             speaker_ids=row.speaker_ids,
             preset_id=row.preset_id,
+            has_cover_art=bool((getattr(row, "cover_thumb_path", None) or "").strip()),
         )
         for row in rows
     ]
 
 
+def _speed_dial_cover_thumb_path(payload: SpeedDialCreate, db: Session) -> str | None:
+    creds = db.query(PlexCredential).first()
+    if not creds or not creds.auth_token:
+        return None
+    try:
+        rating_key = int(str(payload.media_id).strip())
+    except ValueError:
+        return None
+    try:
+        conn = resolve_plex_conn(db)
+        return plex_service.thumb_path_for_item(rating_key, creds.auth_token, conn)
+    except Exception:  # noqa: BLE001
+        return None
+
+
 @router.post("/speed-dial", response_model=IdResponse)
 def create_speed_dial(payload: SpeedDialCreate, db: Session = Depends(get_db)) -> IdResponse:
-    row = SpeedDialFavorite(**payload.model_dump())
+    cover_path = _speed_dial_cover_thumb_path(payload, db)
+    row = SpeedDialFavorite(**payload.model_dump(), cover_thumb_path=cover_path)
     db.add(row)
     db.commit()
     db.refresh(row)
     return IdResponse(id=row.id)
+
+
+@router.get("/speed-dial/{favorite_id}/cover")
+def speed_dial_cover(favorite_id: int, db: Session = Depends(get_db)) -> Response:
+    row = db.get(SpeedDialFavorite, favorite_id)
+    path = (getattr(row, "cover_thumb_path", None) or "").strip() if row else ""
+    if not path:
+        raise HTTPException(status_code=404, detail="Cover not available")
+    creds = db.query(PlexCredential).first()
+    if not creds or not creds.auth_token:
+        raise HTTPException(status_code=404, detail="Cover not available")
+    try:
+        conn = resolve_plex_conn(db)
+        body, media_type = plex_service.fetch_thumb_bytes(path, creds.auth_token, conn)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"Plex image fetch failed: {exc}") from exc
+    return Response(content=body, media_type=media_type)
 
 
 @router.delete("/speed-dial/{favorite_id}")

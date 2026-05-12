@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import "./App.css";
-import { api, MediaItem, MediaType, Player, Speaker, SpeedDial } from "./api";
+import { api, API_BASE, MediaItem, MediaType, Player, Speaker, SpeedDial } from "./api";
 import { SetupModal } from "./SetupModal";
 
 const mediaTabs: Array<{ label: string; kind: "playlists" | "albums" | "artists" | "tracks"; mediaType: MediaType }> = [
@@ -283,7 +283,25 @@ function App() {
         <div className="grid">
           {speedDial.map((favorite) => (
             <div className="favorite" key={favorite.id}>
-              <button onClick={() => runPlay(favorite).catch((error) => setMessage(error.message))}>{favorite.label}</button>
+              <button
+                type="button"
+                className="favoritePlay"
+                onClick={() => runPlay(favorite).catch((error) => setMessage(error.message))}
+              >
+                {favorite.has_cover_art ? (
+                  <img
+                    className="favoriteCover"
+                    src={`${API_BASE}/speed-dial/${favorite.id}/cover`}
+                    alt=""
+                    loading="lazy"
+                    decoding="async"
+                    onError={(event) => {
+                      (event.target as HTMLImageElement).style.visibility = "hidden";
+                    }}
+                  />
+                ) : null}
+                <span className="favoriteLabel">{favorite.label}</span>
+              </button>
               <button className="danger" onClick={() => deleteSpeedDial(favorite.id).catch((error) => setMessage(error.message))}>
                 Delete
               </button>

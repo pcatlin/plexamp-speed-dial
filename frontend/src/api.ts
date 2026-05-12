@@ -1,4 +1,4 @@
-const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api/v1";
+export const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api/v1";
 
 export type MediaType = "playlist" | "album" | "artist" | "track" | "random_album";
 
@@ -53,6 +53,7 @@ export interface SpeedDial {
   player_id: number;
   speaker_ids: string[];
   preset_id?: number | null;
+  has_cover_art?: boolean;
 }
 
 function extractApiErrorDetail(bodyText: string, status: number): string {
@@ -121,7 +122,7 @@ export const api = {
   createPlayer: (payload: Omit<Player, "id">) => request<{ id: number }>("/players", { method: "POST", body: JSON.stringify(payload) }),
   deletePlayer: (id: number) => request<{ message: string }>(`/players/${id}`, { method: "DELETE" }),
   speedDial: () => request<SpeedDial[]>("/speed-dial"),
-  createSpeedDial: (payload: Omit<SpeedDial, "id">) =>
+  createSpeedDial: (payload: Omit<SpeedDial, "id" | "has_cover_art">) =>
     request<{ id: number }>("/speed-dial", { method: "POST", body: JSON.stringify(payload) }),
   deleteSpeedDial: (id: number) => request<{ message: string }>(`/speed-dial/${id}`, { method: "DELETE" }),
   play: (payload: {

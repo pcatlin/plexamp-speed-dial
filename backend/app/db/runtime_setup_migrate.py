@@ -34,3 +34,20 @@ def ensure_runtime_setup_columns(engine: Engine) -> None:
                 _log.info("Applied runtime_setup migration: %s", stmt.split("ADD COLUMN")[1].strip().split()[0])
             except Exception as exc:  # noqa: BLE001
                 _log.warning("runtime_setup migrate skipped/failed (%s): %s", stmt[:80], exc)
+
+
+def ensure_speed_dial_cover_column(engine: Engine) -> None:
+    """Add speed_dial_favorites.cover_thumb_path when upgrading an existing DB."""
+    insp = inspect(engine)
+    if "speed_dial_favorites" not in insp.get_table_names():
+        return
+    existing = {c["name"] for c in insp.get_columns("speed_dial_favorites")}
+    if "cover_thumb_path" in existing:
+        return
+    stmt = "ALTER TABLE speed_dial_favorites ADD COLUMN cover_thumb_path TEXT"
+    with engine.begin() as conn:
+        try:
+            conn.execute(text(stmt))
+            _log.info("Applied speed_dial_favorites migration: cover_thumb_path")
+        except Exception as exc:  # noqa: BLE001
+            _log.warning("speed_dial_favorites migrate skipped/failed: %s", exc)

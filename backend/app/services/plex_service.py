@@ -323,3 +323,41 @@ class PlexService:
         if not picks:
             raise ValueError("Selected collection has no playable albums.")
         return self._item_to_media(random.choice(picks), "album")
+
+    def thumb_path_for_item(self, rating_key: int, token: str, conn: PlexConn) -> str | None:
+        """Return a thumb URL fragment or absolute URL suitable for fetch_thumb_bytes."""
+        server = self.connect_server(token, conn)
+        try:
+            item = server.fetchItem(rating_key)
+        except (ValueError, NotFound):
+            return None
+        for attr in ("thumb", "composite", "parentThumb", "grandparentThumb"):
+            raw = getattr(item, attr, None)
+            if isinstance(raw, str):
+                s = raw.strip()
+                if s:
+                    return s
+        return None
+
+    def _plex_thumb_request_url(self, stored: str, token: str, conn: PlexConn) -> str:
+        stored = (stored or "").strip()
+        if not stored:
+            raise ValueError("empty thumb path")
+        if stored.startswith("http://") or stored.startswith("https://"):
+            if "X-Plex-Token" in stored:
+                return stored
+            sep = "&" if "?" in stored else "?"
+            return f"{stored}{sep}{urlencode({'X-Plex-Token': token})}"
+        base = conn.base_url.strip().rstrip("/")
+        path = stored if stored.startswith("/") else f"/{stored}"
+        return f"{base}{path}?{urlencode({'X-Plex-Token': token})}"
+
+    def fetch_thumb_bytes(self, stored_thumb: str, token: str, conn: PlexConn) -> tuple[bytes, str]:
+        """GET cover image bytes from PMS (relative path or full URL)."""
+        url = self._plex_thumb_request_url(stored_thumb, token, conn)
+        session = self._make_server_session(conn.ssl_verify)
+        response = session.get(url, timeout=30)
+        response.raise_for_status()
+        raw_ct = response.headers.get("Content-Type") or "image/jpeg"
+        media_type = raw_ct.split(";")[0].strip()
+        return response.content, media_type
