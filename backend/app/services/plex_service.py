@@ -13,7 +13,7 @@ from plexapi.myplex import MyPlexAccount
 from plexapi.server import PlexServer
 
 from app.core.config import settings
-from app.schemas.domain import CollectionItem, MediaItem, PlexAuthStartResponse, PlexServerTestResponse
+from app.schemas.domain import CollectionItem, MediaItem, MediaSuggestionsResponse, PlexAuthStartResponse, PlexServerTestResponse
 from app.services.runtime_setup import PlexConn
 
 
@@ -323,6 +323,102 @@ class PlexService:
         if not picks:
             raise ValueError("Selected collection has no playable albums.")
         return self._item_to_media(random.choice(picks), "album")
+
+    @staticmethod
+    def _try_section_search(section: MusicSection, libtype: str, maxresults: int = 25, **kwargs: object) -> list:
+        try:
+            return list(section.search(libtype=libtype, maxresults=maxresults, **kwargs))
+        except Exception:  # noqa: BLE001
+            return []
+
+    def search_music(self, family: str, query: str, token: str, conn: PlexConn) -> list[MediaItem]:
+        q = (query or "").strip()
+        if len(q) < 2:
+            return []
+        family = family.lower()
+        libtype_map = {"album": "album", "artist": "artist", "track": "track"}
+        if family not in libtype_map:
+            raise ValueError(f"Unsupported search family: {family!r}")
+        libtype = libtype_map[family]
+        server = self.connect_server(token, conn)
+        sections = self._music_sections(server)
+        if not sections:
+            raise ValueError("No Plex music libraries found. Add a Music library in Plex.")
+
+        seen: set[str] = set()
+        out: list[MediaItem] = []
+        for section in sections:
+            rows = self._try_section_search(section, libtype, 30, title=q)
+            for row in rows:
+                sid = str(getattr(row, "ratingKey", "") or "")
+                if not sid or sid in seen:
+                    continue
+                seen.add(sid)
+                out.append(self._item_to_media(row, libtype))
+                if len(out) >= 20:
+                    return out
+        return out
+
+    def get_music_suggestions(self, family: str, token: str, conn: PlexConn) -> MediaSuggestionsResponse:
+        family = family.lower()
+        libtype_map = {"album": "album", "artist": "artist", "track": "track"}
+        if family not in libtype_map:
+            raise ValueError(f"Unsupported suggestions family: {family!r}")
+        libtype = libtype_map[family]
+        server = self.connect_server(token, conn)
+        sections = self._music_sections(server)
+        if not sections:
+            raise ValueError("No Plex music libraries found. Add a Music library in Plex.")
+
+        def merge_unique(row_supplier: object, cap: int = 10) -> list[MediaItem]:
+            seen_u: set[str] = set()
+            acc: list[MediaItem] = []
+            for section in sections:
+                rows = row_supplier(section)
+                for row in rows or []:
+                    sid = str(getattr(row, "ratingKey", "") or "")
+                    if not sid or sid in seen_u:
+                        continue
+                    seen_u.add(sid)
+                    acc.append(self._item_to_media(row, libtype))
+                    if len(acc) >= cap:
+                        return acc
+            return acc
+
+        def most_for_section(section: MusicSection) -> list:
+            for sort in ("viewCount:desc", "lastViewedAt:desc", "lastRatedAt:desc", "addedAt:desc"):
+                rows = self._try_section_search(section, libtype, 20, sort=sort)
+                if rows:
+                    return rows
+            return self._try_section_search(section, libtype, 20, sort="titleSort")
+
+        def unplayed_for_section(section: MusicSection) -> list:
+            rows = self._try_section_search(section, libtype, 20, unwatched=True)
+            if rows:
+                return rows
+            for kwargs in (
+                {"lastViewedAt__lte": "1970-01-02"},
+                {"viewCount__lte": 0},
+            ):
+                rows = self._try_section_search(section, libtype, 20, **kwargs)
+                if rows:
+                    return rows
+            return []
+
+        def random_for_section(section: MusicSection) -> list:
+            rows = self._try_section_search(section, libtype, 40, sort="random")
+            if rows:
+                return rows
+            pool = self._try_section_search(section, libtype, min(120, self._media_limit), sort="titleSort")
+            pl = list(pool)
+            random.shuffle(pl)
+            return pl
+
+        return MediaSuggestionsResponse(
+            most_played=merge_unique(most_for_section, 10),
+            unplayed=merge_unique(unplayed_for_section, 10),
+            random=merge_unique(random_for_section, 10),
+        )
 
     def thumb_path_for_item(self, rating_key: int, token: str, conn: PlexConn) -> str | None:
         """Return a thumb URL fragment or absolute URL suitable for fetch_thumb_bytes."""

@@ -8,6 +8,8 @@ from app.db.runtime_setup_migrate import ensure_runtime_setup_columns, ensure_sp
 from app.models import PlexCredential, PlexampPlayer, SonosGroupPreset, SpeedDialFavorite
 from app.schemas.common import HealthResponse, IdResponse
 from app.schemas.domain import (
+    MediaItem,
+    MediaSuggestionsResponse,
     PlayerControlRequest,
     PlayerCreate,
     PlayerRead,
@@ -224,6 +226,57 @@ def media_random_album(
         return plex_service.get_random_album(collection_id, creds.auth_token, resolve_plex_conn(db))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get("/media/search", response_model=list[MediaItem])
+def media_search(
+    family: str,
+    query: str = "",
+    db: Session = Depends(get_db),
+    creds: PlexCredential = Depends(require_plex_creds),
+):
+    assert creds.auth_token
+    fam = family.strip().lower()
+    if fam not in ("album", "artist", "track"):
+        raise HTTPException(status_code=400, detail="family must be album, artist, or track")
+    try:
+        return plex_service.search_music(fam, query, creds.auth_token, resolve_plex_conn(db))
+    except ValueError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@router.get("/media/suggestions", response_model=MediaSuggestionsResponse)
+def media_suggestions(
+    family: str,
+    db: Session = Depends(get_db),
+    creds: PlexCredential = Depends(require_plex_creds),
+):
+    assert creds.auth_token
+    fam = family.strip().lower()
+    if fam not in ("album", "artist", "track"):
+        raise HTTPException(status_code=400, detail="family must be album, artist, or track")
+    try:
+        return plex_service.get_music_suggestions(fam, creds.auth_token, resolve_plex_conn(db))
+    except ValueError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@router.get("/media/art/{rating_key}")
+def media_art(
+    rating_key: int,
+    db: Session = Depends(get_db),
+    creds: PlexCredential = Depends(require_plex_creds),
+) -> Response:
+    assert creds.auth_token
+    conn = resolve_plex_conn(db)
+    path = plex_service.thumb_path_for_item(rating_key, creds.auth_token, conn)
+    if not path:
+        raise HTTPException(status_code=404, detail="Art not available")
+    try:
+        body, media_type = plex_service.fetch_thumb_bytes(path, creds.auth_token, conn)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return Response(content=body, media_type=media_type)
 
 
 @router.get("/sonos/speakers", response_model=list[SonosSpeaker])

@@ -13,6 +13,12 @@ class MediaItem(BaseModel):
     type: str
 
 
+class MediaSuggestionsResponse(BaseModel):
+    most_played: list[MediaItem] = Field(default_factory=list)
+    unplayed: list[MediaItem] = Field(default_factory=list)
+    random: list[MediaItem] = Field(default_factory=list)
+
+
 class CollectionItem(BaseModel):
     id: str
     title: str

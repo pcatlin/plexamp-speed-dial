@@ -9,6 +9,12 @@ export interface MediaItem {
   type: string;
 }
 
+export interface MediaSuggestions {
+  most_played: MediaItem[];
+  unplayed: MediaItem[];
+  random: MediaItem[];
+}
+
 export interface Speaker {
   id: string;
   name: string;
@@ -111,6 +117,12 @@ export const api = {
       body: JSON.stringify({ pin_id: "demo-pin-id", code: "1234", username }),
     }),
   media: (kind: "playlists" | "albums" | "artists" | "tracks") => request<MediaItem[]>(`/media/${kind}`),
+  mediaSearch: (family: "album" | "artist" | "track", query: string) =>
+    request<MediaItem[]>(
+      `/media/search?family=${encodeURIComponent(family)}&query=${encodeURIComponent(query)}`,
+    ),
+  mediaSuggestions: (family: "album" | "artist" | "track") =>
+    request<MediaSuggestions>(`/media/suggestions?family=${encodeURIComponent(family)}`),
   collections: () =>
     request<{ id: string; title: string }[]>(`/media/collections`),
   randomAlbum: (collectionId: string) => request<MediaItem>(`/media/random-album?collection_id=${encodeURIComponent(collectionId)}`),

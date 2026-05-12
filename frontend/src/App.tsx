@@ -1,14 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import "./App.css";
-import { api, API_BASE, MediaItem, MediaType, Player, Speaker, SpeedDial } from "./api";
+import { api, API_BASE, MediaItem, Player, Speaker, SpeedDial } from "./api";
+import { PickMusicSection, PickTab, playMediaTypeForTab } from "./PickMusicSection";
 import { SetupModal } from "./SetupModal";
-
-const mediaTabs: Array<{ label: string; kind: "playlists" | "albums" | "artists" | "tracks"; mediaType: MediaType }> = [
-  { label: "Playlist", kind: "playlists", mediaType: "playlist" },
-  { label: "Album", kind: "albums", mediaType: "album" },
-  { label: "Artist", kind: "artists", mediaType: "artist" },
-  { label: "Track", kind: "tracks", mediaType: "track" },
-];
 
 function IconPlay() {
   return (
@@ -45,8 +39,7 @@ function IconSkipNext() {
 function App() {
   const [authConnected, setAuthConnected] = useState(false);
   const [username, setUsername] = useState("");
-  const [currentTab, setCurrentTab] = useState(mediaTabs[0]);
-  const [mediaItems, setMediaItems] = useState<MediaItem[]>([]);
+  const [pickTab, setPickTab] = useState<PickTab>("playlist");
   const [selectedMedia, setSelectedMedia] = useState<MediaItem | null>(null);
   const [speakers, setSpeakers] = useState<Speaker[]>([]);
   const [selectedSpeakers, setSelectedSpeakers] = useState<string[]>([]);
@@ -61,27 +54,6 @@ function App() {
   const selectedPlayerName = useMemo(
     () => players.find((player) => player.id === selectedPlayer)?.name ?? "No player selected",
     [players, selectedPlayer],
-  );
-
-  const reloadMediaTab = useCallback(
-    async (kind: typeof currentTab.kind, connected: boolean) => {
-      if (!connected) {
-        setMediaItems([]);
-        setSelectedMedia(null);
-        return;
-      }
-      try {
-        const rows = await api.media(kind);
-        setMediaItems(rows);
-        setSelectedMedia(rows[0] ?? null);
-      } catch (err) {
-        const detail = err instanceof Error ? err.message : String(err);
-        setMessage(`Media failed: ${detail}`);
-        setMediaItems([]);
-        setSelectedMedia(null);
-      }
-    },
-    [],
   );
 
   const reloadCollections = useCallback(async (connected: boolean) => {
@@ -120,7 +92,6 @@ function App() {
     await reloadPlayersSelection(playerRows);
     setSpeedDial(speedDialRows);
     await reloadCollections(authStatus.connected);
-    await reloadMediaTab(currentTab.kind, authStatus.connected);
   };
 
   useEffect(() => {
@@ -128,8 +99,8 @@ function App() {
   }, []);
 
   useEffect(() => {
-    reloadMediaTab(currentTab.kind, authConnected).catch(() => undefined);
-  }, [currentTab, authConnected, reloadMediaTab]);
+    reloadCollections(authConnected).catch(() => undefined);
+  }, [authConnected, reloadCollections]);
 
   const toggleSpeaker = (speakerId: string) => {
     setSelectedSpeakers((current) =>
@@ -138,7 +109,7 @@ function App() {
   };
 
   const runPlay = async (payload?: Omit<SpeedDial, "id" | "label">) => {
-    const mediaType = payload?.media_type ?? currentTab.mediaType;
+    const mediaType = payload?.media_type ?? playMediaTypeForTab(pickTab);
     const mediaId = payload?.media_id ?? selectedMedia?.id;
     const playerId = payload?.player_id ?? selectedPlayer;
     const speakerIds = payload?.speaker_ids ?? selectedSpeakers;
@@ -163,7 +134,7 @@ function App() {
     }
     await api.createSpeedDial({
       label: `${selectedMedia.title} -> ${selectedPlayerName}`,
-      media_type: currentTab.mediaType,
+      media_type: playMediaTypeForTab(pickTab),
       media_id: selectedMedia.id,
       player_id: selectedPlayer,
       speaker_ids: selectedSpeakers,
@@ -178,8 +149,12 @@ function App() {
     setAuthConnected(authStatus.connected);
     setUsername(authStatus.username ?? "");
     await reloadCollections(authStatus.connected);
-    await reloadMediaTab(currentTab.kind, authStatus.connected);
-  }, [currentTab.kind, reloadCollections, reloadMediaTab]);
+  }, [reloadCollections]);
+
+  const handlePickTab = useCallback((tab: PickTab) => {
+    setPickTab(tab);
+    setSelectedMedia(null);
+  }, []);
 
   const reloadSpeakersOnly = async () => {
     try {
@@ -248,62 +223,18 @@ function App() {
         onToast={(t) => setMessage(t)}
       />
 
-      <section className="card">
-        <h2>Pick Music</h2>
-        {!authConnected ? (
-          <p className="hint">
-            Open <strong>Setup</strong> to configure your Plex server URL (or rely on backend env), then link your Plex account to
-            load your library.
-          </p>
-        ) : (
-          <p className="hint">
-            Signed in as <strong>{username || "owner"}</strong>. Re-link from <strong>Setup</strong> if authorization fails or the library is empty.
-          </p>
-        )}
-        <div className="tabRow">
-          {mediaTabs.map((tab) => (
-            <button key={tab.kind} className={tab.kind === currentTab.kind ? "active" : ""} onClick={() => setCurrentTab(tab)}>
-              {tab.label}
-            </button>
-          ))}
-          <button
-            onClick={async () => {
-              if (!selectedCollectionId) {
-                setMessage("No album collections loaded — ensure Plex has collections and retry Connect.");
-                return;
-              }
-              try {
-                const album = await api.randomAlbum(selectedCollectionId);
-                setSelectedMedia(album);
-                setMessage(`Random album selected: ${album.title}`);
-              } catch (e) {
-                setMessage(String(e));
-              }
-            }}
-          >
-            Random Album
-          </button>
-        </div>
-        {collections.length > 0 ? (
-          <label className="checkboxRow">
-            <span>Album collection:</span>
-            <select value={selectedCollectionId} onChange={(e) => setSelectedCollectionId(e.target.value)}>
-              {collections.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.title}
-                </option>
-              ))}
-            </select>
-          </label>
-        ) : null}
-        <select value={selectedMedia?.id ?? ""} onChange={(event) => setSelectedMedia(mediaItems.find((item) => item.id === event.target.value) ?? null)}>
-          {mediaItems.map((item) => (
-            <option key={item.id} value={item.id}>
-              {item.title}
-            </option>
-          ))}
-        </select>
-      </section>
+      <PickMusicSection
+        authConnected={authConnected}
+        username={username}
+        pickTab={pickTab}
+        onPickTab={handlePickTab}
+        collections={collections}
+        selectedCollectionId={selectedCollectionId}
+        onCollectionChange={setSelectedCollectionId}
+        selectedMedia={selectedMedia}
+        onSelectMedia={setSelectedMedia}
+        onToast={setMessage}
+      />
 
       <section className="card">
         <h2>Where to Play</h2>

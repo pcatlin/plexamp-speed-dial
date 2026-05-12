@@ -16,6 +16,8 @@ const responses: Record<string, unknown> = {
 function mockPayload(path: string): unknown {
   const direct = responses[path];
   if (direct !== undefined) return direct;
+  if (path.startsWith("/media/suggestions")) return { most_played: [], unplayed: [], random: [] };
+  if (path.startsWith("/media/search")) return [];
   if (path.startsWith("/media/random-album"))
     return { id: "album-rand", title: "Random Album", type: "album" };
   if (path.startsWith("/media"))
@@ -35,6 +37,10 @@ describe("App", () => {
     render(<App />);
 
     await waitFor(() => expect(screen.getByText("Plexamp Sonos Speed Dial")).toBeInTheDocument());
+    await waitFor(() => {
+      const sel = document.getElementById("pick-playlist") as HTMLSelectElement | null;
+      expect(sel?.value).toBe("playlist-1");
+    });
     const playButton = screen.getByRole("button", { name: "Play" });
     fireEvent.click(playButton);
     await waitFor(() => expect(screen.getByText("Playing now")).toBeInTheDocument());
