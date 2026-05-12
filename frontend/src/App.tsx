@@ -222,6 +222,11 @@ function App() {
     setMessage("Removed from speed dial.");
   };
 
+  const playSpeedDialFavorite = async (favorite: SpeedDial) => {
+    const result = await api.speedDialPlay(favorite.id);
+    setMessage(result.details);
+  };
+
   return (
     <div className="container">
       <header className="headerRow">
@@ -368,7 +373,7 @@ function App() {
               <button
                 type="button"
                 className="favoritePlay"
-                onClick={() => runPlay(favorite).catch((error) => setMessage(error.message))}
+                onClick={() => playSpeedDialFavorite(favorite).catch((error) => setMessage(error.message))}
               >
                 {favorite.has_cover_art ? (
                   <img

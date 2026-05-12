@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Response
+from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_plex_creds
@@ -368,6 +369,32 @@ def create_speed_dial(payload: SpeedDialCreate, db: Session = Depends(get_db)) -
     db.commit()
     db.refresh(row)
     return IdResponse(id=row.id)
+
+
+@router.post("/speed-dial/{favorite_id}/play", response_model=PlayResponse)
+def play_speed_dial_favorite(
+    favorite_id: int,
+    db: Session = Depends(get_db),
+    creds: PlexCredential = Depends(require_plex_creds),
+) -> PlayResponse:
+    row = db.get(SpeedDialFavorite, favorite_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Favorite not found")
+    try:
+        payload = PlayRequest(
+            media_type=row.media_type,
+            media_id=str(row.media_id),
+            player_id=row.player_id,
+            speaker_ids=list(row.speaker_ids or []),
+            preset_id=row.preset_id,
+        )
+    except ValidationError as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid favorite data: {exc}") from exc
+    assert creds.auth_token
+    response = playback_service.play(payload, db, auth_token=creds.auth_token)
+    if response.status == "error":
+        raise HTTPException(status_code=400, detail=response.details)
+    return response
 
 
 @router.get("/speed-dial/{favorite_id}/cover")
