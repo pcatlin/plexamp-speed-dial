@@ -1,6 +1,48 @@
 from unittest.mock import Mock
 
 
+def test_media_tracks_for_parent_ok(client, db_session, monkeypatch):
+    from app.models import PlexCredential
+    from app.schemas.domain import MediaItem
+
+    db_session.add(PlexCredential(auth_token="stub-token", is_connected=True))
+    db_session.commit()
+
+    import app.api.routes as routes_module
+
+    def fake(parent_id, family, token, conn, *, limit=50):  # noqa: ANN001
+        assert parent_id == "12"
+        assert family == "album"
+        assert limit == 50
+        return [MediaItem(id="t1", title="Song A", subtitle="Artist — Album", type="track")]
+
+    monkeypatch.setattr(routes_module.plex_service, "get_tracks_for_parent", fake)
+
+    r = client.get("/api/v1/media/tracks-for-parent?family=album&parent_id=12")
+    assert r.status_code == 200
+    body = r.json()
+    assert len(body) == 1
+    assert body[0]["title"] == "Song A"
+
+
+def test_media_tracks_for_parent_bad_request(client, db_session, monkeypatch):
+    from app.models import PlexCredential
+
+    db_session.add(PlexCredential(auth_token="stub-token", is_connected=True))
+    db_session.commit()
+
+    import app.api.routes as routes_module
+
+    def boom(*_a, **_kw):  # noqa: ANN001
+        raise ValueError("not a playlist")
+
+    monkeypatch.setattr(routes_module.plex_service, "get_tracks_for_parent", boom)
+
+    r = client.get("/api/v1/media/tracks-for-parent?family=playlist&parent_id=1")
+    assert r.status_code == 400
+    assert "not a playlist" in r.json()["detail"]
+
+
 def test_health_endpoint(client):
     response = client.get("/api/v1/health")
     assert response.status_code == 200

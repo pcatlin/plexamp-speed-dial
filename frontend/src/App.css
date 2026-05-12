@@ -154,6 +154,63 @@
   margin-bottom: 0.65rem;
 }
 
+.trackPreviewShell {
+  margin-top: 0.85rem;
+}
+
+.trackPreviewCount {
+  font-weight: 400;
+  color: #6b7280;
+}
+
+.trackPreviewList {
+  margin: 0.35rem 0 0;
+  padding: 0;
+  list-style: none;
+  max-height: min(50vh, 16rem);
+  overflow-y: auto;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fafafa;
+}
+
+.trackPreviewRow {
+  display: flex;
+  gap: 0.5rem;
+  align-items: baseline;
+  padding: 0.4rem 0.55rem;
+  border-bottom: 1px solid #ececec;
+  font-size: 0.9rem;
+}
+
+.trackPreviewRow:last-child {
+  border-bottom: none;
+}
+
+.trackPreviewIdx {
+  flex: 0 0 1.6rem;
+  color: #6b7280;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.trackPreviewCell {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.trackPreviewTitle {
+  word-break: break-word;
+}
+
+.trackPreviewSub {
+  color: #6b7280;
+  font-size: 0.82rem;
+}
+
 button {
   padding: 0.55rem 0.8rem;
   border-radius: 10px;

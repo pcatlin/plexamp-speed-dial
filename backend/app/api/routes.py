@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, Response
+from typing import Literal
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
@@ -209,6 +211,27 @@ def media_tracks(db: Session = Depends(get_db), creds: PlexCredential = Depends(
         return plex_service.get_media("track", creds.auth_token, resolve_plex_conn(db))
     except ValueError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@router.get("/media/tracks-for-parent", response_model=list[MediaItem])
+def media_tracks_for_parent(
+    family: Literal["playlist", "album", "artist"],
+    parent_id: str,
+    limit: int = Query(50, ge=1, le=50),
+    db: Session = Depends(get_db),
+    creds: PlexCredential = Depends(require_plex_creds),
+):
+    assert creds.auth_token
+    try:
+        return plex_service.get_tracks_for_parent(
+            parent_id,
+            family,
+            creds.auth_token,
+            resolve_plex_conn(db),
+            limit=limit,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.get("/media/collections")

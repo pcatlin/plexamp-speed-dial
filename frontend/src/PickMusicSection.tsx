@@ -69,6 +69,8 @@ export function PickMusicSection({
   const [searchLoading, setSearchLoading] = useState(false);
   const [suggestions, setSuggestions] = useState<MediaSuggestions | null>(null);
   const [suggestionSelect, setSuggestionSelect] = useState("");
+  const [previewTracks, setPreviewTracks] = useState<MediaItem[]>([]);
+  const [previewTracksLoading, setPreviewTracksLoading] = useState(false);
 
   const suggestionFamily = useMemo(() => {
     if (pickTab === "album" || pickTab === "artist" || pickTab === "track") return pickTab;
@@ -153,6 +155,45 @@ export function PickMusicSection({
       cancelled = true;
     };
   }, [authConnected, suggestionFamily, debouncedQuery, onToast]);
+
+  useEffect(() => {
+    if (!authConnected) {
+      setPreviewTracks([]);
+      setPreviewTracksLoading(false);
+      return;
+    }
+    if (pickTab !== "playlist" && pickTab !== "album" && pickTab !== "artist") {
+      setPreviewTracks([]);
+      setPreviewTracksLoading(false);
+      return;
+    }
+    if (!selectedMedia || selectedMedia.type !== pickTab) {
+      setPreviewTracks([]);
+      setPreviewTracksLoading(false);
+      return;
+    }
+    const family = pickTab as "playlist" | "album" | "artist";
+    let cancelled = false;
+    setPreviewTracks([]);
+    setPreviewTracksLoading(true);
+    api
+      .mediaTracksForParent(family, selectedMedia.id, 50)
+      .then((rows) => {
+        if (!cancelled) setPreviewTracks(rows);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          onToast(err instanceof Error ? err.message : String(err));
+          setPreviewTracks([]);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setPreviewTracksLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [authConnected, pickTab, selectedMedia?.id, selectedMedia?.type, onToast]);
 
   const allSuggestionItems = useMemo(() => {
     if (!suggestions) return [] as MediaItem[];
@@ -378,6 +419,34 @@ export function PickMusicSection({
             <div className="pickedArtTitle">{selectedMedia.title}</div>
             {selectedMedia.subtitle ? <div className="pickedArtSub">{selectedMedia.subtitle}</div> : null}
           </div>
+        </div>
+      ) : null}
+
+      {showArt && selectedMedia && (pickTab === "playlist" || pickTab === "album" || pickTab === "artist") ? (
+        <div className="trackPreviewShell">
+          <div className="fieldLabel">
+            Tracks
+            {!previewTracksLoading && previewTracks.length > 0 ? (
+              <span className="trackPreviewCount"> (showing {previewTracks.length})</span>
+            ) : null}
+          </div>
+          {previewTracksLoading ? (
+            <p className="hint subtle">Loading tracks…</p>
+          ) : previewTracks.length > 0 ? (
+            <ol className="trackPreviewList" aria-label="Tracks in this selection">
+              {previewTracks.map((track, index) => (
+                <li key={track.id} className="trackPreviewRow">
+                  <span className="trackPreviewIdx">{index + 1}</span>
+                  <span className="trackPreviewCell">
+                    <span className="trackPreviewTitle">{track.title}</span>
+                    {track.subtitle ? <span className="trackPreviewSub">{track.subtitle}</span> : null}
+                  </span>
+                </li>
+              ))}
+            </ol>
+          ) : (
+            <p className="hint subtle">No tracks returned for this item.</p>
+          )}
         </div>
       ) : null}
     </section>

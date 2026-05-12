@@ -128,6 +128,10 @@ export const api = {
   collections: () =>
     request<{ id: string; title: string }[]>(`/media/collections`),
   randomAlbum: (collectionId: string) => request<MediaItem>(`/media/random-album?collection_id=${encodeURIComponent(collectionId)}`),
+  mediaTracksForParent: (family: "playlist" | "album" | "artist", parentId: string, limit = 50) =>
+    request<MediaItem[]>(
+      `/media/tracks-for-parent?family=${encodeURIComponent(family)}&parent_id=${encodeURIComponent(parentId)}&limit=${encodeURIComponent(String(limit))}`,
+    ),
   speakers: () => request<Speaker[]>("/sonos/speakers"),
   groupPresets: () => request<GroupPreset[]>("/sonos/group-presets"),
   createGroupPreset: (name: string, speakerIds: string[]) =>
