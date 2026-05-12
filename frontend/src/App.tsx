@@ -50,6 +50,7 @@ function App() {
   const [collections, setCollections] = useState<{ id: string; title: string }[]>([]);
   const [selectedCollectionId, setSelectedCollectionId] = useState("");
   const [setupOpen, setSetupOpen] = useState(false);
+  const [artistRadio, setArtistRadio] = useState(true);
 
   const selectedPlayerName = useMemo(
     () => players.find((player) => player.id === selectedPlayer)?.name ?? "No player selected",
@@ -123,6 +124,7 @@ function App() {
       player_id: playerId,
       speaker_ids: speakerIds,
       preset_id: payload?.preset_id ?? null,
+      ...(mediaType === "artist" ? { artist_radio: payload?.artist_radio ?? artistRadio } : {}),
     });
     setMessage(result.details);
   };
@@ -132,13 +134,15 @@ function App() {
       setMessage("Select media and player before saving.");
       return;
     }
+    const mt = playMediaTypeForTab(pickTab);
     await api.createSpeedDial({
       label: `${selectedMedia.title} -> ${selectedPlayerName}`,
-      media_type: playMediaTypeForTab(pickTab),
+      media_type: mt,
       media_id: selectedMedia.id,
       player_id: selectedPlayer,
       speaker_ids: selectedSpeakers,
       preset_id: null,
+      ...(mt === "artist" ? { artist_radio: artistRadio } : {}),
     });
     setSpeedDial(await api.speedDial());
     setMessage("Saved to speed dial.");
@@ -233,6 +237,8 @@ function App() {
         onCollectionChange={setSelectedCollectionId}
         selectedMedia={selectedMedia}
         onSelectMedia={setSelectedMedia}
+        artistRadio={artistRadio}
+        onArtistRadioChange={setArtistRadio}
         onToast={setMessage}
       />
 

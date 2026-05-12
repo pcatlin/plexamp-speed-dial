@@ -88,6 +88,10 @@ class PlayRequest(BaseModel):
     player_id: int
     speaker_ids: list[str] = Field(default_factory=list)
     preset_id: int | None = None
+    artist_radio: bool = Field(
+        default=True,
+        description="When media_type is artist: True = Plex artist radio station; False = queue this artist only.",
+    )
 
 
 class PlayResponse(BaseModel):
@@ -110,6 +114,10 @@ class SpeedDialCreate(BaseModel):
     player_id: int
     speaker_ids: list[str] = Field(default_factory=list)
     preset_id: int | None = None
+    artist_radio: bool | None = Field(
+        default=None,
+        description="For artist favorites: True/False; null for non-artist or legacy rows (treated as radio on play).",
+    )
 
 
 class SpeedDialRead(SpeedDialCreate):

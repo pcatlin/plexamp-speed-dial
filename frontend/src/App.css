@@ -149,6 +149,11 @@
   margin-bottom: 0.5rem;
 }
 
+.pickPanel .artistRadioHint {
+  margin-top: -0.15rem;
+  margin-bottom: 0.65rem;
+}
+
 button {
   padding: 0.55rem 0.8rem;
   border-radius: 10px;

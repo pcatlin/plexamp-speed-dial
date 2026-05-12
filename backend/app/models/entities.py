@@ -64,4 +64,5 @@ class SpeedDialFavorite(Base):
     speaker_ids = Column(JSON, nullable=False, default=list)
     preset_id = Column(Integer, nullable=True)
     cover_thumb_path = Column(Text, nullable=True)
+    artist_radio = Column(Boolean, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)

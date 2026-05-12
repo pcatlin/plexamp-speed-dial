@@ -4,7 +4,11 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import require_plex_creds
 from app.db.database import Base, SessionLocal, engine, get_db
-from app.db.runtime_setup_migrate import ensure_runtime_setup_columns, ensure_speed_dial_cover_column
+from app.db.runtime_setup_migrate import (
+    ensure_runtime_setup_columns,
+    ensure_speed_dial_artist_radio_column,
+    ensure_speed_dial_cover_column,
+)
 from app.models import PlexCredential, PlexampPlayer, SonosGroupPreset, SpeedDialFavorite
 from app.schemas.common import HealthResponse, IdResponse
 from app.schemas.domain import (
@@ -61,6 +65,7 @@ def startup() -> None:
     Base.metadata.create_all(bind=engine)
     ensure_runtime_setup_columns(engine)
     ensure_speed_dial_cover_column(engine)
+    ensure_speed_dial_artist_radio_column(engine)
     seed = SessionLocal()
     try:
         get_or_create_runtime_setup(seed)
@@ -393,6 +398,7 @@ def speed_dial(db: Session = Depends(get_db)) -> list[SpeedDialRead]:
             player_id=row.player_id,
             speaker_ids=row.speaker_ids,
             preset_id=row.preset_id,
+            artist_radio=getattr(row, "artist_radio", None),
             has_cover_art=bool((getattr(row, "cover_thumb_path", None) or "").strip()),
         )
         for row in rows
@@ -434,12 +440,14 @@ def play_speed_dial_favorite(
     if not row:
         raise HTTPException(status_code=404, detail="Favorite not found")
     try:
+        ar = getattr(row, "artist_radio", None)
         payload = PlayRequest(
             media_type=row.media_type,
             media_id=str(row.media_id),
             player_id=row.player_id,
             speaker_ids=list(row.speaker_ids or []),
             preset_id=row.preset_id,
+            artist_radio=ar if ar is not None else True,
         )
     except ValidationError as exc:
         raise HTTPException(status_code=400, detail=f"Invalid favorite data: {exc}") from exc

@@ -154,6 +154,47 @@ def test_speed_dial_play_by_id(client, db_session, monkeypatch):
     assert r.json()["status"] == "ok"
     assert seen["payload"].media_id == "99"
     assert seen["payload"].speaker_ids == ["s1"]
+    assert seen["payload"].artist_radio is True
+
+
+def test_speed_dial_play_respects_stored_artist_radio(client, db_session, monkeypatch):
+    from app.models import PlexCredential
+    from app.schemas.domain import PlayResponse
+
+    db_session.add(PlexCredential(auth_token="stub-token", is_connected=True))
+    db_session.commit()
+
+    import app.api.routes as routes_module
+
+    seen: dict = {}
+
+    def fake_play(payload, db, *, auth_token):  # noqa: ANN001
+        seen["payload"] = payload
+        return PlayResponse(status="ok", details="played")
+
+    monkeypatch.setattr(routes_module.playback_service, "play", fake_play)
+
+    player_id = client.post(
+        "/api/v1/players",
+        json={"name": "Kitchen", "host": "plexamp.local", "port": 32500, "is_active": True},
+    ).json()["id"]
+
+    favorite_id = client.post(
+        "/api/v1/speed-dial",
+        json={
+            "label": "Artist lib",
+            "media_type": "artist",
+            "media_id": "77",
+            "player_id": player_id,
+            "speaker_ids": [],
+            "preset_id": None,
+            "artist_radio": False,
+        },
+    ).json()["id"]
+
+    r = client.post(f"/api/v1/speed-dial/{favorite_id}/play")
+    assert r.status_code == 200
+    assert seen["payload"].artist_radio is False
 
 
 def test_speed_dial_play_missing_returns_404(client, db_session):

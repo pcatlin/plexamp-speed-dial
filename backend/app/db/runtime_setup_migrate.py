@@ -51,3 +51,20 @@ def ensure_speed_dial_cover_column(engine: Engine) -> None:
             _log.info("Applied speed_dial_favorites migration: cover_thumb_path")
         except Exception as exc:  # noqa: BLE001
             _log.warning("speed_dial_favorites migrate skipped/failed: %s", exc)
+
+
+def ensure_speed_dial_artist_radio_column(engine: Engine) -> None:
+    """Add speed_dial_favorites.artist_radio when upgrading an existing DB."""
+    insp = inspect(engine)
+    if "speed_dial_favorites" not in insp.get_table_names():
+        return
+    existing = {c["name"] for c in insp.get_columns("speed_dial_favorites")}
+    if "artist_radio" in existing:
+        return
+    stmt = "ALTER TABLE speed_dial_favorites ADD COLUMN artist_radio BOOLEAN"
+    with engine.begin() as conn:
+        try:
+            conn.execute(text(stmt))
+            _log.info("Applied speed_dial_favorites migration: artist_radio")
+        except Exception as exc:  # noqa: BLE001
+            _log.warning("speed_dial_favorites migrate skipped/failed: %s", exc)

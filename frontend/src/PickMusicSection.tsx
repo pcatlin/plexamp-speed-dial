@@ -43,6 +43,8 @@ type Props = {
   onCollectionChange: (id: string) => void;
   selectedMedia: MediaItem | null;
   onSelectMedia: (item: MediaItem | null) => void;
+  artistRadio: boolean;
+  onArtistRadioChange: (value: boolean) => void;
   onToast: (msg: string) => void;
 };
 
@@ -56,6 +58,8 @@ export function PickMusicSection({
   onCollectionChange,
   selectedMedia,
   onSelectMedia,
+  artistRadio,
+  onArtistRadioChange,
   onToast,
 }: Props) {
   const [playlists, setPlaylists] = useState<MediaItem[]>([]);
@@ -249,6 +253,17 @@ export function PickMusicSection({
 
       {!authConnected ? null : suggestionFamily ? (
         <div className="pickPanel">
+          {pickTab === "artist" ? (
+            <label className="checkboxRow artistRadioRow">
+              <input type="checkbox" checked={artistRadio} onChange={(e) => onArtistRadioChange(e.target.checked)} />
+              Radio
+            </label>
+          ) : null}
+          {pickTab === "artist" ? (
+            <p className="hint subtle artistRadioHint">
+              When checked, Plex artist radio; when off, only this artist&apos;s library tracks.
+            </p>
+          ) : null}
           <label className="fieldLabel" htmlFor={`pick-search-${suggestionFamily}`}>
             Search {suggestionFamily}s
           </label>

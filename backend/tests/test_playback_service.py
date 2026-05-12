@@ -98,3 +98,87 @@ def test_playback_sonos_stop_empty_returns_error(db_session):
     service = PlaybackService(plex_service=FakePlexService(), sonos_service=FakeSonosService())
     result = service.sonos_stop_selected([], db_session)
     assert result.status == "error"
+
+
+class FakeArtistPMS:
+    machineIdentifier = "machine-id"
+    library = type("Lib", (), {"identifier": "com.plexapp.plugins.library"})()
+
+    class _Artist:
+        type = "artist"
+        title = "Radiohead"
+        key = "/library/metadata/555"
+
+        def station(self):
+            class _Station:
+                key = "/library/sections/1/stations/888"
+
+            return _Station()
+
+    def fetchItem(self, rating_key: int):  # noqa: ANN001
+        return FakeArtistPMS._Artist()
+
+
+class FakeArtistPlexService:
+    def connect_server(self, token: str, conn=None) -> FakeArtistPMS:  # noqa: ANN001
+        assert token == "dummy-token"
+        return FakeArtistPMS()
+
+
+def test_playback_artist_radio_uses_station_in_uri(db_session, monkeypatch):
+    db_session.add(PlexCredential(auth_token="dummy-token", is_connected=True))
+    db_session.commit()
+    player = PlexampPlayer(name="Kitchen", host="plexamp.local", port=32500, is_active=True)
+    db_session.add(player)
+    db_session.commit()
+    db_session.refresh(player)
+
+    captured: dict = {}
+
+    def capture_queue(**kwargs):  # noqa: ANN001
+        captured["server_uri"] = kwargs["server_uri"]
+        fake = Mock()
+        fake.status_code = 200
+        fake.text = ""
+        return fake
+
+    monkeypatch.setattr("app.services.playback_service.create_play_queue", capture_queue)
+
+    service = PlaybackService(plex_service=FakeArtistPlexService(), sonos_service=FakeSonosService())
+    result = service.play(
+        PlayRequest(media_type="artist", media_id="555", player_id=player.id, speaker_ids=[], artist_radio=True),
+        db_session,
+        auth_token="dummy-token",
+    )
+    assert result.status == "ok"
+    assert "stations/888" in captured["server_uri"]
+
+
+def test_playback_artist_library_uses_metadata_uri(db_session, monkeypatch):
+    db_session.add(PlexCredential(auth_token="dummy-token", is_connected=True))
+    db_session.commit()
+    player = PlexampPlayer(name="Kitchen", host="plexamp.local", port=32500, is_active=True)
+    db_session.add(player)
+    db_session.commit()
+    db_session.refresh(player)
+
+    captured: dict = {}
+
+    def capture_queue(**kwargs):  # noqa: ANN001
+        captured["server_uri"] = kwargs["server_uri"]
+        fake = Mock()
+        fake.status_code = 200
+        fake.text = ""
+        return fake
+
+    monkeypatch.setattr("app.services.playback_service.create_play_queue", capture_queue)
+
+    service = PlaybackService(plex_service=FakeArtistPlexService(), sonos_service=FakeSonosService())
+    result = service.play(
+        PlayRequest(media_type="artist", media_id="555", player_id=player.id, speaker_ids=[], artist_radio=False),
+        db_session,
+        auth_token="dummy-token",
+    )
+    assert result.status == "ok"
+    assert "metadata/555" in captured["server_uri"]
+    assert "stations" not in captured["server_uri"]

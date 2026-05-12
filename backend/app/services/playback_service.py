@@ -98,16 +98,23 @@ class PlaybackService:
             return PlayResponse(status="error", details=f"Plex lookup failed: {exc}")
 
         if effective_type == "artist":
-            station_builder = getattr(item, "station", None)
-            if not callable(station_builder):
-                return PlayResponse(status="error", details="This media item cannot start an artist radio station.")
-            station = station_builder()
-            if station is None:
-                return PlayResponse(
-                    status="error",
-                    details="Artist has no Plex radio station (or station metadata could not be loaded).",
-                )
-            library_key = station.key
+            if payload.artist_radio:
+                station_builder = getattr(item, "station", None)
+                if not callable(station_builder):
+                    return PlayResponse(status="error", details="This media item cannot start an artist radio station.")
+                station = station_builder()
+                if station is None:
+                    return PlayResponse(
+                        status="error",
+                        details="Artist has no Plex radio station (or station metadata could not be loaded).",
+                    )
+                library_key = station.key
+            else:
+                libtype = (getattr(item, "type", None) or "artist").lower()
+                raw_key = item.key or ""
+                if not raw_key.strip():
+                    return PlayResponse(status="error", details="Artist item has no library path for playback.")
+                library_key = append_type_if_missing(raw_key, libtype)
         else:
             libtype = (getattr(item, "type", None) or "").lower()
             raw_key = item.key or ""
@@ -165,7 +172,10 @@ class PlaybackService:
             tail = sonos_note if sonos_note else f"Sonos: no line-in action ({speaker_note})."
         else:
             tail = "No Sonos outputs selected."
-        details = f"Plexamp playing {effective_type}: {title!r} via {player.name}. {tail}"
+        play_kind = effective_type
+        if effective_type == "artist":
+            play_kind = "artist radio" if payload.artist_radio else "artist library"
+        details = f"Plexamp playing {play_kind}: {title!r} via {player.name}. {tail}"
         return PlayResponse(status="ok", details=details)
 
     def _plexamp_playback_simple(
