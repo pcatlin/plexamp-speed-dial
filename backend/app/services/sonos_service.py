@@ -182,6 +182,15 @@ class SonosService:
         else:
             master = sorted(targets, key=lambda z: (z.player_name or "").lower())[0]
 
+        # Each selected player may still be in an old zone group (e.g. user unchecked one room).
+        # SoCo join() does not remove other members of that group — unjoin first so only the
+        # checked speakers end up in the new group before line-in / play.
+        for d in sorted(targets, key=lambda z: (z.uid or "")):
+            try:
+                d.unjoin()
+            except Exception as exc:  # noqa: BLE001
+                _log.warning("Sonos unjoin %s failed (continuing): %s", d.player_name, exc)
+
         for d in targets:
             if d.uid != master.uid:
                 try:
