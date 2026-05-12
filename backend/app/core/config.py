@@ -25,6 +25,14 @@ class Settings(BaseSettings):
             "PLEX_CLIENT_ID",
         ),
     )
+    plex_device_name: str = Field(
+        default="Plexamp Speed Dial API",
+        validation_alias=AliasChoices("plex_device_name", "PLEX_DEVICE_NAME"),
+    )
+    plex_product: str = Field(
+        default="Plexamp Speed Dial",
+        validation_alias=AliasChoices("plex_product", "PLEX_PRODUCT"),
+    )
     plex_media_limit: int = Field(
         default=300,
         ge=50,

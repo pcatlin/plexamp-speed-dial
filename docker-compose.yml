@@ -22,6 +22,8 @@ services:
       DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://postgres:postgres@db:5432/plexamp_speed_dial}
       PLEX_SERVER_URL: ${PLEX_SERVER_URL:-}
       PLEX_CLIENT_IDENTIFIER: ${PLEX_CLIENT_IDENTIFIER:-plexamp-speed-dial-web}
+      PLEX_DEVICE_NAME: ${PLEX_DEVICE_NAME:-Plexamp Speed Dial API}
+      PLEX_PRODUCT: ${PLEX_PRODUCT:-Plexamp Speed Dial}
       PLEX_SSL_VERIFY: ${PLEX_SSL_VERIFY:-true}
       SONOS_SEED_IPS: ${SONOS_SEED_IPS:-}
       SONOS_DISCOVER_TIMEOUT: ${SONOS_DISCOVER_TIMEOUT:-10}

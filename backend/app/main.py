@@ -3,8 +3,12 @@ import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import router
 from app.core.config import settings
+from app.plexapi_identity import apply_stable_plexapi_headers
+
+apply_stable_plexapi_headers(settings)
+
+from app.api.routes import router
 from app.db.database import SessionLocal
 from app.services.runtime_setup import effective_plex_url, get_or_create_runtime_setup
 
