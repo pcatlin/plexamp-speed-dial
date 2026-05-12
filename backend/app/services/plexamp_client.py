@@ -99,3 +99,19 @@ def create_play_queue(
     resp = requests.get(url, timeout=timeout)
     print(f"[plexamp] createPlayQueue HTTP {resp.status_code} body_len={len(resp.text or '')}", flush=True)
     return resp
+
+
+def plexamp_playback_command(
+    *,
+    plexamp_base: str,
+    token: str,
+    action: str,
+    timeout: float,
+) -> requests.Response:
+    """Send a companion playback command to headless Plexamp (skipNext, skipPrevious, stop, …)."""
+    base = sanitize_plexamp_base(plexamp_base)
+    query = urlencode({"type": "audio", "commandID": 1, "token": token})
+    url = f"{base}/player/playback/{action}?{query}"
+    safe = re.sub(r"token=[^&]*", "token=<redacted>", url)
+    _log.info("Plexamp playback %s GET %s", action, safe)
+    return requests.get(url, timeout=timeout)

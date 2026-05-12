@@ -12,7 +12,13 @@ from app.core.config import settings
 from app.models import PlexampPlayer, SonosGroupPreset
 from app.schemas.domain import PlayRequest, PlayResponse
 from app.services.plex_service import PlexService
-from app.services.plexamp_client import append_type_if_missing, build_server_playback_uri, create_play_queue, parse_pms_host_port_protocol
+from app.services.plexamp_client import (
+    append_type_if_missing,
+    build_server_playback_uri,
+    create_play_queue,
+    parse_pms_host_port_protocol,
+    plexamp_playback_command,
+)
 from app.services.runtime_setup import resolve_plex_conn, resolve_sonos_runtime
 from app.services.sonos_service import SonosService
 
@@ -27,6 +33,22 @@ class PlaybackService:
     ) -> None:
         self._plex = plex_service or PlexService()
         self._sonos = sonos_service or SonosService()
+
+    @staticmethod
+    def _plexamp_base_for_player(player: PlexampPlayer) -> tuple[str | None, str | None]:
+        """Return ``(base_url, error_message)`` for the Plexamp companion HTTP API."""
+        raw_host = (player.host or "").strip()
+        if not raw_host:
+            return None, "Plexamp player host is empty."
+        if raw_host.startswith(("http://", "https://")):
+            parsed = urlparse(raw_host)
+            if not parsed.hostname:
+                return None, "Plexamp player host URL is invalid"
+            scheme = parsed.scheme if parsed.scheme in ("http", "https") else "http"
+            port = player.port or parsed.port or 32500
+            return f"{scheme}://{parsed.hostname}:{port}", None
+        scheme = "https" if player.port == 443 else "http"
+        return f"{scheme}://{raw_host}:{player.port or 32500}", None
 
     def play(self, payload: PlayRequest, db: Session, *, auth_token: str) -> PlayResponse:
         player = db.get(PlexampPlayer, payload.player_id)
@@ -50,17 +72,9 @@ class PlaybackService:
                 details="Plex Media Server URL is empty; configure it under Setup (or PLEX_SERVER_URL).",
             )
 
-        raw_host = (player.host or "").strip()
-        if raw_host.startswith(("http://", "https://")):
-            parsed = urlparse(raw_host)
-            if not parsed.hostname:
-                return PlayResponse(status="error", details="Plexamp player host URL is invalid")
-            scheme = parsed.scheme if parsed.scheme in ("http", "https") else "http"
-            port = player.port or parsed.port or 32500
-            plexamp_base = f"{scheme}://{parsed.hostname}:{port}"
-        else:
-            scheme = "https" if player.port == 443 else "http"
-            plexamp_base = f"{scheme}://{raw_host}:{player.port or 32500}"
+        plexamp_base, perr = self._plexamp_base_for_player(player)
+        if not plexamp_base:
+            return PlayResponse(status="error", details=perr or "Invalid Plexamp URL")
 
         try:
             rating_key = int(str(payload.media_id).strip())
@@ -153,3 +167,64 @@ class PlaybackService:
             tail = "No Sonos outputs selected."
         details = f"Plexamp playing {effective_type}: {title!r} via {player.name}. {tail}"
         return PlayResponse(status="ok", details=details)
+
+    def _plexamp_playback_simple(
+        self,
+        player_id: int,
+        db: Session,
+        *,
+        auth_token: str,
+        action: str,
+        ok_details: str,
+    ) -> PlayResponse:
+        player = db.get(PlexampPlayer, player_id)
+        if not player:
+            return PlayResponse(status="error", details="Selected Plexamp player not found")
+        plexamp_base, perr = self._plexamp_base_for_player(player)
+        if not plexamp_base:
+            return PlayResponse(status="error", details=perr or "Invalid Plexamp URL")
+        try:
+            response = plexamp_playback_command(
+                plexamp_base=plexamp_base,
+                token=auth_token,
+                action=action,
+                timeout=settings.plexamp_request_timeout_seconds,
+            )
+        except requests_exc.RequestException as exc:
+            return PlayResponse(status="error", details=f"Plexamp {action} failed: {exc}")
+        if response.status_code != 200:
+            snippet = (response.text or "")[:280]
+            return PlayResponse(
+                status="error",
+                details=f"Plexamp {action} returned HTTP {response.status_code}. {snippet or 'Empty response body'}",
+            )
+        return PlayResponse(status="ok", details=f"{ok_details} ({player.name}).")
+
+    def plexamp_skip_next(self, player_id: int, db: Session, *, auth_token: str) -> PlayResponse:
+        return self._plexamp_playback_simple(
+            player_id,
+            db,
+            auth_token=auth_token,
+            action="skipNext",
+            ok_details="Skipped to next track",
+        )
+
+    def plexamp_skip_previous(self, player_id: int, db: Session, *, auth_token: str) -> PlayResponse:
+        return self._plexamp_playback_simple(
+            player_id,
+            db,
+            auth_token=auth_token,
+            action="skipPrevious",
+            ok_details="Skipped to previous track",
+        )
+
+    def sonos_stop_selected(self, speaker_ids: list[str], db: Session) -> PlayResponse:
+        if not speaker_ids:
+            return PlayResponse(status="error", details="Select at least one Sonos speaker, then press stop.")
+        try:
+            runtime = resolve_sonos_runtime(db)
+            msg = self._sonos.stop_selected_speakers(runtime, speaker_ids)
+        except Exception as exc:  # noqa: BLE001
+            _log.exception("Sonos stop failed")
+            return PlayResponse(status="error", details=f"Sonos stop failed: {exc}")
+        return PlayResponse(status="ok", details=msg)

@@ -132,4 +132,19 @@ export const api = {
     speaker_ids: string[];
     preset_id?: number | null;
   }) => request<{ status: string; details: string }>("/play", { method: "POST", body: JSON.stringify(payload) }),
+  plexampSkipNext: (playerId: number) =>
+    request<{ status: string; details: string }>("/plexamp/skip-next", {
+      method: "POST",
+      body: JSON.stringify({ player_id: playerId }),
+    }),
+  plexampSkipPrevious: (playerId: number) =>
+    request<{ status: string; details: string }>("/plexamp/skip-previous", {
+      method: "POST",
+      body: JSON.stringify({ player_id: playerId }),
+    }),
+  sonosStop: (speakerIds: string[]) =>
+    request<{ status: string; details: string }>("/sonos/stop", {
+      method: "POST",
+      body: JSON.stringify({ speaker_ids: speakerIds }),
+    }),
 };

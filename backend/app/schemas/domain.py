@@ -89,6 +89,14 @@ class PlayResponse(BaseModel):
     details: str
 
 
+class PlayerControlRequest(BaseModel):
+    player_id: int
+
+
+class SonosStopRequest(BaseModel):
+    speaker_ids: list[str] = Field(default_factory=list)
+
+
 class SpeedDialCreate(BaseModel):
     label: str
     media_type: MediaType

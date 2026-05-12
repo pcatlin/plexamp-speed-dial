@@ -91,6 +91,30 @@ def test_speed_dial_create_list_delete(client):
     assert listed_after.json() == []
 
 
+def test_sonos_stop_requires_selected_speakers(client):
+    r = client.post("/api/v1/sonos/stop", json={"speaker_ids": []})
+    assert r.status_code == 400
+
+
+def test_plexamp_skip_next_happy_path(client, db_session, monkeypatch):
+    from app.models import PlexCredential
+
+    db_session.add(PlexCredential(auth_token="stub-token", is_connected=True))
+    db_session.commit()
+
+    player_id = client.post(
+        "/api/v1/players",
+        json={"name": "Amp", "host": "plexamp.local", "port": 32500, "is_active": True},
+    ).json()["id"]
+
+    fake = Mock(status_code=200, text="OK")
+    monkeypatch.setattr("app.services.playback_service.plexamp_playback_command", lambda **kwargs: fake)
+
+    r = client.post("/api/v1/plexamp/skip-next", json={"player_id": player_id})
+    assert r.status_code == 200
+    assert r.json()["status"] == "ok"
+
+
 def test_speed_dial_cover_thumb_saved_and_served(client, db_session, monkeypatch):
     from app.models import PlexCredential
 

@@ -35,7 +35,7 @@ describe("App", () => {
     render(<App />);
 
     await waitFor(() => expect(screen.getByText("Plexamp Sonos Speed Dial")).toBeInTheDocument());
-    const playButton = screen.getByRole("button", { name: "Play now" });
+    const playButton = screen.getByRole("button", { name: "Play" });
     fireEvent.click(playButton);
     await waitFor(() => expect(screen.getByText("Playing now")).toBeInTheDocument());
   });

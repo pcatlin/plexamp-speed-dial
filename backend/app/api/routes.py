@@ -7,6 +7,7 @@ from app.db.runtime_setup_migrate import ensure_runtime_setup_columns, ensure_sp
 from app.models import PlexCredential, PlexampPlayer, SonosGroupPreset, SpeedDialFavorite
 from app.schemas.common import HealthResponse, IdResponse
 from app.schemas.domain import (
+    PlayerControlRequest,
     PlayerCreate,
     PlayerRead,
     PlayRequest,
@@ -21,6 +22,7 @@ from app.schemas.domain import (
     SonosGroupPresetCreate,
     SonosGroupPresetRead,
     SonosSpeaker,
+    SonosStopRequest,
     SpeedDialCreate,
     SpeedDialRead,
 )
@@ -286,6 +288,40 @@ def play(
 ) -> PlayResponse:
     assert creds.auth_token
     response = playback_service.play(payload, db, auth_token=creds.auth_token)
+    if response.status == "error":
+        raise HTTPException(status_code=400, detail=response.details)
+    return response
+
+
+@router.post("/plexamp/skip-next", response_model=PlayResponse)
+def plexamp_skip_next(
+    payload: PlayerControlRequest,
+    db: Session = Depends(get_db),
+    creds: PlexCredential = Depends(require_plex_creds),
+) -> PlayResponse:
+    assert creds.auth_token
+    response = playback_service.plexamp_skip_next(payload.player_id, db, auth_token=creds.auth_token)
+    if response.status == "error":
+        raise HTTPException(status_code=400, detail=response.details)
+    return response
+
+
+@router.post("/plexamp/skip-previous", response_model=PlayResponse)
+def plexamp_skip_previous(
+    payload: PlayerControlRequest,
+    db: Session = Depends(get_db),
+    creds: PlexCredential = Depends(require_plex_creds),
+) -> PlayResponse:
+    assert creds.auth_token
+    response = playback_service.plexamp_skip_previous(payload.player_id, db, auth_token=creds.auth_token)
+    if response.status == "error":
+        raise HTTPException(status_code=400, detail=response.details)
+    return response
+
+
+@router.post("/sonos/stop", response_model=PlayResponse)
+def sonos_stop(payload: SonosStopRequest, db: Session = Depends(get_db)) -> PlayResponse:
+    response = playback_service.sonos_stop_selected(payload.speaker_ids, db)
     if response.status == "error":
         raise HTTPException(status_code=400, detail=response.details)
     return response

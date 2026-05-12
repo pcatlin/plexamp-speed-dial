@@ -10,6 +10,38 @@ const mediaTabs: Array<{ label: string; kind: "playlists" | "albums" | "artists"
   { label: "Track", kind: "tracks", mediaType: "track" },
 ];
 
+function IconPlay() {
+  return (
+    <svg className="mediaCtrlIcon" viewBox="0 0 24 24" aria-hidden>
+      <path fill="currentColor" d="M8 5v14l11-7L8 5z" />
+    </svg>
+  );
+}
+
+function IconStop() {
+  return (
+    <svg className="mediaCtrlIcon" viewBox="0 0 24 24" aria-hidden>
+      <path fill="currentColor" d="M6 6h12v12H6V6z" />
+    </svg>
+  );
+}
+
+function IconSkipPrevious() {
+  return (
+    <svg className="mediaCtrlIcon" viewBox="0 0 24 24" aria-hidden>
+      <path fill="currentColor" d="M6 6h2v12H6V6zm3 6l9-6v12l-9-6z" />
+    </svg>
+  );
+}
+
+function IconSkipNext() {
+  return (
+    <svg className="mediaCtrlIcon" viewBox="0 0 24 24" aria-hidden>
+      <path fill="currentColor" d="M6 18V6l9 6-9 6zm10-12h2v12h-2V6z" />
+    </svg>
+  );
+}
+
 function App() {
   const [authConnected, setAuthConnected] = useState(false);
   const [username, setUsername] = useState("");
@@ -157,6 +189,33 @@ function App() {
     }
   };
 
+  const stopSonos = async () => {
+    if (selectedSpeakers.length === 0) {
+      setMessage("Select at least one Sonos speaker to stop.");
+      return;
+    }
+    const result = await api.sonosStop(selectedSpeakers);
+    setMessage(result.details);
+  };
+
+  const skipNextPlexamp = async () => {
+    if (!selectedPlayer) {
+      setMessage("Select a Plexamp player first.");
+      return;
+    }
+    const result = await api.plexampSkipNext(selectedPlayer);
+    setMessage(result.details);
+  };
+
+  const skipPreviousPlexamp = async () => {
+    if (!selectedPlayer) {
+      setMessage("Select a Plexamp player first.");
+      return;
+    }
+    const result = await api.plexampSkipPrevious(selectedPlayer);
+    setMessage(result.details);
+  };
+
   const deleteSpeedDial = async (id: number) => {
     await api.deleteSpeedDial(id);
     setSpeedDial(await api.speedDial());
@@ -271,9 +330,32 @@ function App() {
       </section>
 
       <section className="card sticky">
-        <button className="primary" onClick={() => runPlay().catch((error) => setMessage(error.message))}>
-          Play now
-        </button>
+        <div className="mediaToolbar" role="group" aria-label="Playback controls">
+          <button
+            type="button"
+            className="iconBtn primary"
+            aria-label="Play"
+            title="Play"
+            onClick={() => runPlay().catch((error) => setMessage(error.message))}
+          >
+            <IconPlay />
+          </button>
+          <button type="button" className="iconBtn" aria-label="Stop" title="Stop Sonos" onClick={() => stopSonos().catch((e) => setMessage(e.message))}>
+            <IconStop />
+          </button>
+          <button
+            type="button"
+            className="iconBtn"
+            aria-label="Previous track"
+            title="Previous track"
+            onClick={() => skipPreviousPlexamp().catch((e) => setMessage(e.message))}
+          >
+            <IconSkipPrevious />
+          </button>
+          <button type="button" className="iconBtn" aria-label="Next track" title="Next track" onClick={() => skipNextPlexamp().catch((e) => setMessage(e.message))}>
+            <IconSkipNext />
+          </button>
+        </div>
         <button onClick={() => saveSpeedDial().catch((error) => setMessage(error.message))}>Add to speed dial</button>
       </section>
 

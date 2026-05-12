@@ -100,6 +100,37 @@ select {
   background: #fff;
 }
 
+.mediaToolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: center;
+  margin-bottom: 0.65rem;
+}
+
+button.iconBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.65rem;
+  height: 2.65rem;
+  padding: 0;
+  border-radius: 10px;
+  line-height: 0;
+}
+
+button.iconBtn.primary {
+  background: #2d6cdf;
+  color: #fff;
+  border-color: #2558b8;
+}
+
+.mediaCtrlIcon {
+  width: 1.4rem;
+  height: 1.4rem;
+  display: block;
+}
+
 .message {
   font-size: 0.95rem;
   color: #444;

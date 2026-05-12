@@ -212,3 +212,33 @@ class SonosService:
 
         names = ", ".join(sorted((t.player_name or t.uid) for t in targets))
         return f"Sonos: grouped [{names}] → line-in from {line_src.player_name or line_src.uid}."
+
+    def stop_selected_speakers(self, runtime: SonosRuntime, output_speaker_ids: list[str]) -> str:
+        """Stop playback on the coordinator for each selected speaker (deduplicated by group)."""
+        zones = self.discover_visible_zones(runtime)
+        if not zones:
+            return "Sonos: no zones discovered — nothing to stop."
+
+        coordinators: list[SoCo] = []
+        seen_uid: set[str] = set()
+        for sid in output_speaker_ids:
+            dev = self._device_for_api_speaker_id(zones, sid)
+            if dev is None:
+                _log.warning("Sonos stop: no device matched speaker id %r", sid)
+                continue
+            coord = self._group_coordinator(dev)
+            if coord.uid in seen_uid:
+                continue
+            seen_uid.add(coord.uid)
+            coordinators.append(coord)
+
+        if not coordinators:
+            return "Sonos: none of the selected speakers matched discovered zones."
+
+        stopped: list[str] = []
+        for coord in coordinators:
+            coord.stop()
+            stopped.append(coord.player_name or coord.uid)
+
+        names = ", ".join(sorted(stopped))
+        return f"Sonos: stopped playback on {names}."
