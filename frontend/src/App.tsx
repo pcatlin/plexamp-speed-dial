@@ -51,6 +51,8 @@ function App() {
   const [selectedCollectionId, setSelectedCollectionId] = useState("");
   const [setupOpen, setSetupOpen] = useState(false);
   const [artistRadio, setArtistRadio] = useState(true);
+  const [shufflePlaylist, setShufflePlaylist] = useState(false);
+  const [shuffleArtist, setShuffleArtist] = useState(false);
 
   const selectedPlayerName = useMemo(
     () => players.find((player) => player.id === selectedPlayer)?.name ?? "No player selected",
@@ -118,6 +120,9 @@ function App() {
       setMessage("Select media and Plexamp player first.");
       return;
     }
+    const shufflePlay =
+      payload?.shuffle ??
+      (mediaType === "playlist" ? shufflePlaylist : mediaType === "artist" ? shuffleArtist : false);
     const result = await api.play({
       media_type: mediaType,
       media_id: mediaId,
@@ -125,6 +130,7 @@ function App() {
       speaker_ids: speakerIds,
       preset_id: payload?.preset_id ?? null,
       ...(mediaType === "artist" ? { artist_radio: payload?.artist_radio ?? artistRadio } : {}),
+      shuffle: shufflePlay,
     });
     setMessage(result.details);
   };
@@ -143,6 +149,7 @@ function App() {
       speaker_ids: selectedSpeakers,
       preset_id: null,
       ...(mt === "artist" ? { artist_radio: artistRadio } : {}),
+      ...(mt === "playlist" || mt === "artist" ? { shuffle: mt === "playlist" ? shufflePlaylist : shuffleArtist } : {}),
     });
     setSpeedDial(await api.speedDial());
     setMessage("Saved to speed dial.");
@@ -239,6 +246,10 @@ function App() {
         onSelectMedia={setSelectedMedia}
         artistRadio={artistRadio}
         onArtistRadioChange={setArtistRadio}
+        shufflePlaylist={shufflePlaylist}
+        onShufflePlaylistChange={setShufflePlaylist}
+        shuffleArtist={shuffleArtist}
+        onShuffleArtistChange={setShuffleArtist}
         onToast={setMessage}
       />
 

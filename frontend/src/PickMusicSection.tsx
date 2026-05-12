@@ -45,6 +45,10 @@ type Props = {
   onSelectMedia: (item: MediaItem | null) => void;
   artistRadio: boolean;
   onArtistRadioChange: (value: boolean) => void;
+  shufflePlaylist: boolean;
+  onShufflePlaylistChange: (value: boolean) => void;
+  shuffleArtist: boolean;
+  onShuffleArtistChange: (value: boolean) => void;
   onToast: (msg: string) => void;
 };
 
@@ -60,6 +64,10 @@ export function PickMusicSection({
   onSelectMedia,
   artistRadio,
   onArtistRadioChange,
+  shufflePlaylist,
+  onShufflePlaylistChange,
+  shuffleArtist,
+  onShuffleArtistChange,
   onToast,
 }: Props) {
   const [playlists, setPlaylists] = useState<MediaItem[]>([]);
@@ -289,6 +297,11 @@ export function PickMusicSection({
               </option>
             ))}
           </select>
+          <label className="checkboxRow shufflePickRow">
+            <input type="checkbox" checked={shufflePlaylist} onChange={(e) => onShufflePlaylistChange(e.target.checked)} />
+            Shuffle
+          </label>
+          <p className="hint subtle">When on, Plexamp builds a shuffled queue for this playlist.</p>
         </div>
       ) : null}
 
@@ -304,6 +317,15 @@ export function PickMusicSection({
             <p className="hint subtle artistRadioHint">
               When checked, Plex artist radio; when off, only this artist&apos;s library tracks.
             </p>
+          ) : null}
+          {pickTab === "artist" ? (
+            <label className="checkboxRow shufflePickRow">
+              <input type="checkbox" checked={shuffleArtist} onChange={(e) => onShuffleArtistChange(e.target.checked)} />
+              Shuffle
+            </label>
+          ) : null}
+          {pickTab === "artist" ? (
+            <p className="hint subtle shuffleArtistHint">When on, Plexamp shuffles the queue (radio or library).</p>
           ) : null}
           <label className="fieldLabel" htmlFor={`pick-search-${suggestionFamily}`}>
             Search {suggestionFamily}s

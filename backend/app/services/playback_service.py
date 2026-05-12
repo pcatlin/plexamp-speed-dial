@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from urllib.parse import urlparse
 
 import logging
@@ -23,6 +24,16 @@ from app.services.runtime_setup import resolve_plex_conn, resolve_sonos_runtime
 from app.services.sonos_service import SonosService
 
 _log = logging.getLogger(__name__)
+
+# Plex artist station keys look like: /library/metadata/{id}/station/{uuid}?type=10
+_STATION_UUID_RE = re.compile(
+    r"/station/([a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12})(?:\?|$|/)",
+)
+
+
+def _extract_station_uuid_from_key(station_key: str) -> str | None:
+    m = _STATION_UUID_RE.search((station_key or "").strip())
+    return m.group(1) if m else None
 
 
 class PlaybackService:
@@ -97,7 +108,38 @@ class PlaybackService:
         except Exception as exc:  # noqa: BLE001
             return PlayResponse(status="error", details=f"Plex lookup failed: {exc}")
 
-        if effective_type == "artist":
+        if effective_type == "track":
+            track_key = ((getattr(item, "key", None) or "").strip().split("?", 1)[0]).rstrip("/")
+            if not track_key:
+                return PlayResponse(status="error", details="Track has no library path for playback.")
+            try:
+                artist = item.artist()
+            except Exception as exc:  # noqa: BLE001
+                return PlayResponse(status="error", details=f"Could not resolve track artist: {exc}")
+            station_builder = getattr(artist, "station", None)
+            if not callable(station_builder):
+                return PlayResponse(
+                    status="error",
+                    details="Artist metadata has no radio station; cannot start track radio.",
+                )
+            try:
+                station = station_builder()
+            except Exception as exc:  # noqa: BLE001
+                return PlayResponse(status="error", details=f"Could not load artist radio for track radio: {exc}")
+            if station is None:
+                return PlayResponse(
+                    status="error",
+                    details="Artist has no Plex radio station (required for track radio).",
+                )
+            station_key = (getattr(station, "key", None) or "").strip()
+            artist_uuid = _extract_station_uuid_from_key(station_key)
+            if not artist_uuid:
+                return PlayResponse(
+                    status="error",
+                    details="Could not parse station id from artist radio for track radio.",
+                )
+            library_key = f"{track_key}/station/{artist_uuid}"
+        elif effective_type == "artist":
             if payload.artist_radio:
                 station_builder = getattr(item, "station", None)
                 if not callable(station_builder):
@@ -124,6 +166,8 @@ class PlaybackService:
             else:
                 library_key = append_type_if_missing(raw_key, libtype)
 
+        shuffle_flag = 1 if (payload.shuffle and effective_type in ("playlist", "artist")) else 0
+
         uri = build_server_playback_uri(
             machine_identifier=pms.machineIdentifier,
             library_identifier=pms.library.identifier,
@@ -141,6 +185,7 @@ class PlaybackService:
                 pms_port=pms_port,
                 pms_protocol=pms_protocol,
                 timeout=settings.plexamp_request_timeout_seconds,
+                shuffle=shuffle_flag,
             )
         except requests_exc.RequestException as exc:
             return PlayResponse(
@@ -173,8 +218,12 @@ class PlaybackService:
         else:
             tail = "No Sonos outputs selected."
         play_kind = effective_type
-        if effective_type == "artist":
+        if effective_type == "track":
+            play_kind = "track radio"
+        elif effective_type == "artist":
             play_kind = "artist radio" if payload.artist_radio else "artist library"
+        if shuffle_flag:
+            play_kind = f"{play_kind} (shuffled)"
         details = f"Plexamp playing {play_kind}: {title!r} via {player.name}. {tail}"
         return PlayResponse(status="ok", details=details)
 

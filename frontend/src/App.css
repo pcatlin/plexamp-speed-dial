@@ -154,6 +154,15 @@
   margin-bottom: 0.65rem;
 }
 
+.shufflePickRow {
+  margin-top: 0.5rem;
+}
+
+.shuffleArtistHint {
+  margin-top: -0.35rem;
+  margin-bottom: 0.65rem;
+}
+
 .trackPreviewShell {
   margin-top: 0.85rem;
 }

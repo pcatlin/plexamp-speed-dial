@@ -76,19 +76,21 @@ def create_play_queue(
     pms_port: int,
     pms_protocol: str,
     timeout: float,
+    shuffle: int = 0,
 ) -> requests.Response:
     base = sanitize_plexamp_base(plexamp_base)
-    query = urlencode(
-        {
-            "uri": server_uri,
-            "token": token,
-            "type": "audio",
-            "protocol": pms_protocol,
-            "address": pms_address,
-            "port": str(pms_port),
-            "commandID": 1,
-        }
-    )
+    query_params: dict[str, str] = {
+        "uri": server_uri,
+        "token": token,
+        "type": "audio",
+        "protocol": pms_protocol,
+        "address": pms_address,
+        "port": str(pms_port),
+        "commandID": "1",
+    }
+    if shuffle:
+        query_params["shuffle"] = "1"
+    query = urlencode(query_params)
     url = f"{base}/player/playback/createPlayQueue?{query}"
     safe = re.sub(r"token=[^&]*", "token=<redacted>", url)
     _log.info("Plexamp createPlayQueue server_uri=%s", server_uri)

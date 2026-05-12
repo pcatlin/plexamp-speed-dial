@@ -182,3 +182,144 @@ def test_playback_artist_library_uses_metadata_uri(db_session, monkeypatch):
     assert result.status == "ok"
     assert "metadata/555" in captured["server_uri"]
     assert "stations" not in captured["server_uri"]
+
+
+class FakeTrackPMS:
+    machineIdentifier = "machine-id"
+    library = type("Lib", (), {"identifier": "com.plexapp.plugins.library"})()
+
+    class _FakeStation:
+        key = "/library/metadata/1/station/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee?type=10"
+
+    class _FakeArtist:
+        def station(self):
+            return FakeTrackPMS._FakeStation()
+
+    class _Track:
+        type = "track"
+        title = "Hit"
+        key = "/library/metadata/777"
+
+        def artist(self):
+            return FakeTrackPMS._FakeArtist()
+
+    def fetchItem(self, rating_key: int):  # noqa: ANN001
+        return FakeTrackPMS._Track()
+
+
+class FakeTrackPlexService:
+    def connect_server(self, token: str, conn=None) -> FakeTrackPMS:  # noqa: ANN001
+        assert token == "dummy-token"
+        return FakeTrackPMS()
+
+
+def test_playback_track_radio_uses_station_in_uri(db_session, monkeypatch):
+    db_session.add(PlexCredential(auth_token="dummy-token", is_connected=True))
+    db_session.commit()
+    player = PlexampPlayer(name="Kitchen", host="plexamp.local", port=32500, is_active=True)
+    db_session.add(player)
+    db_session.commit()
+    db_session.refresh(player)
+
+    captured: dict = {}
+
+    def capture_queue(**kwargs):  # noqa: ANN001
+        captured.update(kwargs)
+        fake = Mock()
+        fake.status_code = 200
+        fake.text = ""
+        return fake
+
+    monkeypatch.setattr("app.services.playback_service.create_play_queue", capture_queue)
+
+    service = PlaybackService(plex_service=FakeTrackPlexService(), sonos_service=FakeSonosService())
+    result = service.play(
+        PlayRequest(media_type="track", media_id="777", player_id=player.id, speaker_ids=[]),
+        db_session,
+        auth_token="dummy-token",
+    )
+    assert result.status == "ok"
+    assert "/library/metadata/777/station/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee" in captured["server_uri"]
+    assert captured.get("shuffle") == 0
+    assert "track radio" in result.details
+
+
+def test_playback_playlist_shuffle_passed_to_plexamp(db_session, monkeypatch):
+    db_session.add(PlexCredential(auth_token="dummy-token", is_connected=True))
+    db_session.commit()
+    player = PlexampPlayer(name="Kitchen", host="plexamp.local", port=32500, is_active=True)
+    db_session.add(player)
+    db_session.commit()
+    db_session.refresh(player)
+
+    captured: dict = {}
+
+    def capture_queue(**kwargs):  # noqa: ANN001
+        captured.update(kwargs)
+        fake = Mock()
+        fake.status_code = 200
+        fake.text = ""
+        return fake
+
+    monkeypatch.setattr("app.services.playback_service.create_play_queue", capture_queue)
+
+    service = PlaybackService(plex_service=FakePlexService(), sonos_service=FakeSonosService())
+    result = service.play(
+        PlayRequest(
+            media_type="playlist",
+            media_id="100",
+            player_id=player.id,
+            speaker_ids=[],
+            shuffle=True,
+        ),
+        db_session,
+        auth_token="dummy-token",
+    )
+    assert result.status == "ok"
+    assert captured.get("shuffle") == 1
+    assert "shuffled" in result.details
+
+
+def test_playback_album_ignores_shuffle(db_session, monkeypatch):
+    db_session.add(PlexCredential(auth_token="dummy-token", is_connected=True))
+    db_session.commit()
+    player = PlexampPlayer(name="Kitchen", host="plexamp.local", port=32500, is_active=True)
+    db_session.add(player)
+    db_session.commit()
+    db_session.refresh(player)
+
+    captured: dict = {}
+
+    def capture_queue(**kwargs):  # noqa: ANN001
+        captured.update(kwargs)
+        fake = Mock()
+        fake.status_code = 200
+        fake.text = ""
+        return fake
+
+    monkeypatch.setattr("app.services.playback_service.create_play_queue", capture_queue)
+
+    class FakeAlbumPMS:
+        machineIdentifier = "machine-id"
+        library = type("Lib", (), {"identifier": "com.plexapp.plugins.library"})()
+
+        class _Al:
+            type = "album"
+            title = "Album"
+            key = "/library/metadata/42"
+
+        def fetchItem(self, rating_key: int):  # noqa: ANN001
+            return FakeAlbumPMS._Al()
+
+    class FakeAlbumPlexService:
+        def connect_server(self, token: str, conn=None) -> FakeAlbumPMS:  # noqa: ANN001
+            return FakeAlbumPMS()
+
+    service = PlaybackService(plex_service=FakeAlbumPlexService(), sonos_service=FakeSonosService())
+    result = service.play(
+        PlayRequest(media_type="album", media_id="42", player_id=player.id, speaker_ids=[], shuffle=True),
+        db_session,
+        auth_token="dummy-token",
+    )
+    assert result.status == "ok"
+    assert captured.get("shuffle") == 0

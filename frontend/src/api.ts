@@ -61,6 +61,8 @@ export interface SpeedDial {
   preset_id?: number | null;
   /** Artist favorites only: true = radio, false = library only; omitted/null = radio when playing. */
   artist_radio?: boolean | null;
+  /** Playlist / artist favorites: shuffle on play; omitted/null = false. */
+  shuffle?: boolean | null;
   has_cover_art?: boolean;
 }
 
@@ -152,6 +154,7 @@ export const api = {
     speaker_ids: string[];
     preset_id?: number | null;
     artist_radio?: boolean;
+    shuffle?: boolean;
   }) => request<{ status: string; details: string }>("/play", { method: "POST", body: JSON.stringify(payload) }),
   plexampSkipNext: (playerId: number) =>
     request<{ status: string; details: string }>("/plexamp/skip-next", {

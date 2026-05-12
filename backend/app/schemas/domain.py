@@ -92,6 +92,10 @@ class PlayRequest(BaseModel):
         default=True,
         description="When media_type is artist: True = Plex artist radio station; False = queue this artist only.",
     )
+    shuffle: bool = Field(
+        default=False,
+        description="When media_type is playlist or artist: request shuffled queue from Plexamp.",
+    )
 
 
 class PlayResponse(BaseModel):
@@ -117,6 +121,10 @@ class SpeedDialCreate(BaseModel):
     artist_radio: bool | None = Field(
         default=None,
         description="For artist favorites: True/False; null for non-artist or legacy rows (treated as radio on play).",
+    )
+    shuffle: bool | None = Field(
+        default=None,
+        description="For playlist/artist favorites: shuffle on play; null treated as false.",
     )
 
 
