@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from urllib.parse import urlparse
 
+import logging
 import requests.exceptions as requests_exc
 from plexapi.exceptions import NotFound
 
@@ -12,12 +13,20 @@ from app.models import PlexampPlayer, SonosGroupPreset
 from app.schemas.domain import PlayRequest, PlayResponse
 from app.services.plex_service import PlexService
 from app.services.plexamp_client import append_type_if_missing, build_server_playback_uri, create_play_queue, parse_pms_host_port_protocol
-from app.services.runtime_setup import resolve_plex_conn
+from app.services.runtime_setup import resolve_plex_conn, resolve_sonos_runtime
+from app.services.sonos_service import SonosService
+
+_log = logging.getLogger(__name__)
 
 
 class PlaybackService:
-    def __init__(self, plex_service: PlexService | None = None) -> None:
+    def __init__(
+        self,
+        plex_service: PlexService | None = None,
+        sonos_service: SonosService | None = None,
+    ) -> None:
         self._plex = plex_service or PlexService()
+        self._sonos = sonos_service or SonosService()
 
     def play(self, payload: PlayRequest, db: Session, *, auth_token: str) -> PlayResponse:
         player = db.get(PlexampPlayer, payload.player_id)
@@ -128,9 +137,19 @@ class PlaybackService:
                 ),
             )
 
+        sonos_note = ""
+        if target_speakers:
+            try:
+                runtime = resolve_sonos_runtime(db)
+                sonos_note = self._sonos.group_selected_and_play_line_in(runtime, target_speakers)
+            except Exception as exc:  # noqa: BLE001
+                _log.exception("Sonos line-in orchestration failed")
+                sonos_note = f"Sonos error: {exc}"
+
         title = getattr(item, "title", "") or getattr(item, "tag", "") or payload.media_id
-        details = (
-            f"Plexamp playing {effective_type}: {title!r} via {player.name} "
-            f"(speakers tracked for UI only: {speaker_note})"
-        )
+        if target_speakers:
+            tail = sonos_note if sonos_note else f"Sonos: no line-in action ({speaker_note})."
+        else:
+            tail = "No Sonos outputs selected."
+        details = f"Plexamp playing {effective_type}: {title!r} via {player.name}. {tail}"
         return PlayResponse(status="ok", details=details)

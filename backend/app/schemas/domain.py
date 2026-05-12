@@ -118,6 +118,11 @@ class RuntimeSetupUpdate(BaseModel):
         description="Optional interface address for SSDP (advanced).",
     )
     sonos_demo_fallback: bool = False
+    sonos_line_in_source_name: str = Field(default="", description="Substring of the Sonos player name that has Plexamp on line-in (e.g. Fridge).")
+    sonos_line_in_source_uid: str = Field(
+        default="",
+        description="Optional exact Sonos player UID (RINCON_…); overrides name when set.",
+    )
 
 
 class RuntimeSetupRead(RuntimeSetupUpdate):

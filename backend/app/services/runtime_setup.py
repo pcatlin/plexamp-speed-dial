@@ -25,6 +25,8 @@ class SonosRuntime:
     allow_network_scan: bool
     interface_addr: str
     demo_fallback: bool
+    line_in_source_name: str
+    line_in_source_uid: str
 
 
 def effective_plex_url(stored_raw: str) -> str:
@@ -45,6 +47,8 @@ def get_or_create_runtime_setup(db: Session) -> RuntimeSetup:
         sonos_allow_network_scan=settings.sonos_allow_network_scan,
         sonos_interface_addr=settings.sonos_interface_addr,
         sonos_demo_fallback=settings.sonos_demo_fallback,
+        sonos_line_in_source_name=settings.sonos_line_in_source_name.strip(),
+        sonos_line_in_source_uid=settings.sonos_line_in_source_uid.strip(),
     )
     db.add(row)
     db.commit()
@@ -59,10 +63,14 @@ def resolve_plex_conn(db: Session) -> PlexConn:
 
 def resolve_sonos_runtime(db: Session) -> SonosRuntime:
     row = get_or_create_runtime_setup(db)
+    name_db = (getattr(row, "sonos_line_in_source_name", None) or "").strip()
+    uid_db = (getattr(row, "sonos_line_in_source_uid", None) or "").strip()
     return SonosRuntime(
         seed_ips=row.sonos_seed_ips,
         discover_timeout=row.sonos_discover_timeout,
         allow_network_scan=row.sonos_allow_network_scan,
         interface_addr=row.sonos_interface_addr,
         demo_fallback=row.sonos_demo_fallback,
+        line_in_source_name=name_db or settings.sonos_line_in_source_name.strip(),
+        line_in_source_uid=uid_db or settings.sonos_line_in_source_uid.strip(),
     )

@@ -39,8 +39,13 @@ class FakePlexService:
         return FakePMS()
 
 
+class FakeSonosService:
+    def group_selected_and_play_line_in(self, runtime, output_speaker_ids):  # noqa: ANN001
+        return f"Sonos: ok (mock) ids={output_speaker_ids!r}"
+
+
 def test_playback_service_returns_error_when_player_missing(db_session, patched_play_queue):
-    service = PlaybackService(plex_service=FakePlexService())
+    service = PlaybackService(plex_service=FakePlexService(), sonos_service=FakeSonosService())
     result = service.play(
         PlayRequest(media_type="album", media_id="42", player_id=99, speaker_ids=[]),
         db_session,
@@ -61,11 +66,12 @@ def test_playback_service_uses_preset_speakers(db_session, patched_play_queue):
     db_session.refresh(player)
     db_session.refresh(preset)
 
-    service = PlaybackService(plex_service=FakePlexService())
+    service = PlaybackService(plex_service=FakePlexService(), sonos_service=FakeSonosService())
     result = service.play(
         PlayRequest(media_type="playlist", media_id="123", player_id=player.id, speaker_ids=["s3"], preset_id=preset.id),
         db_session,
         auth_token="dummy-token",
     )
     assert result.status == "ok"
-    assert "s1, s2" in result.details
+    assert "Sonos: ok (mock)" in result.details
+    assert "['s1', 's2']" in result.details

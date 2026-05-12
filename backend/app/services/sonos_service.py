@@ -9,8 +9,19 @@ from app.services.runtime_setup import SonosRuntime
 _log = logging.getLogger(__name__)
 
 
+def _normalize_sonos_uid(raw: str) -> tuple[str, str | None]:
+    """Return (full_id, base_uid_without_group_suffix) for RINCON IDs."""
+    s = (raw or "").strip()
+    if not s:
+        return "", None
+    if ":" in s:
+        return s, s.split(":", 1)[0]
+    return s, None
+
+
 class SonosService:
-    def list_speakers(self, runtime: SonosRuntime) -> list[SonosSpeaker]:
+    def discover_visible_zones(self, runtime: SonosRuntime) -> set[SoCo]:
+        """Return visible Sonos players (SoCo instances). Same rules as list_speakers."""
         seeds = [ip.strip() for ip in runtime.seed_ips.split(",") if ip.strip()]
         zones: set | None = None
 
@@ -18,10 +29,10 @@ class SonosService:
             for ip in seeds:
                 try:
                     speaker = SoCo(ip)
-                    speaker.player_name  # force quick reachability check
+                    speaker.player_name
                     zones = speaker.visible_zones
                     if zones:
-                        _log.info("Sonos list built from seed IP %s (%d zones)", ip, len(zones))
+                        _log.info("Sonos zones from seed IP %s (%d players)", ip, len(zones))
                         break
                 except Exception as exc:  # noqa: BLE001
                     _log.warning("Sonos seed IP %s failed: %s", ip, exc)
@@ -45,24 +56,150 @@ class SonosService:
 
             if discovered:
                 zones = discovered
-                _log.info("Sonos discover found %d zones", len(zones))
+                _log.info("Sonos discover found %d players", len(zones))
             elif zones is None:
                 zones = set()
 
         if not zones and runtime.demo_fallback:
-            _log.warning("Sonos demo fallback enabled — returning placeholder speakers")
-            return [
-                SonosSpeaker(id="demo-living-room", name="Living Room (demo)", ip="192.168.1.10"),
-                SonosSpeaker(id="demo-kitchen", name="Kitchen (demo)", ip="192.168.1.11"),
-            ]
+            _log.warning("Sonos demo fallback — skipping zone discovery for line-in orchestration")
+            return set()
 
+        return zones or set()
+
+    # Backwards-compatible alias (older code referred to "zone groups")
+    def discover_zone_groups(self, runtime: SonosRuntime) -> set[SoCo]:
+        return self.discover_visible_zones(runtime)
+
+    def list_speakers(self, runtime: SonosRuntime) -> list[SonosSpeaker]:
+        zones = self.discover_visible_zones(runtime)
         if not zones:
-            _log.info(
-                "No Sonos zones found (Docker/multicast: set SONOS_SEED_IPS to a player LAN IP)."
-            )
+            if runtime.demo_fallback:
+                return [
+                    SonosSpeaker(id="demo-living-room", name="Living Room (demo)", ip="192.168.1.10"),
+                    SonosSpeaker(id="demo-kitchen", name="Kitchen (demo)", ip="192.168.1.11"),
+                ]
+            _log.info("No Sonos zones found (Docker/multicast: set SONOS_SEED_IPS to a player LAN IP).")
             return []
 
         return [
             SonosSpeaker(id=speaker.uid, name=speaker.player_name, ip=speaker.ip_address)
-            for speaker in sorted(zones, key=lambda z: z.player_name.lower())
+            for speaker in sorted(zones, key=lambda z: (z.player_name or "").lower())
         ]
+
+    @staticmethod
+    def _device_for_api_speaker_id(zones: set[SoCo], speaker_id: str) -> SoCo | None:
+        """Map API speaker id (player uid, optionally with :group suffix) to a SoCo device."""
+        sid, base = _normalize_sonos_uid(speaker_id)
+        if not sid:
+            return None
+        for d in zones:
+            du = d.uid
+            if du == sid or (base is not None and du == base):
+                return d
+        return None
+
+    @staticmethod
+    def _all_devices(zones: set[SoCo]) -> list[SoCo]:
+        by_uid: dict[str, SoCo] = {}
+        for d in zones:
+            u = d.uid
+            if u and u not in by_uid:
+                by_uid[u] = d
+        return list(by_uid.values())
+
+    def _find_line_in_source(self, zones: set[SoCo], *, name_sub: str, uid: str) -> SoCo | None:
+        devices = self._all_devices(zones)
+        want_uid, want_base = _normalize_sonos_uid(uid)
+        if want_uid:
+            for d in devices:
+                du = d.uid
+                if du == want_uid or (want_base is not None and du == want_base):
+                    return d
+        name_sub = (name_sub or "").strip().lower()
+        if name_sub:
+            for d in devices:
+                pname = (d.player_name or "").lower()
+                if name_sub in pname:
+                    return d
+        return None
+
+    @staticmethod
+    def _group_coordinator(device: SoCo) -> SoCo:
+        """Return coordinator SoCo for this device's current group (or device if ungrouped / slave)."""
+        device.zone_group_state.poll(device)
+        grp = device.group
+        if grp is None:
+            return device
+        return grp.coordinator
+
+    def group_selected_and_play_line_in(
+        self,
+        runtime: SonosRuntime,
+        output_speaker_ids: list[str],
+    ) -> str:
+        """
+        Group selected Sonos outputs and play the configured line-in source (Plexamp → Fridge).
+
+        Uses SoCo ``switch_to_line_in`` / ``x-rincon-stream`` so outputs hear another player's line-in.
+        """
+        zones = self.discover_visible_zones(runtime)
+        if not zones:
+            return "Sonos: no zones discovered — set seed IPs in Setup or check the network."
+
+        targets: list[SoCo] = []
+        for sid in output_speaker_ids:
+            dev = self._device_for_api_speaker_id(zones, sid)
+            if dev is None:
+                _log.warning("Sonos: no device matched speaker id %r", sid)
+            else:
+                targets.append(dev)
+
+        seen_u: set[str] = set()
+        uniq: list[SoCo] = []
+        for d in targets:
+            if d.uid in seen_u:
+                continue
+            seen_u.add(d.uid)
+            uniq.append(d)
+        targets = uniq
+
+        if not targets:
+            return "Sonos: none of the selected speakers matched discovered zones."
+
+        line_src = self._find_line_in_source(
+            zones,
+            name_sub=runtime.line_in_source_name,
+            uid=runtime.line_in_source_uid,
+        )
+        if line_src is None:
+            return (
+                f"Sonos: line-in source not found (name contains {runtime.line_in_source_name!r} "
+                f"or UID {runtime.line_in_source_uid!r}). Check Setup."
+            )
+
+        if line_src.uid in {t.uid for t in targets}:
+            master = line_src
+        else:
+            master = sorted(targets, key=lambda z: (z.player_name or "").lower())[0]
+
+        for d in targets:
+            if d.uid != master.uid:
+                try:
+                    d.join(master)
+                except Exception as exc:  # noqa: BLE001
+                    _log.warning("Sonos join %s → %s failed: %s", d.player_name, master.player_name, exc)
+                    raise
+
+        coord = self._group_coordinator(master)
+        try:
+            if coord.uid == line_src.uid:
+                coord.switch_to_line_in()
+            else:
+                coord.switch_to_line_in(source=line_src)
+            coord.play()
+        except Exception as exc:  # noqa: BLE001
+            _log.exception("Sonos line-in playback failed")
+            raise RuntimeError(f"Sonos line-in failed: {exc}") from exc
+
+        names = ", ".join(sorted((t.player_name or t.uid) for t in targets))
+        return f"Sonos: grouped [{names}] → line-in from {line_src.player_name or line_src.uid}."

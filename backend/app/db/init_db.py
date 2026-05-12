@@ -1,9 +1,9 @@
 from app.db.database import Base, engine
-from app.models import PlexCredential, PlexampPlayer, SonosGroupPreset, SpeedDialFavorite
+from app.models import PlexCredential, PlexampPlayer, RuntimeSetup, SonosGroupPreset, SpeedDialFavorite
 
 
 def run() -> None:
-    _ = (PlexCredential, PlexampPlayer, SonosGroupPreset, SpeedDialFavorite)
+    _ = (PlexCredential, PlexampPlayer, RuntimeSetup, SonosGroupPreset, SpeedDialFavorite)
     Base.metadata.create_all(bind=engine)
 
 

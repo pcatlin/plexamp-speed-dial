@@ -52,7 +52,7 @@ def test_player_create_and_play_flow(client, db_session, monkeypatch):
 
     play_response = client.post(
         "/api/v1/play",
-        json={"media_type": "album", "media_id": "1", "player_id": player_id, "speaker_ids": ["s1"]},
+        json={"media_type": "album", "media_id": "1", "player_id": player_id, "speaker_ids": []},
     )
     assert play_response.status_code == 200
     assert play_response.json()["status"] == "ok"

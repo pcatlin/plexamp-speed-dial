@@ -16,6 +16,8 @@ class RuntimeSetup(Base):
     sonos_allow_network_scan = Column(Boolean, nullable=False, default=True)
     sonos_interface_addr = Column(String(255), nullable=False, default="")
     sonos_demo_fallback = Column(Boolean, nullable=False, default=False)
+    sonos_line_in_source_name = Column(String(255), nullable=False, default="")
+    sonos_line_in_source_uid = Column(String(255), nullable=False, default="")
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), onupdate=func.now(), server_default=func.now(), nullable=False)
 

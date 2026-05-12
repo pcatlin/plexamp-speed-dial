@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import require_plex_creds
 from app.db.database import Base, SessionLocal, engine, get_db
+from app.db.runtime_setup_migrate import ensure_runtime_setup_columns
 from app.models import PlexCredential, PlexampPlayer, SonosGroupPreset, SpeedDialFavorite
 from app.schemas.common import HealthResponse, IdResponse
 from app.schemas.domain import (
@@ -44,6 +45,8 @@ def _serialize_runtime_setup_read(db: Session) -> RuntimeSetupRead:
         sonos_allow_network_scan=row.sonos_allow_network_scan,
         sonos_interface_addr=row.sonos_interface_addr or "",
         sonos_demo_fallback=row.sonos_demo_fallback,
+        sonos_line_in_source_name=getattr(row, "sonos_line_in_source_name", None) or "",
+        sonos_line_in_source_uid=getattr(row, "sonos_line_in_source_uid", None) or "",
         plex_server_url_effective=effective_plex_url(row.plex_server_url),
     )
 
@@ -51,6 +54,7 @@ def _serialize_runtime_setup_read(db: Session) -> RuntimeSetupRead:
 @router.on_event("startup")
 def startup() -> None:
     Base.metadata.create_all(bind=engine)
+    ensure_runtime_setup_columns(engine)
     seed = SessionLocal()
     try:
         get_or_create_runtime_setup(seed)
@@ -74,6 +78,8 @@ def update_runtime_settings(payload: RuntimeSetupUpdate, db: Session = Depends(g
     row.sonos_allow_network_scan = data["sonos_allow_network_scan"]
     row.sonos_interface_addr = data["sonos_interface_addr"].strip()
     row.sonos_demo_fallback = data["sonos_demo_fallback"]
+    row.sonos_line_in_source_name = data["sonos_line_in_source_name"].strip()
+    row.sonos_line_in_source_uid = data["sonos_line_in_source_uid"].strip()
     db.commit()
     db.refresh(row)
     return _serialize_runtime_setup_read(db)

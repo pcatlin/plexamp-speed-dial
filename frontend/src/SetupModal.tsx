@@ -58,6 +58,8 @@ export function SetupModal({
   const [sonosScan, setSonosScan] = useState(true);
   const [sonosIface, setSonosIface] = useState("");
   const [sonosDemo, setSonosDemo] = useState(false);
+  const [sonosLineInName, setSonosLineInName] = useState("");
+  const [sonosLineInUid, setSonosLineInUid] = useState("");
   const [players, setPlayers] = useState<Player[]>([]);
   const [playerInput, setPlayerInput] = useState("");
   const [playerNameHint, setPlayerNameHint] = useState("");
@@ -98,6 +100,8 @@ export function SetupModal({
     setSonosScan(s.sonos_allow_network_scan);
     setSonosIface(s.sonos_interface_addr);
     setSonosDemo(s.sonos_demo_fallback);
+    setSonosLineInName(s.sonos_line_in_source_name ?? "");
+    setSonosLineInUid(s.sonos_line_in_source_uid ?? "");
   }
 
   const saveSetup = async () => {
@@ -111,6 +115,8 @@ export function SetupModal({
         sonos_allow_network_scan: sonosScan,
         sonos_interface_addr: sonosIface.trim(),
         sonos_demo_fallback: sonosDemo,
+        sonos_line_in_source_name: sonosLineInName.trim(),
+        sonos_line_in_source_uid: sonosLineInUid.trim(),
       });
       applySettings(saved);
       await afterRuntimeSaved?.().catch(() => undefined);
@@ -298,6 +304,30 @@ export function SetupModal({
             <input type="checkbox" checked={sonosDemo} onChange={(e) => setSonosDemo(e.target.checked)} />
             Demo speaker fallback (placeholder devices if nothing discovered)
           </label>
+          <label className="fieldLabel">
+            Line-in source (Plexamp analog input)
+            <input
+              type="text"
+              className="textInput"
+              placeholder="Fridge — substring of the Sonos room name"
+              value={sonosLineInName}
+              onChange={(e) => setSonosLineInName(e.target.value)}
+            />
+          </label>
+          <label className="fieldLabel">
+            Line-in source UID (optional)
+            <input
+              type="text"
+              className="textInput"
+              placeholder="RINCON_… — exact player UID; overrides name when set"
+              value={sonosLineInUid}
+              onChange={(e) => setSonosLineInUid(e.target.value)}
+            />
+          </label>
+          <p className="hint">
+            After Plexamp starts playback, selected Sonos outputs are grouped and switched to this player&apos;s line-in
+            (SoCo <code>switch_to_line_in</code>).
+          </p>
         </section>
 
         <section className="modalSection">

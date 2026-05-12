@@ -76,6 +76,20 @@ class Settings(BaseSettings):
         default=False,
         validation_alias=AliasChoices("sonos_demo_fallback", "SONOS_DEMO_FALLBACK"),
     )
+    sonos_line_in_source_name: str = Field(
+        default="Fridge",
+        validation_alias=AliasChoices(
+            "sonos_line_in_source_name",
+            "SONOS_LINE_IN_SOURCE_NAME",
+        ),
+    )
+    sonos_line_in_source_uid: str = Field(
+        default="",
+        validation_alias=AliasChoices(
+            "sonos_line_in_source_uid",
+            "SONOS_LINE_IN_SOURCE_UID",
+        ),
+    )
 
     model_config = SettingsConfigDict(
         env_file=_DOTENV_FILES if _DOTENV_FILES else None,
