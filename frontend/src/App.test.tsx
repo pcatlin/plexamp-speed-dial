@@ -46,8 +46,8 @@ describe("App", () => {
       const sel = document.getElementById("pick-playlist") as HTMLSelectElement | null;
       expect(sel?.value).toBe("playlist-1");
     });
-    const playButton = screen.getByRole("button", { name: "Play" });
-    fireEvent.click(playButton);
+    const startButton = screen.getByRole("button", { name: "Start" });
+    fireEvent.click(startButton);
     await waitFor(() => expect(screen.getByText("Playing now")).toBeInTheDocument());
   });
 });

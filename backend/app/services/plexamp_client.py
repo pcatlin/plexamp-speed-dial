@@ -110,7 +110,7 @@ def plexamp_playback_command(
     action: str,
     timeout: float,
 ) -> requests.Response:
-    """Send a companion playback command to headless Plexamp (skipNext, skipPrevious, pause, stop, …)."""
+    """Send a companion playback command to headless Plexamp (play, pause, skipNext, skipPrevious, stop, …)."""
     base = sanitize_plexamp_base(plexamp_base)
     query = urlencode({"type": "audio", "commandID": 1, "token": token})
     url = f"{base}/player/playback/{action}?{query}"

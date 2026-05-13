@@ -219,6 +219,15 @@ function App() {
     setMessage(result.details);
   };
 
+  const resumePlexamp = async () => {
+    if (!selectedPlayer) {
+      setMessage("Select a Plexamp player first.");
+      return;
+    }
+    const result = await api.plexampResume(selectedPlayer);
+    setMessage(result.details);
+  };
+
   const playSonosLineIn = async () => {
     if (selectedSpeakers.length === 0) {
       setMessage("Select at least one Sonos speaker to play line-in.");
@@ -310,7 +319,14 @@ function App() {
         </section>
 
         <section className="card sticky">
-          <button onClick={() => saveSpeedDial().catch((error) => setMessage(error.message))}>Add to speed dial</button>
+          <div className="stickyActions">
+            <button type="button" className="primary" onClick={() => runPlay().catch((error) => setMessage(error.message))}>
+              Start
+            </button>
+            <button type="button" onClick={() => saveSpeedDial().catch((error) => setMessage(error.message))}>
+              Add to speed dial
+            </button>
+          </div>
         </section>
 
         <section className="card">
@@ -376,13 +392,13 @@ function App() {
 
         <fieldset className="controlFrameset">
           <legend>Plexamp</legend>
-          <div className="mediaToolbar mediaToolbarStack" role="group" aria-label="Plexamp and library playback">
+          <div className="mediaToolbar mediaToolbarStack" role="group" aria-label="Plexamp transport">
             <button
               type="button"
-              className="iconBtn primary"
-              aria-label="Play"
-              title="Play selected media on Plexamp (and Sonos line-in if speakers are selected)"
-              onClick={() => runPlay().catch((error) => setMessage(error.message))}
+              className="iconBtn"
+              aria-label="Resume Plexamp playback"
+              title="Resume playback on Plexamp (current queue; does not start a new queue)"
+              onClick={() => resumePlexamp().catch((e) => setMessage(e.message))}
             >
               <IconPlay />
             </button>

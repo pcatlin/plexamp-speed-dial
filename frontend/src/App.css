@@ -358,6 +358,13 @@ select {
   line-height: 1.25;
 }
 
+.stickyActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
 .sticky {
   position: sticky;
   bottom: 0.5rem;

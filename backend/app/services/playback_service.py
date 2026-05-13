@@ -286,6 +286,16 @@ class PlaybackService:
             ok_details="Paused playback",
         )
 
+    def plexamp_resume(self, player_id: int, db: Session, *, auth_token: str) -> PlayResponse:
+        """Resume / play current queue on headless Plexamp (companion ``play`` — no new play queue)."""
+        return self._plexamp_playback_simple(
+            player_id,
+            db,
+            auth_token=auth_token,
+            action="play",
+            ok_details="Resumed playback",
+        )
+
     def sonos_stop_selected(self, speaker_ids: list[str], db: Session) -> PlayResponse:
         if not speaker_ids:
             return PlayResponse(status="error", details="Select at least one Sonos speaker, then press stop.")

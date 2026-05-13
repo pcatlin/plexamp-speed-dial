@@ -420,6 +420,19 @@ def plexamp_pause(
     return response
 
 
+@router.post("/plexamp/resume", response_model=PlayResponse)
+def plexamp_resume(
+    payload: PlayerControlRequest,
+    db: Session = Depends(get_db),
+    creds: PlexCredential = Depends(require_plex_creds),
+) -> PlayResponse:
+    assert creds.auth_token
+    response = playback_service.plexamp_resume(payload.player_id, db, auth_token=creds.auth_token)
+    if response.status == "error":
+        raise HTTPException(status_code=400, detail=response.details)
+    return response
+
+
 @router.post("/sonos/play-line-in", response_model=PlayResponse)
 def sonos_play_line_in(payload: SonosStopRequest, db: Session = Depends(get_db)) -> PlayResponse:
     response = playback_service.sonos_play_line_in_selected(payload.speaker_ids, db)
