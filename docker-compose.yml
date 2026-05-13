@@ -1,4 +1,6 @@
-# Images: paulcatlin/* on Docker Hub. Build locally: docker compose -f docker-compose.yml -f docker-compose.build.yml up --build
+# Images: paulcatlin/* on Docker Hub.
+# Published web UI (port 3000): docker compose -f docker-compose.yml -f docker-compose.build.yml up [--build]
+# Vite HMR while editing frontend: docker compose -f docker-compose.yml -f docker-compose.dev.yml up
 services:
   db:
     image: postgres:16
@@ -29,8 +31,6 @@ services:
     image: paulcatlin/plexamp-speed-dial-web:latest
     depends_on:
       - api
-    ports:
-      - "3000:80"
 
 volumes:
   postgres_data:

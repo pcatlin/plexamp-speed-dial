@@ -1,0 +1,24 @@
+# Merge with docker-compose.yml for Vite HMR on the web app (source bind-mounted).
+# Do not use this file when building images for Docker Hub — keep using frontend/Dockerfile (nginx + npm run build).
+#
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+#
+# Open http://localhost:3000 — API requests proxy to the compose `api` service.
+
+services:
+  web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    image: plexamp-speed-dial-web:dev
+    volumes:
+      - ./frontend:/app
+      - web_node_modules:/app/node_modules
+    ports:
+      - "3000:5173"
+    environment:
+      VITE_API_PROXY: http://api:8000
+      VITE_USE_POLLING: "1"
+
+volumes:
+  web_node_modules:
