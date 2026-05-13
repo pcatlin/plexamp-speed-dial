@@ -1,0 +1,10 @@
+# Merge with docker-compose.yml to build API + web images locally (tags match compose image names).
+# Example: docker compose -f docker-compose.yml -f docker-compose.build.yml build
+#          docker compose -f docker-compose.yml -f docker-compose.build.yml up --build
+services:
+  api:
+    build:
+      context: ./backend
+  web:
+    build:
+      context: ./frontend

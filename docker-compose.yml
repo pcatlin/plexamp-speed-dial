@@ -1,3 +1,4 @@
+# Images: paulcatlin/* on Docker Hub. Build locally: docker compose -f docker-compose.yml -f docker-compose.build.yml up --build
 services:
   db:
     image: postgres:16
@@ -14,8 +15,7 @@ services:
       retries: 10
 
   api:
-    build:
-      context: ./backend
+    image: paulcatlin/plexamp-speed-dial-api:latest
     environment:
       DATABASE_URL: postgresql+psycopg://plexamp:plexamp_local_only@db:5432/plexamp_speed_dial
     depends_on:
@@ -26,8 +26,7 @@ services:
       - "8000:8000"
 
   web:
-    build:
-      context: ./frontend
+    image: paulcatlin/plexamp-speed-dial-web:latest
     depends_on:
       - api
     ports:

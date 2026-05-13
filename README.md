@@ -8,7 +8,7 @@ Mobile-optimized web app to quickly play Plex music through Plexamp headless pla
 - Frontend: React + Vite (mobile-first UI)
 - Sonos: SoCo discovery
 - Plex: Plex API integration layer (single-owner auth flow)
-- Deployment: Docker Compose
+- Deployment: Docker Compose + optional [Docker Hub](https://hub.docker.com/) images (`plexamp-speed-dial-api`, `plexamp-speed-dial-web`)
 
 ## Features
 
@@ -86,18 +86,39 @@ python backend/export_openapi.py
 
 ### Configuration
 
-**No `.env` file is required** for the default Docker stack or for local dev with the documented ports.
-
 The UI calls the API at **`/api/v1`** on the same origin: in Docker, [`frontend/nginx.conf`](frontend/nginx.conf) proxies `/api` to the `api` service; with **`npm run dev`**, Vite proxies `/api` to **`http://127.0.0.1:8000`**. You can change the **published** ports in [`docker-compose.yml`](docker-compose.yml) (for example `8080:80` for the web service) without changing the app — keep the API service reachable as hostname `api` on port 8000 inside Compose. If you run uvicorn on a **non-8000** port locally, adjust the `server.proxy` target in [`frontend/vite.config.ts`](frontend/vite.config.ts).
 
 **Docker Compose** uses fixed Postgres credentials and `DATABASE_URL` in [`docker-compose.yml`](docker-compose.yml) (database is not exposed on the host). **Setup** stores Plex server URL, TLS, Sonos options, and line-in in the database. On first API startup, a **Plex client UUID** is generated and stored in the same table so Plex sees a stable device identity (no `PLEX_CLIENT_*` env vars). The API still defaults **`CORS_ORIGINS=*`** in code ([`backend/app/core/config.py`](backend/app/core/config.py)); override with a root `.env` only if you need a stricter allowlist.
 
 After you sign in with Plex, media routes use [python-plexapi](https://github.com/pkkid/python-plexapi) against the server URL from Setup with your stored owner token.
 
-### Run with Docker Compose
+### Run with Docker Compose (pull pre-built images)
+
+[`docker-compose.yml`](docker-compose.yml) pulls **`paulcatlin/plexamp-speed-dial-api:latest`** and **`paulcatlin/plexamp-speed-dial-web:latest`**. On a new machine, copy the repo (or at least `docker-compose.yml`), then:
 
 ```bash
-docker compose up --build
+docker compose pull
+docker compose up -d
+```
+
+### Build and push images (Docker Hub)
+
+1. On [Docker Hub](https://hub.docker.com/), create repositories **`plexamp-speed-dial-api`** and **`plexamp-speed-dial-web`** under the **paulcatlin** account (if they do not exist yet).
+2. `docker login`
+3. From the repo root:
+
+```bash
+./scripts/docker-build-push.sh
+```
+
+The script uses **`docker buildx`** and publishes **`linux/amd64` and `linux/arm64`** by default so `docker compose pull` works on Apple Silicon and typical Linux servers. For amd64-only images (smaller, but arm64 Macs cannot pull natively): `DOCKER_PLATFORMS=linux/amd64 ./scripts/docker-build-push.sh`.
+
+If you already have **amd64-only** images on Hub and cannot republish yet, force emulation on an arm64 Mac by adding under `api` and `web` in compose: `platform: linux/amd64` (slower startup).
+
+### Run from local source (build instead of pull)
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.build.yml up --build
 ```
 
 Services:
@@ -169,7 +190,8 @@ npm test
 
 ## Notes / troubleshooting
 
-- **Postgres `FATAL: role "plexamp" does not exist`:** the named volume was created earlier with different credentials. Postgres only applies `POSTGRES_USER` on first init. Stop the stack and remove the DB volume, then start again (this wipes local Docker DB data): `docker compose down -v` then `docker compose up --build`. If you need to keep other volumes, use `docker volume ls` to find this project’s `*_postgres_data` volume, remove it with `docker volume rm …`, then `docker compose up --build`.
+- **`no matching manifest for linux/arm64` on `docker compose pull`:** the Hub images were built for **amd64 only**. Re-publish with [`scripts/docker-build-push.sh`](scripts/docker-build-push.sh) (defaults to **amd64 + arm64**). Until then, add `platform: linux/amd64` under `api` and `web`, or build locally with `docker-compose.build.yml`.
+- **Postgres `FATAL: role "plexamp" does not exist`:** the named volume was created earlier with different credentials. Postgres only applies `POSTGRES_USER` on first init. Stop the stack and remove the DB volume, then start again (this wipes local Docker DB data): `docker compose down -v` then `docker compose pull && docker compose up` (or add `-f docker-compose.build.yml` and `up --build` if you build images locally). If you need to keep other volumes, use `docker volume ls` to find this project’s `*_postgres_data` volume, remove it with `docker volume rm …`, then start the stack again.
 - **Nginx `502` / “Host is unreachable” to the API:** usually the `api` container never came up or exited (often because the API could not connect to Postgres). Fix the database issue above first; then confirm `docker compose ps` shows `api` running.
 - If the UI shows “connected” but artists/albums are empty or errors occur, the **Plex URL in Setup** must be reachable from where the API runs (Docker cannot use `localhost` to mean your Mac unless you use `host.docker.internal` or the LAN IP).
 - Use **Connect Plex**, then **`Test Plex server (API)`** in the UI: it confirms TCP/TLS connectivity, token acceptance, and lists **Music** library section names Plex returned (not TIDAL-only views).
