@@ -40,6 +40,7 @@ app.include_router(router, prefix=settings.api_prefix)
 
 @app.on_event("startup")
 def _startup_plex_url_check() -> None:
+    eff = ""
     db = SessionLocal()
     try:
         row = get_or_create_runtime_setup(db)
@@ -48,6 +49,6 @@ def _startup_plex_url_check() -> None:
         db.close()
     if not eff.strip():
         _logger.warning(
-            "Plex Media Server URL is unset (Setup modal + env). "
+            "Plex Media Server URL is unset in Setup. "
             "/api/v1/media/* will return 503 until a URL is configured."
         )

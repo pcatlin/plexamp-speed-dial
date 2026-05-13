@@ -78,7 +78,7 @@ class SonosService:
                     SonosSpeaker(id="demo-living-room", name="Living Room (demo)", ip="192.168.1.10"),
                     SonosSpeaker(id="demo-kitchen", name="Kitchen (demo)", ip="192.168.1.11"),
                 ]
-            _log.info("No Sonos zones found (Docker/multicast: set SONOS_SEED_IPS to a player LAN IP).")
+            _log.info("No Sonos zones found (Docker/multicast: set seed IPs under Setup).")
             return []
 
         return [

@@ -35,7 +35,7 @@ Base path: `http://localhost:8000/api/v1`
 - `GET /auth/plex/server-test` — diagnostic: reachable URL?, token?, Music library sections
 - `POST /auth/plex/complete` — optional developer override or one-shot PIN completion
 - `GET /auth/plex/status`
-- `GET /media/playlists` *(requires linked Plex token + `PLEX_SERVER_URL`)*
+- `GET /media/playlists` *(requires linked Plex token + Plex server URL in Setup)*
 - `GET /media/artists`
 - `GET /media/albums`
 - `GET /media/tracks`
@@ -90,11 +90,13 @@ python backend/export_openapi.py
 cp .env.example .env
 ```
 
-Set **`PLEX_SERVER_URL`** on the **API** to the Plex Media Server HTTP base (for example `http://192.168.1.42:32400` or `http://127.0.0.1:32400` when API and Plex share a host). The API must be able to reach that host: from Docker on macOS/Windows, `http://host.docker.internal:32400` often works if Plex runs on the machine. **`PLEX_SERVER_URL` is loaded from `./.env` at the repo root or `backend/.env`**, so it still works when you start uvicorn with cwd `backend/`.
+Fill in **Postgres** and **`DATABASE_URL`** (see `.env.example`). Plex server URL, TLS, Sonos discovery, and line-in are **only** configured in the **Setup** UI (stored in the database), not via duplicate env vars.
 
-After you sign in with Plex, media routes use [python-plexapi](https://github.com/pkkid/python-plexapi) against that server with your stored owner token.
+After you sign in with Plex, media routes use [python-plexapi](https://github.com/pkkid/python-plexapi) against the server URL from Setup with your stored owner token.
 
 ### Run with Docker Compose
+
+Create a `.env` file (see `.env.example`) with `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, and `DATABASE_URL` (credentials and database name must match the `db` service). Then:
 
 ```bash
 docker compose up --build
@@ -114,10 +116,11 @@ Services:
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r backend/requirements.txt
-export PLEX_SERVER_URL='http://YOUR_PMS_IP:32400'  # or add to .env in project root
 python -m app.db.init_db
 uvicorn app.main:app --app-dir backend --reload
 ```
+
+Open **Setup** in the UI and set the Plex Media Server base URL (and Sonos options as needed).
 
 ### Frontend
 
@@ -129,7 +132,7 @@ npm run dev
 
 ## Usage Flow
 
-1. Set `PLEX_SERVER_URL` for the API container
+1. Open **Setup** and set the Plex Media Server base URL (reachable from the API host; from Docker to a Mac/Windows host, `http://host.docker.internal:32400` is a common choice)
 2. Connect Plex (browser OAuth; the UI polls until the token is stored)
 3. Add one or more Plexamp players
 4. Choose media tab and media item (or random album from a collection)
@@ -167,10 +170,10 @@ npm test
 
 ## Notes / troubleshooting
 
-- If the UI shows “connected” but artists/albums are empty or errors occur, **`PLEX_SERVER_URL` must point at Plex from where the API runs** (Docker cannot use `localhost` to mean your Mac unless you use `host.docker.internal` or the LAN IP).
+- If the UI shows “connected” but artists/albums are empty or errors occur, the **Plex URL in Setup** must be reachable from where the API runs (Docker cannot use `localhost` to mean your Mac unless you use `host.docker.internal` or the LAN IP).
 - Use **Connect Plex**, then **`Test Plex server (API)`** in the UI: it confirms TCP/TLS connectivity, token acceptance, and lists **Music** library section names Plex returned (not TIDAL-only views).
 - If you get **401** from Plex, ensure **Settings → Network → List of IP addresses allowed without auth** covers the subnet of the Docker host/API (or Plex will reject APIs that do not behave like a LAN client session).
-- For **HTTPS** to Plex with a self-signed certificate, try plain **`http://...:32400`**, or set **`PLEX_SSL_VERIFY=false`** on the backend (trusted LAN only).
+- For **HTTPS** to Plex with a self-signed certificate, try plain **`http://...:32400`**, or turn off **Verify HTTPS certificates** in Setup (trusted LAN only).
 - Media lists require at least one **Music** library on the Plex server that your account can read.
-- **Sonos in Docker:** discovery uses SSDP multicast, which usually **does not cross Docker’s default bridge**. Set **`SONOS_SEED_IPS`** to the LAN IP of **one** Sonos speaker; the API opens TCP to that device and lists **all players** in the household via `visible_zones`. On **Linux** you can alternatively run the API with **`network_mode: host`** (not supported the same way on Docker Desktop for Mac).
-- Optional **`SONOS_DEMO_FALLBACK=true`** restores fake “Living Room / Kitchen” entries for UI testing only.
+- **Sonos in Docker:** discovery uses SSDP multicast, which usually **does not cross Docker’s default bridge**. Enter **seed IPs** under Setup (comma-separated LAN IPs of any Sonos player). On **Linux** you can alternatively run the API with **`network_mode: host`** (not supported the same way on Docker Desktop for Mac).
+- **Demo fallback** for Sonos (fake players) is available only as a checkbox under Setup for UI testing.

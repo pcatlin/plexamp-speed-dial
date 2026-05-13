@@ -20,7 +20,7 @@ def require_plex_creds(db: Session = Depends(get_db)) -> PlexCredential:
             status_code=503,
             detail=(
                 "Plex Media Server URL is not configured. Open Setup and enter your PMS base URL "
-                "(e.g. http://127.0.0.1:32400), or set PLEX_SERVER_URL for the API if the DB setting is blank."
+                "(e.g. http://127.0.0.1:32400 when the API can reach Plex on that host)."
             ),
         )
     return creds

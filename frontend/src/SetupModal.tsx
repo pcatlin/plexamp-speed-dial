@@ -229,8 +229,8 @@ export function SetupModal({
           <h3>Plex account</h3>
           <p>{authConnected ? `Connected as ${authUsername || "owner"}` : "Not connected"}</p>
           <p className="hint">
-            Set the server URL in the next section first (or rely on env). Then link your Plex account; after that you can run a
-            server test with your saved token.
+            Set the Plex Media Server base URL in the next section first, then link your Plex account; after that you can run a server
+            test with your saved token.
           </p>
           <div className="modalButtonRow">
             <button type="button" disabled={busy || loading || !authConnected} onClick={() => void testPlexServer()}>
@@ -246,7 +246,7 @@ export function SetupModal({
         <section className="modalSection">
           <h3>Plex Media Server</h3>
           <label className="fieldLabel">
-            Base URL (empty = env <code>PLEX_SERVER_URL</code>)
+            Base URL (required for library access from this API)
             <input
               type="url"
               className="textInput"

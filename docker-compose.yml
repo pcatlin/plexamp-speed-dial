@@ -2,15 +2,15 @@ services:
   db:
     image: postgres:16
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-plexamp_speed_dial}
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-plexamp_speed_dial}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -19,20 +19,7 @@ services:
     build:
       context: ./backend
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://postgres:postgres@db:5432/plexamp_speed_dial}
-      PLEX_SERVER_URL: ${PLEX_SERVER_URL:-}
-      PLEX_CLIENT_IDENTIFIER: ${PLEX_CLIENT_IDENTIFIER:-plexamp-speed-dial-web}
-      PLEX_DEVICE_NAME: ${PLEX_DEVICE_NAME:-Plexamp Speed Dial API}
-      PLEX_PRODUCT: ${PLEX_PRODUCT:-Plexamp Speed Dial}
-      PLEX_SSL_VERIFY: ${PLEX_SSL_VERIFY:-true}
-      SONOS_SEED_IPS: ${SONOS_SEED_IPS:-}
-      SONOS_DISCOVER_TIMEOUT: ${SONOS_DISCOVER_TIMEOUT:-10}
-      SONOS_ALLOW_NETWORK_SCAN: ${SONOS_ALLOW_NETWORK_SCAN:-true}
-      SONOS_INTERFACE_ADDR: ${SONOS_INTERFACE_ADDR:-}
-      SONOS_DEMO_FALLBACK: ${SONOS_DEMO_FALLBACK:-false}
-      SONOS_LINE_IN_SOURCE_NAME: ${SONOS_LINE_IN_SOURCE_NAME:-Fridge}
-      SONOS_LINE_IN_SOURCE_UID: ${SONOS_LINE_IN_SOURCE_UID:-}
-      CORS_ORIGINS: "*"
+      DATABASE_URL: ${DATABASE_URL}
     depends_on:
       db:
         condition: service_healthy

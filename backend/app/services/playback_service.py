@@ -80,7 +80,7 @@ class PlaybackService:
         if not server_url:
             return PlayResponse(
                 status="error",
-                details="Plex Media Server URL is empty; configure it under Setup (or PLEX_SERVER_URL).",
+                details="Plex Media Server URL is empty; configure it under Setup.",
             )
 
         plexamp_base, perr = self._plexamp_base_for_player(player)

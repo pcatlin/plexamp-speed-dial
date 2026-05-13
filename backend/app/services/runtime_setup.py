@@ -1,4 +1,4 @@
-"""Persisted runtime configuration (Setup modal) with environment fallbacks."""
+"""Persisted runtime configuration (Setup modal), stored in the database."""
 
 from __future__ import annotations
 
@@ -6,7 +6,6 @@ from dataclasses import dataclass
 
 from sqlalchemy.orm import Session
 
-from app.core.config import settings
 from app.models import RuntimeSetup
 
 _RUN_ID = 1
@@ -30,26 +29,15 @@ class SonosRuntime:
 
 
 def effective_plex_url(stored_raw: str) -> str:
-    stored = (stored_raw or "").strip().rstrip("/")
-    return stored or settings.plex_server_url.strip().rstrip("/")
+    """PMS base URL from Setup (DB) only."""
+    return (stored_raw or "").strip().rstrip("/")
 
 
 def get_or_create_runtime_setup(db: Session) -> RuntimeSetup:
     row = db.get(RuntimeSetup, _RUN_ID)
     if row is not None:
         return row
-    row = RuntimeSetup(
-        id=_RUN_ID,
-        plex_server_url=settings.plex_server_url.strip(),
-        plex_ssl_verify=settings.plex_ssl_verify,
-        sonos_seed_ips=settings.sonos_seed_ips,
-        sonos_discover_timeout=settings.sonos_discover_timeout,
-        sonos_allow_network_scan=settings.sonos_allow_network_scan,
-        sonos_interface_addr=settings.sonos_interface_addr,
-        sonos_demo_fallback=settings.sonos_demo_fallback,
-        sonos_line_in_source_name=settings.sonos_line_in_source_name.strip(),
-        sonos_line_in_source_uid=settings.sonos_line_in_source_uid.strip(),
-    )
+    row = RuntimeSetup(id=_RUN_ID)
     db.add(row)
     db.commit()
     db.refresh(row)
@@ -71,6 +59,6 @@ def resolve_sonos_runtime(db: Session) -> SonosRuntime:
         allow_network_scan=row.sonos_allow_network_scan,
         interface_addr=row.sonos_interface_addr,
         demo_fallback=row.sonos_demo_fallback,
-        line_in_source_name=name_db or settings.sonos_line_in_source_name.strip(),
-        line_in_source_uid=uid_db or settings.sonos_line_in_source_uid.strip(),
+        line_in_source_name=name_db,
+        line_in_source_uid=uid_db,
     )

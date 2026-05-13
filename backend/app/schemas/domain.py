@@ -136,7 +136,10 @@ class SpeedDialRead(SpeedDialCreate):
 class RuntimeSetupUpdate(BaseModel):
     """Editable fields from the Setup modal (stored in DB)."""
 
-    plex_server_url: str = Field(default="", description="PMS base URL, e.g. http://192.168.1.10:32400. Empty uses PLEX_SERVER_URL from the environment.")
+    plex_server_url: str = Field(
+        default="",
+        description="PMS base URL, e.g. http://192.168.1.10:32400. Set in Setup (stored in DB).",
+    )
     plex_ssl_verify: bool = True
     sonos_seed_ips: str = Field(
         default="",
@@ -159,5 +162,5 @@ class RuntimeSetupUpdate(BaseModel):
 class RuntimeSetupRead(RuntimeSetupUpdate):
     plex_server_url_effective: str = Field(
         default="",
-        description="URL the API will actually use (DB value, or env fallback if DB is blank).",
+        description="Same as plex_server_url from Setup (DB); exposed for the UI.",
     )

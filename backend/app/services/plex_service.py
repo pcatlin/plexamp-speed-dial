@@ -95,7 +95,7 @@ class PlexService:
         base = conn.base_url.strip().rstrip("/")
         if not base:
             raise ValueError(
-                "Plex Media Server URL is empty. Set it under Setup (or PLEX_SERVER_URL in the environment).",
+                "Plex Media Server URL is empty. Set it under Setup.",
             )
         session = self._make_server_session(conn.ssl_verify)
         try:
@@ -137,7 +137,7 @@ class PlexService:
                 configured_url="",
                 ssl_verify_enabled=ssl_on,
                 error_detail=(
-                    "Plex Media Server URL is empty. Set it under Setup, or configure PLEX_SERVER_URL for the API process."
+                    "Plex Media Server URL is empty. Set it under Setup."
                 ),
             )
 
