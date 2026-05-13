@@ -84,19 +84,15 @@ python backend/export_openapi.py
   - Sonos speakers
   - Plexamp headless players
 
-### Environment
+### Environment (local dev)
 
-```bash
-cp .env.example .env
-```
+For **`npm run dev`** in `frontend/`, copy `.env.example` to `.env` and set `VITE_API_BASE_URL` if your API is not on the default URL.
 
-Fill in **Postgres** and **`DATABASE_URL`** (see `.env.example`). **Setup** stores Plex server URL, TLS, Sonos options, and line-in in the database. On first API startup, a **Plex client UUID** is generated and stored in the same table so Plex sees a stable device identity (no `PLEX_CLIENT_*` env vars).
+**Docker Compose** uses fixed Postgres credentials and `DATABASE_URL` in [`docker-compose.yml`](docker-compose.yml) (database is not exposed on the host). **Setup** stores Plex server URL, TLS, Sonos options, and line-in in the database. On first API startup, a **Plex client UUID** is generated and stored in the same table so Plex sees a stable device identity (no `PLEX_CLIENT_*` env vars).
 
 After you sign in with Plex, media routes use [python-plexapi](https://github.com/pkkid/python-plexapi) against the server URL from Setup with your stored owner token.
 
 ### Run with Docker Compose
-
-Create a `.env` file (see `.env.example`) with `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, and `DATABASE_URL` (credentials and database name must match the `db` service). Then:
 
 ```bash
 docker compose up --build
@@ -106,7 +102,8 @@ Services:
 
 - Frontend: `http://localhost:3000`
 - API: `http://localhost:8000`
-- Postgres: `localhost:5432`
+
+Postgres runs only on the Compose network (user `plexamp`, database `plexamp_speed_dial`; see `docker-compose.yml`). To open a shell: `docker compose exec db psql -U plexamp -d plexamp_speed_dial`.
 
 ## Manual Setup (without Docker)
 
