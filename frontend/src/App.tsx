@@ -1,8 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import "./App.css";
 import { api, API_BASE, MediaItem, Player, Speaker, SpeedDial } from "./api";
+import CreditsPage from "./CreditsPage";
 import { PickMusicSection, PickTab, playMediaTypeForTab } from "./PickMusicSection";
 import { SetupModal } from "./SetupModal";
+
+function routeFromHash(hash: string): "app" | "credits" {
+  const path = hash.replace(/^#/, "");
+  return path === "/credits" || path.startsWith("/credits?") ? "credits" : "app";
+}
 
 function IconPlay() {
   return (
@@ -45,6 +51,19 @@ function IconSkipNext() {
 }
 
 function App() {
+  const [route, setRoute] = useState<"app" | "credits">(() => routeFromHash(window.location.hash));
+
+  useEffect(() => {
+    const sync = () => {
+      const next = routeFromHash(window.location.hash);
+      setRoute(next);
+      document.title = next === "credits" ? "Credits — Plexamp Speed Dial" : "Plexamp Speed Dial";
+    };
+    sync();
+    window.addEventListener("hashchange", sync);
+    return () => window.removeEventListener("hashchange", sync);
+  }, []);
+
   const [authConnected, setAuthConnected] = useState(false);
   const [username, setUsername] = useState("");
   const [pickTab, setPickTab] = useState<PickTab>("playlist");
@@ -257,6 +276,10 @@ function App() {
     setMessage(result.details);
   };
 
+  if (route === "credits") {
+    return <CreditsPage />;
+  }
+
   return (
     <div className="appShell">
       <div className="appMain">
@@ -372,6 +395,11 @@ function App() {
         </section>
 
         <p className="message">{message}</p>
+        <footer className="creditsFooter">
+          <a href="#/credits" className="creditsLink">
+            Credits
+          </a>
+        </footer>
       </div>
 
       <aside className="controlRail" aria-label="Playback controls">

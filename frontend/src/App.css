@@ -588,6 +588,116 @@ button.smallBtn {
   font-size: 0.88rem;
 }
 
+.creditsFooter {
+  margin-top: 1.25rem;
+  padding-top: 0.5rem;
+  text-align: center;
+  border-top: 1px solid #e8e8e8;
+}
+
+.creditsLink {
+  font-size: 0.72rem;
+  color: #9ca3af;
+  text-decoration: none;
+  letter-spacing: 0.02em;
+}
+
+.creditsLink:hover {
+  color: #6b7280;
+  text-decoration: underline;
+}
+
+.creditsShell {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.creditsPage {
+  max-width: 36rem;
+  margin: 0 auto;
+}
+
+.creditsBack {
+  margin: 0 0 0.75rem;
+  font-size: 0.9rem;
+}
+
+.creditsBack a {
+  color: #4b5563;
+  text-decoration: none;
+}
+
+.creditsBack a:hover {
+  text-decoration: underline;
+}
+
+.creditsTitle {
+  margin: 0 0 0.35rem;
+  font-size: 1.35rem;
+}
+
+.creditsLead {
+  margin: 0 0 1.25rem;
+  font-size: 0.9rem;
+  color: #525252;
+}
+
+.creditsSection {
+  margin-bottom: 1.25rem;
+}
+
+.creditsSection h2 {
+  margin: 0 0 0.45rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #374151;
+}
+
+.creditsSection p {
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.creditsList {
+  margin: 0;
+  padding-left: 1.1rem;
+  font-size: 0.88rem;
+  line-height: 1.55;
+  color: #444;
+}
+
+.creditsList li {
+  margin-bottom: 0.35rem;
+}
+
+.creditsList a {
+  color: #2563eb;
+}
+
+.creditsList a:hover {
+  text-decoration: underline;
+}
+
+.creditsSectionDim h2 {
+  color: #6b7280;
+}
+
+.creditsDim {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: #6b7280;
+}
+
+.creditsDim a {
+  color: #4b5563;
+}
+
+.creditsDim a:hover {
+  color: #2563eb;
+}
+
 button.nowrap {
   white-space: nowrap;
 }

@@ -50,4 +50,15 @@ describe("App", () => {
     fireEvent.click(startButton);
     await waitFor(() => expect(screen.getByText("Playing now")).toBeInTheDocument());
   });
+
+  it("opens credits from footer link and returns via hash", async () => {
+    render(<App />);
+    await waitFor(() => expect(screen.getByText("Plexamp Sonos Speed Dial")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("link", { name: "Credits" }));
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Credits", level: 1 })).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("link", { name: /Back to app/i }));
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Plexamp Sonos Speed Dial", level: 1 })).toBeInTheDocument());
+  });
 });
