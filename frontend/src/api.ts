@@ -1,4 +1,5 @@
-export const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api/v1";
+/** Same-origin `/api/v1` — Vite dev server proxies `/api` to uvicorn; Docker nginx proxies to the API service. */
+export const API_BASE = "/api/v1";
 
 export type MediaType = "playlist" | "album" | "artist" | "track" | "random_album";
 

@@ -25,9 +25,14 @@ function mockPayload(path: string): unknown {
   return { id: 1, message: "ok" };
 }
 
+function apiPathFromFetchInput(input: RequestInfo | URL): string {
+  const raw = input instanceof Request ? input.url : String(input);
+  const pathname = new URL(raw, "http://localhost").pathname;
+  return pathname.startsWith("/api/v1") ? pathname.slice("/api/v1".length) : pathname;
+}
+
 globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
-  const url = String(input);
-  const path = url.replace("http://localhost:8000/api/v1", "");
+  const path = apiPathFromFetchInput(input);
   const payload = mockPayload(path);
   return new Response(JSON.stringify(payload), { status: 200, headers: { "Content-Type": "application/json" } });
 }) as typeof fetch;

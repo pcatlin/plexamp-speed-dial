@@ -84,11 +84,13 @@ python backend/export_openapi.py
   - Sonos speakers
   - Plexamp headless players
 
-### Environment (local dev)
+### Configuration
 
-For **`npm run dev`** in `frontend/`, copy `.env.example` to `.env` and set `VITE_API_BASE_URL` if your API is not on the default URL.
+**No `.env` file is required** for the default Docker stack or for local dev with the documented ports.
 
-**Docker Compose** uses fixed Postgres credentials and `DATABASE_URL` in [`docker-compose.yml`](docker-compose.yml) (database is not exposed on the host). **Setup** stores Plex server URL, TLS, Sonos options, and line-in in the database. On first API startup, a **Plex client UUID** is generated and stored in the same table so Plex sees a stable device identity (no `PLEX_CLIENT_*` env vars).
+The UI calls the API at **`/api/v1`** on the same origin: in Docker, [`frontend/nginx.conf`](frontend/nginx.conf) proxies `/api` to the `api` service; with **`npm run dev`**, Vite proxies `/api` to **`http://127.0.0.1:8000`**. You can change the **published** ports in [`docker-compose.yml`](docker-compose.yml) (for example `8080:80` for the web service) without changing the app — keep the API service reachable as hostname `api` on port 8000 inside Compose. If you run uvicorn on a **non-8000** port locally, adjust the `server.proxy` target in [`frontend/vite.config.ts`](frontend/vite.config.ts).
+
+**Docker Compose** uses fixed Postgres credentials and `DATABASE_URL` in [`docker-compose.yml`](docker-compose.yml) (database is not exposed on the host). **Setup** stores Plex server URL, TLS, Sonos options, and line-in in the database. On first API startup, a **Plex client UUID** is generated and stored in the same table so Plex sees a stable device identity (no `PLEX_CLIENT_*` env vars). The API still defaults **`CORS_ORIGINS=*`** in code ([`backend/app/core/config.py`](backend/app/core/config.py)); override with a root `.env` only if you need a stricter allowlist.
 
 After you sign in with Plex, media routes use [python-plexapi](https://github.com/pkkid/python-plexapi) against the server URL from Setup with your stored owner token.
 
@@ -100,8 +102,8 @@ docker compose up --build
 
 Services:
 
-- Frontend: `http://localhost:3000`
-- API: `http://localhost:8000`
+- Web UI (and browser calls to **`/api/v1`**, proxied to the API): `http://localhost:3000`
+- API directly (OpenAPI, curl): `http://localhost:8000`
 
 Postgres runs only on the Compose network (user `plexamp`, database `plexamp_speed_dial`; see `docker-compose.yml`). To open a shell: `docker compose exec db psql -U plexamp -d plexamp_speed_dial`.
 
