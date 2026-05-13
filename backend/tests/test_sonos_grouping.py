@@ -54,6 +54,10 @@ class FakeSonosDevice:
     def play(self, **kwargs: object) -> None:
         self.play_calls += 1
 
+    def set_relative_volume(self, relative_volume: int) -> int:
+        self._volume = max(0, min(100, self._volume + int(relative_volume)))
+        return self._volume
+
 
 @pytest.fixture()
 def runtime() -> SonosRuntime:
@@ -111,8 +115,10 @@ def test_group_selected_unjoins_both_before_pairing(runtime: SonosRuntime, monke
     assert alpha.switch_calls and alpha.switch_calls[0] is fridge
 
 
-def test_adjust_volume_selected_clamps_and_dedupes_coordinator(runtime: SonosRuntime, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Two selected speakers in the same group adjust volume once; result stays in 0–100."""
+def test_adjust_volume_selected_applies_relative_step_to_each_selected_zone(
+    runtime: SonosRuntime, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Each checked speaker gets a relative volume step (grouped rooms are not collapsed to coordinator-only)."""
     kitchen = FakeSonosDevice("uid-k", "Kitchen", volume=98)
     kitchen.group = _FakeGroup(coordinator=kitchen)
     dining = FakeSonosDevice("uid-d", "Dining", volume=98)
@@ -123,9 +129,10 @@ def test_adjust_volume_selected_clamps_and_dedupes_coordinator(runtime: SonosRun
 
     msg = svc.adjust_volume_selected(runtime, ["uid-k", "uid-d"], 10)
     assert kitchen.volume == 100
-    assert dining.volume == 98
+    assert dining.volume == 100
     assert "100%" in msg
 
     msg2 = svc.adjust_volume_selected(runtime, ["uid-d"], -20)
-    assert kitchen.volume == 80
+    assert kitchen.volume == 100
+    assert dining.volume == 80
     assert "-20%" in msg2

@@ -258,9 +258,37 @@ class SonosService:
             return [], "Sonos: none of the selected speakers matched discovered zones."
         return coordinators, ""
 
+    def _unique_devices_for_speaker_ids(
+        self, runtime: SonosRuntime, output_speaker_ids: list[str], *, no_zones_detail: str
+    ) -> tuple[list[SoCo], str]:
+        """Resolve one SoCo per selected API speaker id (deduplicated by player UID, not by group)."""
+        zones = self.discover_visible_zones(runtime)
+        if not zones:
+            return [], f"Sonos: no zones discovered — {no_zones_detail}"
+
+        devices: list[SoCo] = []
+        seen_uid: set[str] = set()
+        for sid in output_speaker_ids:
+            dev = self._device_for_api_speaker_id(zones, sid)
+            if dev is None:
+                _log.warning("Sonos: no device matched speaker id %r", sid)
+                continue
+            if dev.uid in seen_uid:
+                continue
+            seen_uid.add(dev.uid)
+            devices.append(dev)
+
+        if not devices:
+            return [], "Sonos: none of the selected speakers matched discovered zones."
+        return devices, ""
+
     def adjust_volume_selected(self, runtime: SonosRuntime, output_speaker_ids: list[str], delta: int) -> str:
-        """Change group volume on each distinct coordinator (clamped 0–100)."""
-        coordinators, err = self._unique_coordinators_for_speaker_ids(
+        """Apply the same relative volume step to every selected zone (each player, not coordinator-only).
+
+        Bonded groups keep per-room balance: each checked speaker gets ``SetRelativeVolume`` so all
+        selected outputs move together instead of only adjusting the group coordinator once.
+        """
+        devices, err = self._unique_devices_for_speaker_ids(
             runtime, output_speaker_ids, no_zones_detail="nothing to adjust."
         )
         if err:
@@ -269,14 +297,15 @@ class SonosService:
             return "Sonos: volume delta was zero — no change."
 
         lines: list[str] = []
-        for coord in coordinators:
+        for dev in devices:
             try:
-                cur = int(coord.volume)
-            except (TypeError, ValueError):
-                cur = 0
-            new_vol = max(0, min(100, cur + delta))
-            coord.volume = new_vol
-            label = coord.player_name or coord.uid
+                new_vol = int(dev.set_relative_volume(delta))
+            except Exception as exc:  # noqa: BLE001
+                _log.warning("Sonos volume adjust failed for %s: %s", dev.player_name or dev.uid, exc)
+                label = dev.player_name or dev.uid
+                lines.append(f"{label} (failed: {exc})")
+                continue
+            label = dev.player_name or dev.uid
             lines.append(f"{label} → {new_vol}%")
 
         names = "; ".join(sorted(lines))

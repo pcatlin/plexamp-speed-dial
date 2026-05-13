@@ -636,6 +636,7 @@ paths:
   /api/v1/sonos/volume:
     post:
       summary: Sonos Volume Adjust
+      description: Applies a relative volume step to each selected zone (SetRelativeVolume), including every checked speaker in a bonded group.
       operationId: sonos_volume_api_v1_sonos_volume_post
       requestBody:
         content:
