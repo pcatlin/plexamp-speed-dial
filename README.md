@@ -1,14 +1,8 @@
 # Plexamp Sonos Speed Dial
 
-Mobile-optimized web app to quickly play Plex music through Plexamp headless players and Sonos speaker targets, with one-tap speed-dial favorites.
-
-## Tech Stack
-
-- Backend: FastAPI + SQLAlchemy + PostgreSQL
-- Frontend: React + Vite (mobile-first UI)
-- Sonos: SoCo discovery
-- Plex: Plex API integration layer (single-owner auth flow)
-- Deployment: Docker Compose + optional [Docker Hub](https://hub.docker.com/) images (`plexamp-speed-dial-api`, `plexamp-speed-dial-web`)
+A web app to quickly play music through **Plexamp headless** players to **Sonos** speakers via **Line-In** input.
+Yes, a very specific, odd audio setup, I know.  I just want it all. To have lovely *sweet fades* provided by Plexamp and 
+Sonos speakers without the clunky Plexamp casting.
 
 ## Features
 
@@ -19,10 +13,11 @@ Mobile-optimized web app to quickly play Plex music through Plexamp headless pla
   - track
   - random album from collection
 - Select playback target:
-  - multiple Sonos speakers via checkboxes
-  - saved Sonos group presets
-- Manage multiple Plexamp headless players
+  - one or more Sonos speakers (via Line-In)
+  - ignore this and just control Plexamp only
+- Manage multiple Plexamp players
 - Save one-tap speed-dial favorites and delete them
+- Direct basic control Plexamp and Sonos speakers (Play, Pause, Volume, Skip, Prev)
 - Simple API-first backend with OpenAPI docs
 
 ## API Overview
@@ -90,7 +85,7 @@ python backend/export_openapi.py
 
 The UI calls the API at **`/api/v1`** on the same origin: in Docker, [`frontend/nginx.conf`](frontend/nginx.conf) proxies `/api` to the `api` service; with **`npm run dev`**, Vite proxies `/api` to **`http://127.0.0.1:8000`**. You can change the **published** ports in [`docker-compose.yml`](docker-compose.yml) (for example `8080:80` for the web service) without changing the app — keep the API service reachable as hostname `api` on port 8000 inside Compose. If you run uvicorn on a **non-8000** port locally, adjust the `server.proxy` target in [`frontend/vite.config.ts`](frontend/vite.config.ts).
 
-**Docker Compose** uses fixed Postgres credentials and `DATABASE_URL` in [`docker-compose.yml`](docker-compose.yml) (database is not exposed on the host). **Setup** stores Plex server URL, TLS, Sonos options, and line-in in the database. On first API startup, a **Plex client UUID** is generated and stored in the same table so Plex sees a stable device identity (no `PLEX_CLIENT_*` env vars). The API still defaults **`CORS_ORIGINS=*`** in code ([`backend/app/core/config.py`](backend/app/core/config.py)); override with a root `.env` only if you need a stricter allowlist.
+**Docker Compose** uses fixed Postgres credentials and `DATABASE_URL` in [`docker-compose.yml`](docker-compose.yml) (database is not exposed on the host). **Setup** stores Plex server URL, TLS, Sonos options, and line-in in the database. The API still defaults **`CORS_ORIGINS=*`** in code ([`backend/app/core/config.py`](backend/app/core/config.py)); override with a root `.env` only if you need a stricter allowlist.
 
 After you sign in with Plex, media routes use [python-plexapi](https://github.com/pkkid/python-plexapi) against the server URL from Setup with your stored owner token.
 
@@ -180,25 +175,11 @@ cd frontend
 npm test
 ```
 
-## End-to-End Validation Checklist
-
-- [ ] Plex auth status transitions from disconnected to connected
-- [ ] Media lists load for playlist/album/artist/track
-- [ ] Random album endpoint returns playable album payload
-- [ ] Sonos speakers are listed
-- [ ] Plexamp player can be created and selected
-- [ ] `POST /play` returns success with selected targets
-- [ ] Speed dial create/list/delete works end-to-end
-
 ## Notes / troubleshooting
 
-- **`no matching manifest for linux/arm64` on `docker compose pull`:** the Hub images were built for **amd64 only**. Re-publish with [`scripts/docker-build-push.sh`](scripts/docker-build-push.sh) (defaults to **amd64 + arm64**). Until then, add `platform: linux/amd64` under `api` and `web`, or build locally with `docker-compose.build.yml`.
-- **Postgres `FATAL: role "plexamp" does not exist`:** the named volume was created earlier with different credentials. Postgres only applies `POSTGRES_USER` on first init. Stop the stack and remove the DB volume, then start again (this wipes local Docker DB data): `docker compose down -v` then `docker compose pull && docker compose up` (or add `-f docker-compose.build.yml` and `up --build` if you build images locally). If you need to keep other volumes, use `docker volume ls` to find this project’s `*_postgres_data` volume, remove it with `docker volume rm …`, then start the stack again.
-- **Nginx `502` / “Host is unreachable” to the API:** usually the `api` container never came up or exited (often because the API could not connect to Postgres). Fix the database issue above first; then confirm `docker compose ps` shows `api` running.
 - If the UI shows “connected” but artists/albums are empty or errors occur, the **Plex URL in Setup** must be reachable from where the API runs (Docker cannot use `localhost` to mean your Mac unless you use `host.docker.internal` or the LAN IP).
-- Use **Connect Plex**, then **`Test Plex server (API)`** in the UI: it confirms TCP/TLS connectivity, token acceptance, and lists **Music** library section names Plex returned (not TIDAL-only views).
+- Use **Connect Plex**, then **`Test Plex server (API)`** in the UI: it confirms TCP/TLS connectivity, token acceptance, and lists **Music** library section names Plex returned.
 - If you get **401** from Plex, ensure **Settings → Network → List of IP addresses allowed without auth** covers the subnet of the Docker host/API (or Plex will reject APIs that do not behave like a LAN client session).
 - For **HTTPS** to Plex with a self-signed certificate, try plain **`http://...:32400`**, or turn off **Verify HTTPS certificates** in Setup (trusted LAN only).
 - Media lists require at least one **Music** library on the Plex server that your account can read.
 - **Sonos in Docker:** discovery uses SSDP multicast, which usually **does not cross Docker’s default bridge**. Enter **seed IPs** under Setup (comma-separated LAN IPs of any Sonos player). On **Linux** you can alternatively run the API with **`network_mode: host`** (not supported the same way on Docker Desktop for Mac).
-- **Demo fallback** for Sonos (fake players) is available only as a checkbox under Setup for UI testing.
