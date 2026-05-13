@@ -14,7 +14,7 @@ from app.db.runtime_setup_migrate import (
     ensure_speed_dial_shuffle_column,
 )
 from app.models import PlexCredential, PlexampPlayer, SonosGroupPreset, SpeedDialFavorite
-from app.plexapi_identity import apply_stable_plexapi_headers
+from app.plexapi_identity import apply_stable_plexapi_headers, log_plex_account_linked
 from app.schemas.common import HealthResponse, IdResponse
 from app.schemas.domain import (
     MediaItem,
@@ -130,10 +130,12 @@ def plex_poll_pin(pin_id: str, db: Session = Depends(get_db)) -> PlexPinPollResp
     if not creds:
         creds = PlexCredential()
         db.add(creds)
+    had_previous_token = bool(creds.auth_token)
     creds.auth_token = token
     creds.username = plex_service.lookup_username(token) or creds.username
     creds.is_connected = True
     db.commit()
+    log_plex_account_linked(had_previous_token=had_previous_token)
     return PlexPinPollResponse(status="connected", username=creds.username)
 
 
@@ -145,10 +147,12 @@ def plex_complete(payload: PlexAuthCompleteRequest, db: Session = Depends(get_db
         creds = PlexCredential()
         db.add(creds)
     if payload.mock_token:
+        had_previous_token = bool(creds.auth_token)
         creds.auth_token = payload.mock_token
         creds.username = payload.username or creds.username or "dev"
         creds.is_connected = True
         db.commit()
+        log_plex_account_linked(had_previous_token=had_previous_token)
         return PlexAuthStatusResponse(connected=True, username=creds.username)
     try:
         token = plex_service.poll_oauth_pin(payload.pin_id)
@@ -159,10 +163,12 @@ def plex_complete(payload: PlexAuthCompleteRequest, db: Session = Depends(get_db
             status_code=400,
             detail="Plex login not finished yet. Approve the app in the browser, then try again.",
         )
+    had_previous_token = bool(creds.auth_token)
     creds.auth_token = token
     creds.username = plex_service.lookup_username(token) or payload.username or creds.username
     creds.is_connected = True
     db.commit()
+    log_plex_account_linked(had_previous_token=had_previous_token)
     return PlexAuthStatusResponse(connected=True, username=creds.username)
 
 

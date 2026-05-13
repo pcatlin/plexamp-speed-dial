@@ -5,7 +5,7 @@ from urllib.parse import urlencode
 
 import requests
 import requests.exceptions as requests_exc
-from plexapi import BASE_HEADERS
+import plexapi
 from plexapi import utils as plex_utils
 from plexapi.exceptions import NotFound, Unauthorized
 from plexapi.library import MusicSection
@@ -38,7 +38,7 @@ class PlexService:
         return session
 
     def _plex_tv_headers(self) -> dict[str, str]:
-        headers = BASE_HEADERS.copy()
+        headers = plexapi.BASE_HEADERS.copy()
         headers.setdefault("X-Plex-Product", "Plexamp Speed Dial")
         return headers
 
