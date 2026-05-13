@@ -169,6 +169,8 @@ npm test
 
 ## Notes / troubleshooting
 
+- **Postgres `FATAL: role "plexamp" does not exist`:** the named volume was created earlier with different credentials. Postgres only applies `POSTGRES_USER` on first init. Stop the stack and remove the DB volume, then start again (this wipes local Docker DB data): `docker compose down -v` then `docker compose up --build`. If you need to keep other volumes, use `docker volume ls` to find this project’s `*_postgres_data` volume, remove it with `docker volume rm …`, then `docker compose up --build`.
+- **Nginx `502` / “Host is unreachable” to the API:** usually the `api` container never came up or exited (often because the API could not connect to Postgres). Fix the database issue above first; then confirm `docker compose ps` shows `api` running.
 - If the UI shows “connected” but artists/albums are empty or errors occur, the **Plex URL in Setup** must be reachable from where the API runs (Docker cannot use `localhost` to mean your Mac unless you use `host.docker.internal` or the LAN IP).
 - Use **Connect Plex**, then **`Test Plex server (API)`** in the UI: it confirms TCP/TLS connectivity, token acceptance, and lists **Music** library section names Plex returned (not TIDAL-only views).
 - If you get **401** from Plex, ensure **Settings → Network → List of IP addresses allowed without auth** covers the subnet of the Docker host/API (or Plex will reject APIs that do not behave like a LAN client session).
