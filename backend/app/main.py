@@ -4,9 +4,6 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
-from app.plexapi_identity import apply_stable_plexapi_headers
-
-apply_stable_plexapi_headers(settings)
 
 from app.api.routes import router
 from app.db.database import SessionLocal

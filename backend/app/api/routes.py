@@ -8,11 +8,13 @@ from app.api.deps import require_plex_creds
 from app.db.database import Base, SessionLocal, engine, get_db
 from app.db.runtime_setup_migrate import (
     ensure_runtime_setup_columns,
+    ensure_runtime_setup_plex_client_identifier_column,
     ensure_speed_dial_artist_radio_column,
     ensure_speed_dial_cover_column,
     ensure_speed_dial_shuffle_column,
 )
 from app.models import PlexCredential, PlexampPlayer, SonosGroupPreset, SpeedDialFavorite
+from app.plexapi_identity import apply_stable_plexapi_headers
 from app.schemas.common import HealthResponse, IdResponse
 from app.schemas.domain import (
     MediaItem,
@@ -67,12 +69,14 @@ def _serialize_runtime_setup_read(db: Session) -> RuntimeSetupRead:
 def startup() -> None:
     Base.metadata.create_all(bind=engine)
     ensure_runtime_setup_columns(engine)
+    ensure_runtime_setup_plex_client_identifier_column(engine)
     ensure_speed_dial_cover_column(engine)
     ensure_speed_dial_artist_radio_column(engine)
     ensure_speed_dial_shuffle_column(engine)
     seed = SessionLocal()
     try:
-        get_or_create_runtime_setup(seed)
+        row = get_or_create_runtime_setup(seed)
+        apply_stable_plexapi_headers(row.plex_client_identifier)
     finally:
         seed.close()
 

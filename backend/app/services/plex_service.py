@@ -39,7 +39,6 @@ class PlexService:
 
     def _plex_tv_headers(self) -> dict[str, str]:
         headers = BASE_HEADERS.copy()
-        headers["X-Plex-Client-Identifier"] = settings.plex_client_identifier
         headers.setdefault("X-Plex-Product", "Plexamp Speed Dial")
         return headers
 

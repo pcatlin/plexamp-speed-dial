@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import uuid
 from dataclasses import dataclass
 
 from sqlalchemy.orm import Session
@@ -33,14 +34,24 @@ def effective_plex_url(stored_raw: str) -> str:
     return (stored_raw or "").strip().rstrip("/")
 
 
-def get_or_create_runtime_setup(db: Session) -> RuntimeSetup:
-    row = db.get(RuntimeSetup, _RUN_ID)
-    if row is not None:
-        return row
-    row = RuntimeSetup(id=_RUN_ID)
+def _ensure_plex_client_identifier(db: Session, row: RuntimeSetup) -> None:
+    existing = (getattr(row, "plex_client_identifier", None) or "").strip()
+    if existing:
+        return
+    row.plex_client_identifier = str(uuid.uuid4())
     db.add(row)
     db.commit()
     db.refresh(row)
+
+
+def get_or_create_runtime_setup(db: Session) -> RuntimeSetup:
+    row = db.get(RuntimeSetup, _RUN_ID)
+    if row is None:
+        row = RuntimeSetup(id=_RUN_ID)
+        db.add(row)
+        db.commit()
+        db.refresh(row)
+    _ensure_plex_client_identifier(db, row)
     return row
 
 

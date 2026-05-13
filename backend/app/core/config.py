@@ -16,22 +16,6 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./app.db"
     cors_origins: str = "*"
 
-    plex_client_identifier: str = Field(
-        default="plexamp-speed-dial-web",
-        validation_alias=AliasChoices(
-            "plex_client_identifier",
-            "PLEX_CLIENT_IDENTIFIER",
-            "PLEX_CLIENT_ID",
-        ),
-    )
-    plex_device_name: str = Field(
-        default="Plexamp Speed Dial API",
-        validation_alias=AliasChoices("plex_device_name", "PLEX_DEVICE_NAME"),
-    )
-    plex_product: str = Field(
-        default="Plexamp Speed Dial",
-        validation_alias=AliasChoices("plex_product", "PLEX_PRODUCT"),
-    )
     plex_media_limit: int = Field(
         default=300,
         ge=50,

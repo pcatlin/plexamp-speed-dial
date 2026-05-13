@@ -90,7 +90,7 @@ python backend/export_openapi.py
 cp .env.example .env
 ```
 
-Fill in **Postgres** and **`DATABASE_URL`** (see `.env.example`). Plex server URL, TLS, Sonos discovery, and line-in are **only** configured in the **Setup** UI (stored in the database), not via duplicate env vars.
+Fill in **Postgres** and **`DATABASE_URL`** (see `.env.example`). **Setup** stores Plex server URL, TLS, Sonos options, and line-in in the database. On first API startup, a **Plex client UUID** is generated and stored in the same table so Plex sees a stable device identity (no `PLEX_CLIENT_*` env vars).
 
 After you sign in with Plex, media routes use [python-plexapi](https://github.com/pkkid/python-plexapi) against the server URL from Setup with your stored owner token.
 

@@ -36,6 +36,23 @@ def ensure_runtime_setup_columns(engine: Engine) -> None:
                 _log.warning("runtime_setup migrate skipped/failed (%s): %s", stmt[:80], exc)
 
 
+def ensure_runtime_setup_plex_client_identifier_column(engine: Engine) -> None:
+    """Add runtime_setup.plex_client_identifier when upgrading an existing DB."""
+    insp = inspect(engine)
+    if "runtime_setup" not in insp.get_table_names():
+        return
+    existing = {c["name"] for c in insp.get_columns("runtime_setup")}
+    if "plex_client_identifier" in existing:
+        return
+    stmt = "ALTER TABLE runtime_setup ADD COLUMN plex_client_identifier VARCHAR(64)"
+    with engine.begin() as conn:
+        try:
+            conn.execute(text(stmt))
+            _log.info("Applied runtime_setup migration: plex_client_identifier")
+        except Exception as exc:  # noqa: BLE001
+            _log.warning("runtime_setup migrate skipped/failed: %s", exc)
+
+
 def ensure_speed_dial_cover_column(engine: Engine) -> None:
     """Add speed_dial_favorites.cover_thumb_path when upgrading an existing DB."""
     insp = inspect(engine)
