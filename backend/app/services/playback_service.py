@@ -277,6 +277,15 @@ class PlaybackService:
             ok_details="Skipped to previous track",
         )
 
+    def plexamp_pause(self, player_id: int, db: Session, *, auth_token: str) -> PlayResponse:
+        return self._plexamp_playback_simple(
+            player_id,
+            db,
+            auth_token=auth_token,
+            action="pause",
+            ok_details="Paused playback",
+        )
+
     def sonos_stop_selected(self, speaker_ids: list[str], db: Session) -> PlayResponse:
         if not speaker_ids:
             return PlayResponse(status="error", details="Select at least one Sonos speaker, then press stop.")
@@ -286,4 +295,16 @@ class PlaybackService:
         except Exception as exc:  # noqa: BLE001
             _log.exception("Sonos stop failed")
             return PlayResponse(status="error", details=f"Sonos stop failed: {exc}")
+        return PlayResponse(status="ok", details=msg)
+
+    def sonos_play_line_in_selected(self, speaker_ids: list[str], db: Session) -> PlayResponse:
+        """Group selected Sonos outputs and play the configured Plexamp line-in source (no new Plex queue)."""
+        if not speaker_ids:
+            return PlayResponse(status="error", details="Select at least one Sonos speaker, then press play.")
+        try:
+            runtime = resolve_sonos_runtime(db)
+            msg = self._sonos.group_selected_and_play_line_in(runtime, speaker_ids)
+        except Exception as exc:  # noqa: BLE001
+            _log.exception("Sonos line-in play failed")
+            return PlayResponse(status="error", details=f"Sonos line-in failed: {exc}")
         return PlayResponse(status="ok", details=msg)

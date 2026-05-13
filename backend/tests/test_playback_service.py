@@ -94,10 +94,40 @@ def test_playback_plexamp_skip_next_ok(db_session, monkeypatch):
     assert "Skipped to next track" in result.details
 
 
+def test_playback_plexamp_pause_ok(db_session, monkeypatch):
+    player = PlexampPlayer(name="Kitchen", host="plexamp.local", port=32500, is_active=True)
+    db_session.add(player)
+    db_session.commit()
+    db_session.refresh(player)
+
+    fake = Mock()
+    fake.status_code = 200
+    fake.text = "OK"
+    monkeypatch.setattr("app.services.playback_service.plexamp_playback_command", lambda **kwargs: fake)
+
+    service = PlaybackService(plex_service=FakePlexService(), sonos_service=FakeSonosService())
+    result = service.plexamp_pause(player.id, db_session, auth_token="dummy-token")
+    assert result.status == "ok"
+    assert "Paused playback" in result.details
+
+
 def test_playback_sonos_stop_empty_returns_error(db_session):
     service = PlaybackService(plex_service=FakePlexService(), sonos_service=FakeSonosService())
     result = service.sonos_stop_selected([], db_session)
     assert result.status == "error"
+
+
+def test_playback_sonos_play_line_in_empty_returns_error(db_session):
+    service = PlaybackService(plex_service=FakePlexService(), sonos_service=FakeSonosService())
+    result = service.sonos_play_line_in_selected([], db_session)
+    assert result.status == "error"
+
+
+def test_playback_sonos_play_line_in_ok(db_session):
+    service = PlaybackService(plex_service=FakePlexService(), sonos_service=FakeSonosService())
+    result = service.sonos_play_line_in_selected(["s1"], db_session)
+    assert result.status == "ok"
+    assert "Sonos: ok (mock)" in result.details
 
 
 class FakeArtistPMS:

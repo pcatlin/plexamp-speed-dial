@@ -3,6 +3,39 @@ info:
   title: Plexamp Sonos Speed Dial API
   version: 0.1.0
 paths:
+  /api/v1/settings/runtime:
+    get:
+      summary: Get Runtime Settings
+      operationId: get_runtime_settings_api_v1_settings_runtime_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RuntimeSetupRead'
+    put:
+      summary: Update Runtime Settings
+      operationId: update_runtime_settings_api_v1_settings_runtime_put
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RuntimeSetupUpdate'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RuntimeSetupRead'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/health:
     get:
       summary: Health
@@ -138,6 +171,53 @@ paths:
           content:
             application/json:
               schema: {}
+  /api/v1/media/tracks-for-parent:
+    get:
+      summary: Media Tracks For Parent
+      operationId: media_tracks_for_parent_api_v1_media_tracks_for_parent_get
+      parameters:
+      - name: family
+        in: query
+        required: true
+        schema:
+          enum:
+          - playlist
+          - album
+          - artist
+          type: string
+          title: Family
+      - name: parent_id
+        in: query
+        required: true
+        schema:
+          type: string
+          title: Parent Id
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 50
+          minimum: 1
+          default: 50
+          title: Limit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MediaItem'
+                title: Response Media Tracks For Parent Api V1 Media Tracks For Parent
+                  Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/media/collections:
     get:
       summary: Media Collections
@@ -159,6 +239,87 @@ paths:
         schema:
           type: string
           title: Collection Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/media/search:
+    get:
+      summary: Media Search
+      operationId: media_search_api_v1_media_search_get
+      parameters:
+      - name: family
+        in: query
+        required: true
+        schema:
+          type: string
+          title: Family
+      - name: query
+        in: query
+        required: false
+        schema:
+          type: string
+          default: ''
+          title: Query
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MediaItem'
+                title: Response Media Search Api V1 Media Search Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/media/suggestions:
+    get:
+      summary: Media Suggestions
+      operationId: media_suggestions_api_v1_media_suggestions_get
+      parameters:
+      - name: family
+        in: query
+        required: true
+        schema:
+          type: string
+          title: Family
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MediaSuggestionsResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/media/art/{rating_key}:
+    get:
+      summary: Media Art
+      operationId: media_art_api_v1_media_art__rating_key__get
+      parameters:
+      - name: rating_key
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Rating Key
       responses:
         '200':
           description: Successful Response
@@ -334,6 +495,121 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/plexamp/skip-next:
+    post:
+      summary: Plexamp Skip Next
+      operationId: plexamp_skip_next_api_v1_plexamp_skip_next_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlayerControlRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlayResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/plexamp/skip-previous:
+    post:
+      summary: Plexamp Skip Previous
+      operationId: plexamp_skip_previous_api_v1_plexamp_skip_previous_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlayerControlRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlayResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/plexamp/pause:
+    post:
+      summary: Plexamp Pause
+      operationId: plexamp_pause_api_v1_plexamp_pause_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlayerControlRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlayResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/sonos/play-line-in:
+    post:
+      summary: Sonos Play Line In
+      operationId: sonos_play_line_in_api_v1_sonos_play_line_in_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SonosStopRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlayResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/sonos/stop:
+    post:
+      summary: Sonos Stop
+      operationId: sonos_stop_api_v1_sonos_stop_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SonosStopRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlayResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/speed-dial:
     get:
       summary: Speed Dial
@@ -364,6 +640,53 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/IdResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/speed-dial/{favorite_id}/play:
+    post:
+      summary: Play Speed Dial Favorite
+      operationId: play_speed_dial_favorite_api_v1_speed_dial__favorite_id__play_post
+      parameters:
+      - name: favorite_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Favorite Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlayResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/speed-dial/{favorite_id}/cover:
+    get:
+      summary: Speed Dial Cover
+      operationId: speed_dial_cover_api_v1_speed_dial__favorite_id__cover_get
+      parameters:
+      - name: favorite_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Favorite Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
         '422':
           description: Validation Error
           content:
@@ -426,6 +749,47 @@ components:
       required:
       - id
       title: IdResponse
+    MediaItem:
+      properties:
+        id:
+          type: string
+          title: Id
+        title:
+          type: string
+          title: Title
+        subtitle:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Subtitle
+        type:
+          type: string
+          title: Type
+      type: object
+      required:
+      - id
+      - title
+      - type
+      title: MediaItem
+    MediaSuggestionsResponse:
+      properties:
+        most_played:
+          items:
+            $ref: '#/components/schemas/MediaItem'
+          type: array
+          title: Most Played
+        unplayed:
+          items:
+            $ref: '#/components/schemas/MediaItem'
+          type: array
+          title: Unplayed
+        random:
+          items:
+            $ref: '#/components/schemas/MediaItem'
+          type: array
+          title: Random
+      type: object
+      title: MediaSuggestionsResponse
     PlayRequest:
       properties:
         media_type:
@@ -453,6 +817,18 @@ components:
           - type: integer
           - type: 'null'
           title: Preset Id
+        artist_radio:
+          type: boolean
+          title: Artist Radio
+          description: 'When media_type is artist: True = Plex artist radio station;
+            False = queue this artist only.'
+          default: true
+        shuffle:
+          type: boolean
+          title: Shuffle
+          description: 'When media_type is playlist or artist: request shuffled queue
+            from Plexamp.'
+          default: false
       type: object
       required:
       - media_type
@@ -472,6 +848,15 @@ components:
       - status
       - details
       title: PlayResponse
+    PlayerControlRequest:
+      properties:
+        player_id:
+          type: integer
+          title: Player Id
+      type: object
+      required:
+      - player_id
+      title: PlayerControlRequest
     PlayerCreate:
       properties:
         name:
@@ -621,6 +1006,114 @@ components:
       required:
       - ok
       title: PlexServerTestResponse
+    RuntimeSetupRead:
+      properties:
+        plex_server_url:
+          type: string
+          title: Plex Server Url
+          description: PMS base URL, e.g. http://192.168.1.10:32400. Set in Setup
+            (stored in DB).
+          default: ''
+        plex_ssl_verify:
+          type: boolean
+          title: Plex Ssl Verify
+          default: true
+        sonos_seed_ips:
+          type: string
+          title: Sonos Seed Ips
+          description: Comma-separated LAN IPs of any Sonos speaker (helps Docker
+            / no multicast).
+          default: ''
+        sonos_discover_timeout:
+          type: integer
+          maximum: 60.0
+          minimum: 2.0
+          title: Sonos Discover Timeout
+          default: 10
+        sonos_allow_network_scan:
+          type: boolean
+          title: Sonos Allow Network Scan
+          default: true
+        sonos_interface_addr:
+          type: string
+          title: Sonos Interface Addr
+          description: Optional interface address for SSDP (advanced).
+          default: ''
+        sonos_demo_fallback:
+          type: boolean
+          title: Sonos Demo Fallback
+          default: false
+        sonos_line_in_source_name:
+          type: string
+          title: Sonos Line In Source Name
+          description: Substring of the Sonos player name that has Plexamp on line-in
+            (e.g. Fridge).
+          default: ''
+        sonos_line_in_source_uid:
+          type: string
+          title: Sonos Line In Source Uid
+          description: "Optional exact Sonos player UID (RINCON_\u2026); overrides\
+            \ name when set."
+          default: ''
+        plex_server_url_effective:
+          type: string
+          title: Plex Server Url Effective
+          description: Same as plex_server_url from Setup (DB); exposed for the UI.
+          default: ''
+      type: object
+      title: RuntimeSetupRead
+    RuntimeSetupUpdate:
+      properties:
+        plex_server_url:
+          type: string
+          title: Plex Server Url
+          description: PMS base URL, e.g. http://192.168.1.10:32400. Set in Setup
+            (stored in DB).
+          default: ''
+        plex_ssl_verify:
+          type: boolean
+          title: Plex Ssl Verify
+          default: true
+        sonos_seed_ips:
+          type: string
+          title: Sonos Seed Ips
+          description: Comma-separated LAN IPs of any Sonos speaker (helps Docker
+            / no multicast).
+          default: ''
+        sonos_discover_timeout:
+          type: integer
+          maximum: 60.0
+          minimum: 2.0
+          title: Sonos Discover Timeout
+          default: 10
+        sonos_allow_network_scan:
+          type: boolean
+          title: Sonos Allow Network Scan
+          default: true
+        sonos_interface_addr:
+          type: string
+          title: Sonos Interface Addr
+          description: Optional interface address for SSDP (advanced).
+          default: ''
+        sonos_demo_fallback:
+          type: boolean
+          title: Sonos Demo Fallback
+          default: false
+        sonos_line_in_source_name:
+          type: string
+          title: Sonos Line In Source Name
+          description: Substring of the Sonos player name that has Plexamp on line-in
+            (e.g. Fridge).
+          default: ''
+        sonos_line_in_source_uid:
+          type: string
+          title: Sonos Line In Source Uid
+          description: "Optional exact Sonos player UID (RINCON_\u2026); overrides\
+            \ name when set."
+          default: ''
+      type: object
+      title: RuntimeSetupUpdate
+      description: Editable fields from the Setup modal (stored in DB).
     SonosGroupPresetCreate:
       properties:
         name:
@@ -670,6 +1163,15 @@ components:
       - name
       - ip
       title: SonosSpeaker
+    SonosStopRequest:
+      properties:
+        speaker_ids:
+          items:
+            type: string
+          type: array
+          title: Speaker Ids
+      type: object
+      title: SonosStopRequest
     SpeedDialCreate:
       properties:
         label:
@@ -700,6 +1202,20 @@ components:
           - type: integer
           - type: 'null'
           title: Preset Id
+        artist_radio:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Artist Radio
+          description: 'For artist favorites: True/False; null for non-artist or legacy
+            rows (treated as radio on play).'
+        shuffle:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Shuffle
+          description: 'For playlist/artist favorites: shuffle on play; null treated
+            as false.'
       type: object
       required:
       - label
@@ -737,9 +1253,27 @@ components:
           - type: integer
           - type: 'null'
           title: Preset Id
+        artist_radio:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Artist Radio
+          description: 'For artist favorites: True/False; null for non-artist or legacy
+            rows (treated as radio on play).'
+        shuffle:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Shuffle
+          description: 'For playlist/artist favorites: shuffle on play; null treated
+            as false.'
         id:
           type: integer
           title: Id
+        has_cover_art:
+          type: boolean
+          title: Has Cover Art
+          default: false
       type: object
       required:
       - label

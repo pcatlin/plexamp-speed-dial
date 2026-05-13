@@ -167,8 +167,18 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ player_id: playerId }),
     }),
+  plexampPause: (playerId: number) =>
+    request<{ status: string; details: string }>("/plexamp/pause", {
+      method: "POST",
+      body: JSON.stringify({ player_id: playerId }),
+    }),
   sonosStop: (speakerIds: string[]) =>
     request<{ status: string; details: string }>("/sonos/stop", {
+      method: "POST",
+      body: JSON.stringify({ speaker_ids: speakerIds }),
+    }),
+  sonosPlayLineIn: (speakerIds: string[]) =>
+    request<{ status: string; details: string }>("/sonos/play-line-in", {
       method: "POST",
       body: JSON.stringify({ speaker_ids: speakerIds }),
     }),

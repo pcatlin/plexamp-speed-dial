@@ -45,6 +45,8 @@ Base path: `http://localhost:8000/api/v1`
 - `GET|POST|DELETE /sonos/group-presets`
 - `GET|POST|DELETE /players`
 - `POST /play`
+- `POST /plexamp/skip-next` · `POST /plexamp/skip-previous` · `POST /plexamp/pause`
+- `POST /sonos/stop` · `POST /sonos/play-line-in`
 - `GET|POST|DELETE /speed-dial`
 
 ### Play request example

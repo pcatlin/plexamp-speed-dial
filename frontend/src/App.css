@@ -1,7 +1,75 @@
-.container {
-  max-width: 680px;
+.appShell {
+  box-sizing: border-box;
+  max-width: 960px;
   margin: 0 auto;
   padding: 1rem;
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.appMain {
+  flex: 1;
+  min-width: 0;
+}
+
+.controlRail {
+  position: sticky;
+  top: 0.75rem;
+  width: 5.5rem;
+  flex-shrink: 0;
+}
+
+.controlFrameset {
+  margin: 0 0 0.75rem;
+  padding: 0.55rem 0.45rem 0.65rem;
+  border: 1px solid #b8bcc4;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #eef0f4 0%, #dfe3ea 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75), 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+.controlFrameset:last-child {
+  margin-bottom: 0;
+}
+
+.controlFrameset legend {
+  font-weight: 700;
+  font-size: 0.78rem;
+  padding: 0 0.3rem;
+  color: #374151;
+}
+
+.mediaToolbarStack {
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: center;
+}
+
+@media (max-width: 640px) {
+  .appShell {
+    flex-direction: column;
+  }
+
+  .controlRail {
+    position: static;
+    width: 100%;
+    display: flex;
+    flex-direction: row;
+    gap: 0.65rem;
+    align-items: stretch;
+  }
+
+  .controlFrameset {
+    flex: 1;
+    margin-bottom: 0;
+  }
+
+  .mediaToolbarStack {
+    flex-direction: row;
+    justify-content: center;
+  }
 }
 
 .card {
