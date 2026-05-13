@@ -138,6 +138,11 @@ def test_sonos_stop_requires_selected_speakers(client):
     assert r.status_code == 400
 
 
+def test_sonos_volume_requires_selected_speakers(client):
+    r = client.post("/api/v1/sonos/volume", json={"speaker_ids": [], "delta": 5})
+    assert r.status_code == 400
+
+
 def test_plexamp_skip_next_happy_path(client, db_session, monkeypatch):
     from app.models import PlexCredential
 

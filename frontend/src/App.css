@@ -402,6 +402,12 @@ button.iconBtn.primary {
   display: block;
 }
 
+.volStepLabel {
+  font-size: 1.35rem;
+  font-weight: 600;
+  line-height: 1;
+}
+
 .message {
   font-size: 0.95rem;
   color: #444;

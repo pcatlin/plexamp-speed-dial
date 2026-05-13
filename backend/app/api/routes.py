@@ -35,6 +35,7 @@ from app.schemas.domain import (
     SonosGroupPresetRead,
     SonosSpeaker,
     SonosStopRequest,
+    SonosVolumeAdjustRequest,
     SpeedDialCreate,
     SpeedDialRead,
 )
@@ -450,6 +451,14 @@ def sonos_play_line_in(payload: SonosStopRequest, db: Session = Depends(get_db))
 @router.post("/sonos/stop", response_model=PlayResponse)
 def sonos_stop(payload: SonosStopRequest, db: Session = Depends(get_db)) -> PlayResponse:
     response = playback_service.sonos_stop_selected(payload.speaker_ids, db)
+    if response.status == "error":
+        raise HTTPException(status_code=400, detail=response.details)
+    return response
+
+
+@router.post("/sonos/volume", response_model=PlayResponse)
+def sonos_volume(payload: SonosVolumeAdjustRequest, db: Session = Depends(get_db)) -> PlayResponse:
+    response = playback_service.sonos_volume_adjust_selected(payload.speaker_ids, payload.delta, db)
     if response.status == "error":
         raise HTTPException(status_code=400, detail=response.details)
     return response

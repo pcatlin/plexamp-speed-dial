@@ -237,6 +237,15 @@ function App() {
     setMessage(result.details);
   };
 
+  const adjustSonosVolume = async (delta: number) => {
+    if (selectedSpeakers.length === 0) {
+      setMessage("Select at least one Sonos speaker to change volume.");
+      return;
+    }
+    const result = await api.sonosVolumeAdjust(selectedSpeakers, delta);
+    setMessage(result.details);
+  };
+
   const deleteSpeedDial = async (id: number) => {
     await api.deleteSpeedDial(id);
     setSpeedDial(await api.speedDial());
@@ -386,6 +395,28 @@ function App() {
               onClick={() => stopSonos().catch((e) => setMessage(e.message))}
             >
               <IconStop />
+            </button>
+            <button
+              type="button"
+              className="iconBtn"
+              aria-label="Lower volume on selected Sonos speakers"
+              title="Volume down (selected speakers)"
+              onClick={() => adjustSonosVolume(-5).catch((e) => setMessage(e.message))}
+            >
+              <span className="volStepLabel" aria-hidden>
+                −
+              </span>
+            </button>
+            <button
+              type="button"
+              className="iconBtn"
+              aria-label="Raise volume on selected Sonos speakers"
+              title="Volume up (selected speakers)"
+              onClick={() => adjustSonosVolume(5).catch((e) => setMessage(e.message))}
+            >
+              <span className="volStepLabel" aria-hidden>
+                +
+              </span>
             </button>
           </div>
         </fieldset>

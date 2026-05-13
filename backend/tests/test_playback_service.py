@@ -43,6 +43,9 @@ class FakeSonosService:
     def group_selected_and_play_line_in(self, runtime, output_speaker_ids):  # noqa: ANN001
         return f"Sonos: ok (mock) ids={output_speaker_ids!r}"
 
+    def adjust_volume_selected(self, runtime, output_speaker_ids, delta):  # noqa: ANN001
+        return f"Sonos: volume mock ids={output_speaker_ids!r} delta={delta}"
+
 
 def test_playback_service_returns_error_when_player_missing(db_session, patched_play_queue):
     service = PlaybackService(plex_service=FakePlexService(), sonos_service=FakeSonosService())
@@ -145,6 +148,19 @@ def test_playback_sonos_play_line_in_ok(db_session):
     result = service.sonos_play_line_in_selected(["s1"], db_session)
     assert result.status == "ok"
     assert "Sonos: ok (mock)" in result.details
+
+
+def test_playback_sonos_volume_empty_returns_error(db_session):
+    service = PlaybackService(plex_service=FakePlexService(), sonos_service=FakeSonosService())
+    result = service.sonos_volume_adjust_selected([], 5, db_session)
+    assert result.status == "error"
+
+
+def test_playback_sonos_volume_ok(db_session):
+    service = PlaybackService(plex_service=FakePlexService(), sonos_service=FakeSonosService())
+    result = service.sonos_volume_adjust_selected(["s1"], -5, db_session)
+    assert result.status == "ok"
+    assert "delta=-5" in result.details
 
 
 class FakeArtistPMS:

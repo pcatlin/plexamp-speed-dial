@@ -318,3 +318,14 @@ class PlaybackService:
             _log.exception("Sonos line-in play failed")
             return PlayResponse(status="error", details=f"Sonos line-in failed: {exc}")
         return PlayResponse(status="ok", details=msg)
+
+    def sonos_volume_adjust_selected(self, speaker_ids: list[str], delta: int, db: Session) -> PlayResponse:
+        if not speaker_ids:
+            return PlayResponse(status="error", details="Select at least one Sonos speaker, then change volume.")
+        try:
+            runtime = resolve_sonos_runtime(db)
+            msg = self._sonos.adjust_volume_selected(runtime, speaker_ids, delta)
+        except Exception as exc:  # noqa: BLE001
+            _log.exception("Sonos volume adjust failed")
+            return PlayResponse(status="error", details=f"Sonos volume failed: {exc}")
+        return PlayResponse(status="ok", details=msg)

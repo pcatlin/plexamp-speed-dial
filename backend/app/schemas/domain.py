@@ -111,6 +111,16 @@ class SonosStopRequest(BaseModel):
     speaker_ids: list[str] = Field(default_factory=list)
 
 
+class SonosVolumeAdjustRequest(BaseModel):
+    speaker_ids: list[str] = Field(default_factory=list)
+    delta: int = Field(
+        ...,
+        ge=-100,
+        le=100,
+        description="Volume change in percent points (e.g. -5 or +5).",
+    )
+
+
 class SpeedDialCreate(BaseModel):
     label: str
     media_type: MediaType

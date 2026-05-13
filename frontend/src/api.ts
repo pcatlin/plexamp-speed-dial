@@ -187,4 +187,9 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ speaker_ids: speakerIds }),
     }),
+  sonosVolumeAdjust: (speakerIds: string[], delta: number) =>
+    request<{ status: string; details: string }>("/sonos/volume", {
+      method: "POST",
+      body: JSON.stringify({ speaker_ids: speakerIds, delta }),
+    }),
 };

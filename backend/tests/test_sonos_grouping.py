@@ -21,7 +21,7 @@ class _FakeZoneState:
 class FakeSonosDevice:
     """Minimal SoCo-shaped object for grouping tests."""
 
-    def __init__(self, uid: str, name: str) -> None:
+    def __init__(self, uid: str, name: str, *, volume: int = 50) -> None:
         self.uid = uid
         self.player_name = name
         self.zone_group_state = _FakeZoneState()
@@ -30,6 +30,15 @@ class FakeSonosDevice:
         self.join_targets: list[str] = []
         self.switch_calls: list[object | None] = []
         self.play_calls = 0
+        self._volume = volume
+
+    @property
+    def volume(self) -> int:
+        return self._volume
+
+    @volume.setter
+    def volume(self, value: int) -> None:
+        self._volume = int(value)
 
     def unjoin(self, **kwargs: object) -> None:
         self.unjoin_calls += 1
@@ -100,3 +109,23 @@ def test_group_selected_unjoins_both_before_pairing(runtime: SonosRuntime, monke
     assert beta.join_targets == [alpha.uid]
     assert alpha.play_calls == 1
     assert alpha.switch_calls and alpha.switch_calls[0] is fridge
+
+
+def test_adjust_volume_selected_clamps_and_dedupes_coordinator(runtime: SonosRuntime, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Two selected speakers in the same group adjust volume once; result stays in 0–100."""
+    kitchen = FakeSonosDevice("uid-k", "Kitchen", volume=98)
+    kitchen.group = _FakeGroup(coordinator=kitchen)
+    dining = FakeSonosDevice("uid-d", "Dining", volume=98)
+    dining.group = _FakeGroup(coordinator=kitchen)
+
+    svc = SonosService()
+    monkeypatch.setattr(svc, "discover_visible_zones", lambda rt: {kitchen, dining})
+
+    msg = svc.adjust_volume_selected(runtime, ["uid-k", "uid-d"], 10)
+    assert kitchen.volume == 100
+    assert dining.volume == 98
+    assert "100%" in msg
+
+    msg2 = svc.adjust_volume_selected(runtime, ["uid-d"], -20)
+    assert kitchen.volume == 80
+    assert "-20%" in msg2

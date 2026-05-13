@@ -633,6 +633,29 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/sonos/volume:
+    post:
+      summary: Sonos Volume Adjust
+      operationId: sonos_volume_api_v1_sonos_volume_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SonosVolumeAdjustRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlayResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/speed-dial:
     get:
       summary: Speed Dial
@@ -1195,6 +1218,23 @@ components:
           title: Speaker Ids
       type: object
       title: SonosStopRequest
+    SonosVolumeAdjustRequest:
+      properties:
+        speaker_ids:
+          items:
+            type: string
+          type: array
+          title: Speaker Ids
+        delta:
+          type: integer
+          title: Delta
+          description: Volume change in percent points (e.g. -5 or +5).
+          maximum: 100
+          minimum: -100
+      type: object
+      required:
+      - delta
+      title: SonosVolumeAdjustRequest
     SpeedDialCreate:
       properties:
         label:
