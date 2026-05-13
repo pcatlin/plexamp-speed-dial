@@ -380,7 +380,7 @@ function App() {
           <div className="mediaToolbar mediaToolbarStack" role="group" aria-label="Sonos selected speakers">
             <button
               type="button"
-              className="iconBtn primary"
+              className="iconBtn"
               aria-label="Play line-in on selected Sonos speakers"
               title="Play line-in on selected speakers"
               onClick={() => playSonosLineIn().catch((e) => setMessage(e.message))}

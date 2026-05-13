@@ -388,6 +388,7 @@ button.iconBtn {
   padding: 0;
   border-radius: 10px;
   line-height: 0;
+  cursor: pointer;
 }
 
 button.iconBtn.primary {
