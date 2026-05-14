@@ -237,6 +237,8 @@ export function SetupModal({
 
   if (!open) return null;
 
+  const hasBaseUrl = plexUrl.trim().length > 0;
+
   return (
     <div className="modalBackdrop" role="presentation" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modalPanel" role="dialog" aria-modal="true" aria-labelledby="setup-title" onMouseDown={(e) => e.stopPropagation()}>
@@ -250,27 +252,9 @@ export function SetupModal({
         {loading ? <p className="hint">Loading…</p> : null}
 
         <section className="modalSection">
-          <h3>Plex account</h3>
-          <p>{authConnected ? `Connected as ${authUsername || "owner"}` : "Not connected"}</p>
-          <p className="hint">
-            Set the Plex Media Server base URL in the next section first, then link your Plex account; after that you can run a server
-            test with your saved token.
-          </p>
-          <div className="modalButtonRow">
-            <button type="button" disabled={busy || loading || !authConnected} onClick={() => void testPlexServer()}>
-              Test Plex server
-            </button>
-            <button type="button" disabled={busy || loading} onClick={() => void connectPlex()}>
-              {authConnected ? "Reconnect Plex" : "Connect Plex"}
-            </button>
-          </div>
-          {!authConnected ? <p className="hint">Connect Plex first — the server test requires a linked account.</p> : null}
-        </section>
-
-        <section className="modalSection">
           <h3>Plex Media Server</h3>
           <label className="fieldLabel">
-            Base URL (required for library access from this API)
+            Base URL (required)
             <input
               type="url"
               className="textInput"
@@ -291,10 +275,22 @@ export function SetupModal({
         </section>
 
         <section className="modalSection">
+          <h3>Plex account</h3>
+          <p>{authConnected ? `Connected as ${authUsername || "owner"}` : "Not connected"}</p>
+          <div className="modalButtonRow">
+            <button type="button" disabled={busy || loading || !authConnected} onClick={() => void testPlexServer()}>
+              Test Plex server
+            </button>
+            <button type="button" disabled={busy || loading || !hasBaseUrl} onClick={() => void connectPlex()}>
+              {authConnected ? "Reconnect Plex" : "Connect Plex"}
+            </button>
+          </div>
+          {!authConnected ? <p className="hint">Connect Plex first — the server test requires a linked account.</p> : null}
+        </section>
+
+        <section className="modalSection">
           <h3>Sonos discovery</h3>
-          <p className="hint">
-            Stored in this app&apos;s database. Use comma-separated IPs of any ZonePlayer when multicast fails (Docker, VLANs).
-          </p>
+          <p className="hint">Use comma-separated IPs of a speaker if speakers cannot be detected.</p>
           <label className="fieldLabel">
             Seed IPs
             <input
@@ -318,23 +314,18 @@ export function SetupModal({
           </label>
           <label className="checkboxRow slim">
             <input type="checkbox" checked={sonosScan} onChange={(e) => setSonosScan(e.target.checked)} />
-            Allow network scan (SoCo SSDP fallback)
+            Allow network scan (SSDP fallback)
           </label>
           <label className="fieldLabel">
             Interface address (optional)
             <input type="text" className="textInput" placeholder="192.168.1.50" value={sonosIface} onChange={(e) => setSonosIface(e.target.value)} />
           </label>
-          <p className="hint">
-            After Plexamp starts playback, selected Sonos outputs can be grouped to that player&apos;s line-in (see each Plexamp player below). SoCo{" "}
-            <code>switch_to_line_in</code>.
-          </p>
         </section>
 
         <section className="modalSection">
           <h3>Plexamp players</h3>
           <p className="hint">
-            Hostname, IP, <code>http://host:32500</code>, or <code>host:32500</code>. Companion port defaults to{" "}
-            <code>32500</code>. Pick which Sonos has this Plexamp on its analog line-in (or none).
+            Hostname, or IP of new Plexamp player. Pick which Sonos has this Plexamp on its analog line-in (or none).
           </p>
           <div className="inlineGrow">
             <label className="fieldLabel mb0 stretch">
@@ -342,7 +333,7 @@ export function SetupModal({
               <input
                 type="text"
                 className="textInput"
-                placeholder="192.168.1.5 or http://kitchen.local:32500"
+                placeholder="192.168.1.5 or http://kitchen.local"
                 value={playerInput}
                 onChange={(e) => {
                   setPlayerInput(e.target.value);
@@ -387,7 +378,7 @@ export function SetupModal({
                   <strong>{p.name}</strong>
                   <span className="dim">
                     {" "}
-                    {p.host}:{p.port}
+                    {p.host}
                   </span>
                 </span>
                 <label className="fieldLabel mb0 nowrap">

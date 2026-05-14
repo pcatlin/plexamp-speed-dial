@@ -389,8 +389,7 @@ function App() {
           <h2>Where to Play</h2>
           <h3>Sonos Speakers</h3>
           <p className="hint">
-            Select Sonos outputs here to group them and switch them to the line-in source set in Setup (the player with
-            Plexamp on analog in, e.g. Fridge). Leave all unchecked if you only want Plexamp without Sonos.
+            Which speakers to play to. Leave all unchecked if you only want Plexamp without Sonos.
           </p>
           {speakers.length === 0 ? <p className="hint">No speakers yet — enter seed IPs under Setup when using Docker/VLAN.</p> : null}
           {speakers.map((speaker) => (
