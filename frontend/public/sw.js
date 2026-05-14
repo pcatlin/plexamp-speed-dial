@@ -1,6 +1,7 @@
 /**
  * Minimal service worker for PWA installability only.
- * All requests go to the network — no offline caching.
+ * Does not intercept fetch — the browser uses the normal network stack, which avoids
+ * uncaught "Failed to fetch" when a passthrough fetch() rejects (navigations, extensions, etc.).
  */
 self.addEventListener("install", () => {
   self.skipWaiting();
@@ -8,8 +9,4 @@ self.addEventListener("install", () => {
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(self.clients.claim());
-});
-
-self.addEventListener("fetch", (event) => {
-  event.respondWith(fetch(event.request));
 });
