@@ -24,6 +24,7 @@ from app.schemas.domain import (
     PlayerRead,
     PlayRequest,
     PlayResponse,
+    PlaybackStateResponse,
     PlexAuthCompleteRequest,
     PlexAuthStatusResponse,
     PlexAuthStartResponse,
@@ -440,6 +441,16 @@ def plexamp_resume(
     return response
 
 
+@router.post("/plexamp/playback-state", response_model=PlaybackStateResponse)
+def plexamp_playback_state(
+    payload: PlayerControlRequest,
+    db: Session = Depends(get_db),
+    creds: PlexCredential = Depends(require_plex_creds),
+) -> PlaybackStateResponse:
+    assert creds.auth_token
+    return playback_service.plexamp_playback_state(payload.player_id, db, auth_token=creds.auth_token)
+
+
 @router.post("/sonos/play-line-in", response_model=PlayResponse)
 def sonos_play_line_in(payload: SonosStopRequest, db: Session = Depends(get_db)) -> PlayResponse:
     response = playback_service.sonos_play_line_in_selected(payload.speaker_ids, db)
@@ -454,6 +465,11 @@ def sonos_stop(payload: SonosStopRequest, db: Session = Depends(get_db)) -> Play
     if response.status == "error":
         raise HTTPException(status_code=400, detail=response.details)
     return response
+
+
+@router.post("/sonos/playback-state", response_model=PlaybackStateResponse)
+def sonos_playback_state(payload: SonosStopRequest, db: Session = Depends(get_db)) -> PlaybackStateResponse:
+    return playback_service.sonos_playback_state(payload.speaker_ids, db)
 
 
 @router.post("/sonos/volume", response_model=PlayResponse)

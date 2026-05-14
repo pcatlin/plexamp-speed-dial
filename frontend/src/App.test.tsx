@@ -7,6 +7,8 @@ const responses: Record<string, unknown> = {
   "/auth/plex/status": { connected: true, username: "owner" },
   "/media/playlists": [{ id: "playlist-1", title: "Top Mix", type: "playlist" }],
   "/sonos/speakers": [{ id: "s1", name: "Living Room", ip: "192.168.1.10" }],
+  "/sonos/playback-state": { ok: true, playing: false, state: null, error: null },
+  "/plexamp/playback-state": { ok: true, playing: false, state: null, error: null },
   "/players": [{ id: 1, name: "Plexamp Kitchen", host: "host", port: 32500, is_active: true }],
   "/speed-dial": [],
   "/play": { status: "ok", details: "Playing now" },

@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import logging
 import re
+import xml.etree.ElementTree as ET
 from urllib.parse import urlencode, urlparse
 
 import requests
+import requests.exceptions as requests_exc
 
 _log = logging.getLogger(__name__)
 
@@ -117,3 +119,68 @@ def plexamp_playback_command(
     safe = re.sub(r"token=[^&]*", "token=<redacted>", url)
     _log.info("Plexamp playback %s GET %s", action, safe)
     return requests.get(url, timeout=timeout)
+
+
+def _timeline_state_from_xml(text: str) -> str | None:
+    """Parse Plex companion timeline XML for the first Timeline ``state`` attribute."""
+    if not text or not text.strip():
+        return None
+    m = re.search(r"<Timeline[^>]*\sstate=\"([^\"]+)\"", text, re.IGNORECASE)
+    if m:
+        return m.group(1).strip()
+    try:
+        root = ET.fromstring(text)
+    except ET.ParseError:
+        return None
+    for el in root.iter():
+        tag = el.tag.split("}")[-1] if "}" in el.tag else el.tag
+        if tag == "Timeline":
+            st = el.get("state")
+            if st:
+                return st.strip()
+    return None
+
+
+def plexamp_timeline_state(
+    *,
+    plexamp_base: str,
+    token: str,
+    timeout: float,
+) -> str | None:
+    """
+    Poll headless Plexamp companion ``/player/timeline/poll`` for music timeline state.
+
+    Returns lowercased state when known (e.g. ``playing``, ``paused``, ``stopped``), else ``None``.
+    """
+    base = sanitize_plexamp_base(plexamp_base)
+    param_variants = (
+        {"type": "music", "wait": "0", "commandID": "1", "token": token},
+        {"wait": "0", "commandID": "1", "token": token},
+    )
+    for params in param_variants:
+        url = f"{base}/player/timeline/poll?{urlencode(params)}"
+        safe = re.sub(r"token=[^&]*", "token=<redacted>", url)
+        try:
+            resp = requests.get(url, timeout=timeout)
+        except requests_exc.RequestException as exc:
+            _log.debug("Plexamp timeline poll transport error %s: %s", safe, exc)
+            continue
+        if resp.status_code != 200:
+            _log.debug("Plexamp timeline poll HTTP %s %s", resp.status_code, safe)
+            continue
+        state = _timeline_state_from_xml(resp.text or "")
+        if state:
+            return state.lower()
+    return None
+
+
+def plexamp_timeline_implies_playing(raw: str | None) -> bool | None:
+    """Map timeline ``state`` string to playing / not playing / unknown."""
+    if not raw:
+        return None
+    s = raw.strip().lower()
+    if s in ("playing", "buffering"):
+        return True
+    if s in ("paused", "stopped", "idle", ""):
+        return False
+    return None

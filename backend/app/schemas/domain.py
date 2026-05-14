@@ -111,6 +111,15 @@ class SonosStopRequest(BaseModel):
     speaker_ids: list[str] = Field(default_factory=list)
 
 
+class PlaybackStateResponse(BaseModel):
+    """Playback snapshot for UI toggles (Sonos transport / Plexamp timeline)."""
+
+    ok: bool = True
+    playing: bool | None = None
+    state: str | None = Field(default=None, description="Raw state string when available (e.g. Sonos transport or Plex timeline).")
+    error: str | None = None
+
+
 class SonosVolumeAdjustRequest(BaseModel):
     speaker_ids: list[str] = Field(default_factory=list)
     delta: int = Field(

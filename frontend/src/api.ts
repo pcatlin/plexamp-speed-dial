@@ -67,6 +67,14 @@ export interface SpeedDial {
   has_cover_art?: boolean;
 }
 
+/** Snapshot from ``/sonos/playback-state`` or ``/plexamp/playback-state``. */
+export interface PlaybackState {
+  ok: boolean;
+  playing: boolean | null;
+  state?: string | null;
+  error?: string | null;
+}
+
 function extractApiErrorDetail(bodyText: string, status: number): string {
   const raw = bodyText.trim();
   if (!raw) return `Request failed (${status})`;
@@ -172,6 +180,11 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ player_id: playerId }),
     }),
+  plexampPlaybackState: (playerId: number) =>
+    request<PlaybackState>("/plexamp/playback-state", {
+      method: "POST",
+      body: JSON.stringify({ player_id: playerId }),
+    }),
   plexampResume: (playerId: number) =>
     request<{ status: string; details: string }>("/plexamp/resume", {
       method: "POST",
@@ -179,6 +192,11 @@ export const api = {
     }),
   sonosStop: (speakerIds: string[]) =>
     request<{ status: string; details: string }>("/sonos/stop", {
+      method: "POST",
+      body: JSON.stringify({ speaker_ids: speakerIds }),
+    }),
+  sonosPlaybackState: (speakerIds: string[]) =>
+    request<PlaybackState>("/sonos/playback-state", {
       method: "POST",
       body: JSON.stringify({ speaker_ids: speakerIds }),
     }),

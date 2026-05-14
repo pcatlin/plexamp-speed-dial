@@ -138,6 +138,14 @@ def test_sonos_stop_requires_selected_speakers(client):
     assert r.status_code == 400
 
 
+def test_sonos_playback_state_empty(client):
+    r = client.post("/api/v1/sonos/playback-state", json={"speaker_ids": []})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["ok"] is True
+    assert body["playing"] is False
+
+
 def test_sonos_volume_requires_selected_speakers(client):
     r = client.post("/api/v1/sonos/volume", json={"speaker_ids": [], "delta": 5})
     assert r.status_code == 400
@@ -160,6 +168,27 @@ def test_plexamp_skip_next_happy_path(client, db_session, monkeypatch):
     r = client.post("/api/v1/plexamp/skip-next", json={"player_id": player_id})
     assert r.status_code == 200
     assert r.json()["status"] == "ok"
+
+
+def test_plexamp_playback_state_happy_path(client, db_session, monkeypatch):
+    from app.models import PlexCredential
+
+    db_session.add(PlexCredential(auth_token="stub-token", is_connected=True))
+    db_session.commit()
+
+    player_id = client.post(
+        "/api/v1/players",
+        json={"name": "Amp", "host": "plexamp.local", "port": 32500, "is_active": True},
+    ).json()["id"]
+
+    monkeypatch.setattr("app.services.playback_service.plexamp_timeline_state", lambda **kwargs: "playing")
+
+    r = client.post("/api/v1/plexamp/playback-state", json={"player_id": player_id})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["ok"] is True
+    assert body["playing"] is True
+    assert body["state"] == "playing"
 
 
 def test_speed_dial_play_by_id(client, db_session, monkeypatch):

@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.models import PlexampPlayer, SonosGroupPreset
-from app.schemas.domain import PlayRequest, PlayResponse
+from app.schemas.domain import PlaybackStateResponse, PlayRequest, PlayResponse
 from app.services.plex_service import PlexService
 from app.services.plexamp_client import (
     append_type_if_missing,
@@ -19,6 +19,8 @@ from app.services.plexamp_client import (
     create_play_queue,
     parse_pms_host_port_protocol,
     plexamp_playback_command,
+    plexamp_timeline_implies_playing,
+    plexamp_timeline_state,
 )
 from app.services.runtime_setup import resolve_plex_conn, resolve_sonos_runtime
 from app.services.sonos_service import SonosService
@@ -329,3 +331,34 @@ class PlaybackService:
             _log.exception("Sonos volume adjust failed")
             return PlayResponse(status="error", details=f"Sonos volume failed: {exc}")
         return PlayResponse(status="ok", details=msg)
+
+    def sonos_playback_state(self, speaker_ids: list[str], db: Session) -> PlaybackStateResponse:
+        if not speaker_ids:
+            return PlaybackStateResponse(ok=True, playing=False, state=None)
+        try:
+            runtime = resolve_sonos_runtime(db)
+            playing, err = self._sonos.selection_transport_playing(runtime, speaker_ids)
+        except Exception as exc:  # noqa: BLE001
+            _log.exception("Sonos playback state failed")
+            return PlaybackStateResponse(ok=False, playing=None, state=None, error=str(exc))
+        if err:
+            return PlaybackStateResponse(ok=False, playing=None, state=None, error=err)
+        return PlaybackStateResponse(ok=True, playing=playing, state=None)
+
+    def plexamp_playback_state(self, player_id: int, db: Session, *, auth_token: str) -> PlaybackStateResponse:
+        player = db.get(PlexampPlayer, player_id)
+        if not player:
+            return PlaybackStateResponse(ok=False, playing=None, state=None, error="Selected Plexamp player not found")
+        plexamp_base, perr = self._plexamp_base_for_player(player)
+        if not plexamp_base:
+            return PlaybackStateResponse(ok=False, playing=None, state=None, error=perr or "Invalid Plexamp URL")
+        try:
+            raw = plexamp_timeline_state(
+                plexamp_base=plexamp_base,
+                token=auth_token,
+                timeout=settings.plexamp_request_timeout_seconds,
+            )
+        except requests_exc.RequestException as exc:
+            return PlaybackStateResponse(ok=False, playing=None, state=None, error=str(exc))
+        mapped = plexamp_timeline_implies_playing(raw)
+        return PlaybackStateResponse(ok=True, playing=mapped, state=raw)

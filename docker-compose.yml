@@ -1,5 +1,11 @@
-# Images: paulcatlin/* on Docker Hub.
-# Published web UI (port 3000): docker compose -f docker-compose.yml -f docker-compose.build.yml up [--build]
+# Images: paulcatlin/* on Docker Hub (fallback when no local build).
+#
+# After pulling new git code, rebuild the API (and web if the UI changed) or playback-state and
+# similar routes will 404 on an old image:
+#   docker compose build api web && docker compose up -d
+# Or in one step: docker compose up --build -d
+#
+# Alternate host port for web: docker compose -f docker-compose.yml -f docker-compose.build.yml up [--build]
 # Vite HMR while editing frontend: docker compose -f docker-compose.yml -f docker-compose.dev.yml up
 services:
   db:
@@ -18,6 +24,8 @@ services:
 
   api:
     image: paulcatlin/plexamp-speed-dial-api:latest
+    build:
+      context: ./backend
     environment:
       DATABASE_URL: postgresql+psycopg://plexamp:plexamp_local_only@db:5432/plexamp_speed_dial
     depends_on:
@@ -29,6 +37,8 @@ services:
 
   web:
     image: paulcatlin/plexamp-speed-dial-web:latest
+    build:
+      context: ./frontend
     ports:
       - "80:80"
     depends_on:

@@ -311,3 +311,21 @@ class SonosService:
         names = "; ".join(sorted(lines))
         sign = "+" if delta > 0 else ""
         return f"Sonos: volume {sign}{delta}% on {names}."
+
+    def selection_transport_playing(self, runtime: SonosRuntime, output_speaker_ids: list[str]) -> tuple[bool | None, str | None]:
+        """Return (playing, error). True if any coordinator for the selection is PLAYING or TRANSITIONING."""
+        coordinators, err = self._unique_coordinators_for_speaker_ids(
+            runtime, output_speaker_ids, no_zones_detail="nothing to query."
+        )
+        if err:
+            return None, err
+        try:
+            for coord in coordinators:
+                coord.zone_group_state.poll(coord)
+                st = (coord.get_current_transport_info().get("current_transport_state") or "").upper()
+                if st in ("PLAYING", "TRANSITIONING"):
+                    return True, None
+            return False, None
+        except Exception as exc:  # noqa: BLE001
+            _log.warning("Sonos transport state query failed: %s", exc)
+            return None, str(exc)

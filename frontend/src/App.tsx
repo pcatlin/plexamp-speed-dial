@@ -80,6 +80,8 @@ function App() {
   const [artistRadio, setArtistRadio] = useState(true);
   const [shufflePlaylist, setShufflePlaylist] = useState(false);
   const [shuffleArtist, setShuffleArtist] = useState(false);
+  const [sonosPlaying, setSonosPlaying] = useState<boolean | null>(null);
+  const [plexampPlaying, setPlexampPlaying] = useState<boolean | null>(null);
 
   const selectedPlayerName = useMemo(
     () => players.find((player) => player.id === selectedPlayer)?.name ?? "No player selected",
@@ -131,6 +133,59 @@ function App() {
   useEffect(() => {
     reloadCollections(authConnected).catch(() => undefined);
   }, [authConnected, reloadCollections]);
+
+  useEffect(() => {
+    if (selectedSpeakers.length === 0) {
+      setSonosPlaying(null);
+      return;
+    }
+    let cancelled = false;
+    const tick = () => {
+      api
+        .sonosPlaybackState(selectedSpeakers)
+        .then((r) => {
+          if (cancelled) return;
+          if (r.ok && typeof r.playing === "boolean") setSonosPlaying(r.playing);
+          else setSonosPlaying(null);
+        })
+        .catch(() => {
+          if (!cancelled) setSonosPlaying(null);
+        });
+    };
+    tick();
+    const id = window.setInterval(tick, 2500);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [selectedSpeakers]);
+
+  useEffect(() => {
+    if (!authConnected || !selectedPlayer) {
+      setPlexampPlaying(null);
+      return;
+    }
+    const playerId = selectedPlayer;
+    let cancelled = false;
+    const tick = () => {
+      api
+        .plexampPlaybackState(playerId)
+        .then((r) => {
+          if (cancelled) return;
+          if (r.ok) setPlexampPlaying(r.playing ?? null);
+          else setPlexampPlaying(null);
+        })
+        .catch(() => {
+          if (!cancelled) setPlexampPlaying(null);
+        });
+    };
+    tick();
+    const id = window.setInterval(tick, 2500);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [authConnected, selectedPlayer]);
 
   const toggleSpeaker = (speakerId: string) => {
     setSelectedSpeakers((current) =>
@@ -202,13 +257,24 @@ function App() {
     }
   };
 
-  const stopSonos = async () => {
+  const toggleSonosLineInTransport = async () => {
     if (selectedSpeakers.length === 0) {
-      setMessage("Select at least one Sonos speaker to stop.");
+      setMessage("Select at least one Sonos speaker to play line-in.");
       return;
     }
-    const result = await api.sonosStop(selectedSpeakers);
-    setMessage(result.details);
+    try {
+      if (sonosPlaying) {
+        const result = await api.sonosStop(selectedSpeakers);
+        setMessage(result.details);
+        setSonosPlaying(false);
+      } else {
+        const result = await api.sonosPlayLineIn(selectedSpeakers);
+        setMessage(result.details);
+        setSonosPlaying(true);
+      }
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : String(err));
+    }
   };
 
   const skipNextPlexamp = async () => {
@@ -229,31 +295,24 @@ function App() {
     setMessage(result.details);
   };
 
-  const pausePlexamp = async () => {
+  const togglePlexampPlayPause = async () => {
     if (!selectedPlayer) {
       setMessage("Select a Plexamp player first.");
       return;
     }
-    const result = await api.plexampPause(selectedPlayer);
-    setMessage(result.details);
-  };
-
-  const resumePlexamp = async () => {
-    if (!selectedPlayer) {
-      setMessage("Select a Plexamp player first.");
-      return;
+    try {
+      if (plexampPlaying) {
+        const result = await api.plexampPause(selectedPlayer);
+        setMessage(result.details);
+        setPlexampPlaying(false);
+      } else {
+        const result = await api.plexampResume(selectedPlayer);
+        setMessage(result.details);
+        setPlexampPlaying(true);
+      }
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : String(err));
     }
-    const result = await api.plexampResume(selectedPlayer);
-    setMessage(result.details);
-  };
-
-  const playSonosLineIn = async () => {
-    if (selectedSpeakers.length === 0) {
-      setMessage("Select at least one Sonos speaker to play line-in.");
-      return;
-    }
-    const result = await api.sonosPlayLineIn(selectedSpeakers);
-    setMessage(result.details);
   };
 
   const adjustSonosVolume = async (delta: number) => {
@@ -409,20 +468,11 @@ function App() {
             <button
               type="button"
               className="iconBtn"
-              aria-label="Play line-in on selected Sonos speakers"
-              title="Play line-in on selected speakers"
-              onClick={() => playSonosLineIn().catch((e) => setMessage(e.message))}
+              aria-label={sonosPlaying ? "Stop selected Sonos speakers" : "Play line-in on selected Sonos speakers"}
+              title={sonosPlaying ? "Stop selected speakers" : "Play line-in on selected speakers"}
+              onClick={() => toggleSonosLineInTransport().catch((e) => setMessage(e.message))}
             >
-              <IconPlay />
-            </button>
-            <button
-              type="button"
-              className="iconBtn"
-              aria-label="Stop selected Sonos speakers"
-              title="Stop selected speakers"
-              onClick={() => stopSonos().catch((e) => setMessage(e.message))}
-            >
-              <IconStop />
+              {sonosPlaying ? <IconStop /> : <IconPlay />}
             </button>
             <button
               type="button"
@@ -455,20 +505,15 @@ function App() {
             <button
               type="button"
               className="iconBtn"
-              aria-label="Resume Plexamp playback"
-              title="Resume playback on Plexamp (current queue; does not start a new queue)"
-              onClick={() => resumePlexamp().catch((e) => setMessage(e.message))}
+              aria-label={plexampPlaying ? "Pause Plexamp playback" : "Resume Plexamp playback"}
+              title={
+                plexampPlaying
+                  ? "Pause Plexamp playback"
+                  : "Resume playback on Plexamp (current queue; does not start a new queue)"
+              }
+              onClick={() => togglePlexampPlayPause().catch((e) => setMessage(e.message))}
             >
-              <IconPlay />
-            </button>
-            <button
-              type="button"
-              className="iconBtn"
-              aria-label="Pause Plexamp playback"
-              title="Pause Plexamp playback"
-              onClick={() => pausePlexamp().catch((e) => setMessage(e.message))}
-            >
-              <IconPause />
+              {plexampPlaying ? <IconPause /> : <IconPlay />}
             </button>
             <button
               type="button"

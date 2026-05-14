@@ -43,6 +43,12 @@ class FakeSonosService:
     def group_selected_and_play_line_in(self, runtime, output_speaker_ids):  # noqa: ANN001
         return f"Sonos: ok (mock) ids={output_speaker_ids!r}"
 
+    def stop_selected_speakers(self, runtime, output_speaker_ids):  # noqa: ANN001
+        return f"Sonos: stopped mock ids={output_speaker_ids!r}"
+
+    def selection_transport_playing(self, runtime, output_speaker_ids):  # noqa: ANN001
+        return (False, None)
+
     def adjust_volume_selected(self, runtime, output_speaker_ids, delta):  # noqa: ANN001
         return f"Sonos: volume mock ids={output_speaker_ids!r} delta={delta}"
 
@@ -161,6 +167,35 @@ def test_playback_sonos_volume_ok(db_session):
     result = service.sonos_volume_adjust_selected(["s1"], -5, db_session)
     assert result.status == "ok"
     assert "delta=-5" in result.details
+
+
+def test_playback_sonos_playback_state_empty(db_session):
+    service = PlaybackService(plex_service=FakePlexService(), sonos_service=FakeSonosService())
+    r = service.sonos_playback_state([], db_session)
+    assert r.ok is True
+    assert r.playing is False
+
+
+def test_playback_sonos_playback_state_ok(db_session):
+    service = PlaybackService(plex_service=FakePlexService(), sonos_service=FakeSonosService())
+    r = service.sonos_playback_state(["s1"], db_session)
+    assert r.ok is True
+    assert r.playing is False
+
+
+def test_playback_plexamp_playback_state_ok(db_session, monkeypatch):
+    player = PlexampPlayer(name="Kitchen", host="plexamp.local", port=32500, is_active=True)
+    db_session.add(player)
+    db_session.commit()
+    db_session.refresh(player)
+
+    monkeypatch.setattr("app.services.playback_service.plexamp_timeline_state", lambda **kwargs: "paused")
+
+    service = PlaybackService(plex_service=FakePlexService(), sonos_service=FakeSonosService())
+    r = service.plexamp_playback_state(player.id, db_session, auth_token="dummy-token")
+    assert r.ok is True
+    assert r.playing is False
+    assert r.state == "paused"
 
 
 class FakeArtistPMS:
