@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import App from "./App";
 
@@ -7,8 +7,6 @@ const responses: Record<string, unknown> = {
   "/auth/plex/status": { connected: true, username: "owner" },
   "/media/playlists": [{ id: "playlist-1", title: "Top Mix", type: "playlist" }],
   "/sonos/speakers": [{ id: "s1", name: "Living Room", ip: "192.168.1.10" }],
-  "/sonos/playback-state": { ok: true, playing: false, state: null, error: null },
-  "/plexamp/playback-state": { ok: true, playing: false, state: null, error: null },
   "/players": [{ id: 1, name: "Plexamp Kitchen", host: "host", port: 32500, is_active: true }],
   "/speed-dial": [],
   "/play": { status: "ok", details: "Playing now" },
@@ -40,6 +38,53 @@ globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
 }) as typeof fetch;
 
 describe("App", () => {
+  beforeAll(() => {
+    vi.stubGlobal(
+      "WebSocket",
+      class MockWebSocket {
+        static CONNECTING = 0;
+        static OPEN = 1;
+        static CLOSING = 2;
+        static CLOSED = 3;
+        readyState = MockWebSocket.CONNECTING;
+        url: string;
+        onopen: (() => void) | null = null;
+        onmessage: ((ev: { data: string }) => void) | null = null;
+        onerror: (() => void) | null = null;
+        onclose: (() => void) | null = null;
+
+        constructor(url: string) {
+          this.url = url;
+          queueMicrotask(() => {
+            this.readyState = MockWebSocket.OPEN;
+            this.onopen?.();
+            queueMicrotask(() => {
+              this.onmessage?.({
+                data: JSON.stringify({
+                  sonos: { ok: true, playing: false, state: null, error: null },
+                  plexamp: { ok: true, playing: false, state: null, error: null },
+                }),
+              });
+            });
+          });
+        }
+
+        send(_data: string) {
+          /* subscribe payload from App */
+        }
+
+        close() {
+          this.readyState = MockWebSocket.CLOSED;
+          this.onclose?.();
+        }
+      },
+    );
+  });
+
+  afterAll(() => {
+    vi.unstubAllGlobals();
+  });
+
   it("renders and executes play action", async () => {
     render(<App />);
 

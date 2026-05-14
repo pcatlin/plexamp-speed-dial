@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import "./App.css";
-import { api, API_BASE, MediaItem, Player, Speaker, SpeedDial } from "./api";
+import { api, API_BASE, MediaItem, Player, Speaker, SpeedDial, playbackStateWebSocketUrl } from "./api";
 import CreditsPage from "./CreditsPage";
 import { PickMusicSection, PickTab, playMediaTypeForTab } from "./PickMusicSection";
 import { SetupModal } from "./SetupModal";
@@ -135,57 +135,62 @@ function App() {
   }, [authConnected, reloadCollections]);
 
   useEffect(() => {
-    if (selectedSpeakers.length === 0) {
+    const wantSonos = selectedSpeakers.length > 0;
+    const wantPlex = authConnected && selectedPlayer !== null;
+    if (!wantSonos && !wantPlex) {
       setSonosPlaying(null);
-      return;
-    }
-    let cancelled = false;
-    const tick = () => {
-      api
-        .sonosPlaybackState(selectedSpeakers)
-        .then((r) => {
-          if (cancelled) return;
-          if (r.ok && typeof r.playing === "boolean") setSonosPlaying(r.playing);
-          else setSonosPlaying(null);
-        })
-        .catch(() => {
-          if (!cancelled) setSonosPlaying(null);
-        });
-    };
-    tick();
-    const id = window.setInterval(tick, 2500);
-    return () => {
-      cancelled = true;
-      window.clearInterval(id);
-    };
-  }, [selectedSpeakers]);
-
-  useEffect(() => {
-    if (!authConnected || !selectedPlayer) {
       setPlexampPlaying(null);
       return;
     }
-    const playerId = selectedPlayer;
+    const url = playbackStateWebSocketUrl();
+    if (!url) return;
     let cancelled = false;
-    const tick = () => {
-      api
-        .plexampPlaybackState(playerId)
-        .then((r) => {
-          if (cancelled) return;
-          if (r.ok) setPlexampPlaying(r.playing ?? null);
-          else setPlexampPlaying(null);
-        })
-        .catch(() => {
-          if (!cancelled) setPlexampPlaying(null);
-        });
+    const ws = new WebSocket(url);
+    ws.onopen = () => {
+      if (cancelled) return;
+      ws.send(
+        JSON.stringify({
+          type: "subscribe",
+          speaker_ids: selectedSpeakers,
+          player_id: wantPlex ? selectedPlayer : null,
+        }),
+      );
     };
-    tick();
-    const id = window.setInterval(tick, 2500);
+    ws.onmessage = (ev) => {
+      if (cancelled) return;
+      try {
+        const data = JSON.parse(ev.data) as {
+          sonos?: { ok?: boolean; playing?: boolean | null };
+          plexamp?: { ok?: boolean; playing?: boolean | null };
+        };
+        const s = data.sonos;
+        if (wantSonos) {
+          if (s?.ok && typeof s.playing === "boolean") setSonosPlaying(s.playing);
+          else setSonosPlaying(null);
+        } else {
+          setSonosPlaying(null);
+        }
+        const p = data.plexamp;
+        if (wantPlex) {
+          if (p?.ok) setPlexampPlaying(p.playing ?? null);
+          else setPlexampPlaying(null);
+        } else {
+          setPlexampPlaying(null);
+        }
+      } catch {
+        /* ignore malformed frame */
+      }
+    };
+    ws.onerror = () => {
+      if (cancelled) return;
+      setSonosPlaying(null);
+      setPlexampPlaying(null);
+    };
     return () => {
       cancelled = true;
-      window.clearInterval(id);
+      ws.close();
     };
-  }, [authConnected, selectedPlayer]);
+  }, [selectedSpeakers, authConnected, selectedPlayer]);
 
   const toggleSpeaker = (speakerId: string) => {
     setSelectedSpeakers((current) =>

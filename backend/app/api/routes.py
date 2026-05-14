@@ -1,6 +1,8 @@
-from typing import Literal
+import asyncio
+import json
+from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, WebSocket, WebSocketDisconnect
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
@@ -49,6 +51,25 @@ router = APIRouter()
 plex_service = PlexService()
 sonos_service = SonosService()
 playback_service = PlaybackService()
+
+
+def _fetch_playback_snapshot(speaker_ids: list[str], player_id: int | None) -> dict[str, Any]:
+    """Blocking: read Sonos + Plexamp playback state (own DB session for threadpool use)."""
+    db = SessionLocal()
+    try:
+        sonos = playback_service.sonos_playback_state(speaker_ids, db)
+        if player_id is None:
+            plex = PlaybackStateResponse(ok=True, playing=None, state=None)
+        else:
+            creds = db.query(PlexCredential).first()
+            conn = resolve_plex_conn(db)
+            if creds and creds.auth_token and conn.base_url.strip():
+                plex = playback_service.plexamp_playback_state(player_id, db, auth_token=creds.auth_token)
+            else:
+                plex = PlaybackStateResponse(ok=True, playing=None, state=None)
+        return {"sonos": sonos.model_dump(), "plexamp": plex.model_dump()}
+    finally:
+        db.close()
 
 
 def _serialize_runtime_setup_read(db: Session) -> RuntimeSetupRead:
@@ -470,6 +491,62 @@ def sonos_stop(payload: SonosStopRequest, db: Session = Depends(get_db)) -> Play
 @router.post("/sonos/playback-state", response_model=PlaybackStateResponse)
 def sonos_playback_state(payload: SonosStopRequest, db: Session = Depends(get_db)) -> PlaybackStateResponse:
     return playback_service.sonos_playback_state(payload.speaker_ids, db)
+
+
+@router.websocket("/playback-state/ws")
+async def playback_state_websocket(websocket: WebSocket) -> None:
+    """
+    Stream combined Sonos + Plexamp playback snapshots over one connection (avoids REST polling spam).
+
+    First message must be JSON: ``{"type": "subscribe", "speaker_ids": [...], "player_id": null|int, "interval_ms"?: 500-30000}``.
+    Server then sends ``{"sonos": {...}, "plexamp": {...}}`` repeatedly on that interval until disconnect.
+    """
+    await websocket.accept()
+    try:
+        raw = await asyncio.wait_for(websocket.receive_text(), timeout=30.0)
+    except asyncio.TimeoutError:
+        await websocket.close(code=4408)
+        return
+    except WebSocketDisconnect:
+        return
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError:
+        await websocket.close(code=4400)
+        return
+    if payload.get("type") != "subscribe":
+        await websocket.close(code=4400)
+        return
+    raw_ids = payload.get("speaker_ids") or []
+    if not isinstance(raw_ids, list):
+        await websocket.close(code=4400)
+        return
+    speaker_ids = [str(x) for x in raw_ids]
+    raw_player = payload.get("player_id")
+    player_id: int | None
+    if raw_player is None or raw_player is False:
+        player_id = None
+    else:
+        try:
+            player_id = int(raw_player)
+        except (TypeError, ValueError):
+            await websocket.close(code=4400)
+            return
+    interval_ms = payload.get("interval_ms", 2500)
+    try:
+        interval_ms = int(interval_ms)
+    except (TypeError, ValueError):
+        interval_ms = 2500
+    interval_ms = max(500, min(interval_ms, 30_000))
+    interval_s = interval_ms / 1000.0
+
+    try:
+        while True:
+            snap = await asyncio.to_thread(_fetch_playback_snapshot, speaker_ids, player_id)
+            await websocket.send_json(snap)
+            await asyncio.sleep(interval_s)
+    except WebSocketDisconnect:
+        return
 
 
 @router.post("/sonos/volume", response_model=PlayResponse)

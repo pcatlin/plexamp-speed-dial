@@ -67,12 +67,26 @@ export interface SpeedDial {
   has_cover_art?: boolean;
 }
 
-/** Snapshot from ``/sonos/playback-state`` or ``/plexamp/playback-state``. */
+/** Snapshot from ``/sonos/playback-state``, ``/plexamp/playback-state``, or the playback WebSocket. */
 export interface PlaybackState {
   ok: boolean;
   playing: boolean | null;
   state?: string | null;
   error?: string | null;
+}
+
+/** Combined snapshot pushed by ``/playback-state/ws``. */
+export interface PlaybackSnapshotMessage {
+  sonos: PlaybackState;
+  plexamp: PlaybackState;
+}
+
+/** WebSocket URL for combined Sonos + Plexamp playback snapshots (same host as REST). */
+export function playbackStateWebSocketUrl(): string {
+  if (typeof window === "undefined") return "";
+  const { protocol, host } = window.location;
+  const wsProto = protocol === "https:" ? "wss:" : "ws:";
+  return `${wsProto}//${host}${API_BASE}/playback-state/ws`;
 }
 
 function extractApiErrorDetail(bodyText: string, status: number): string {
@@ -180,11 +194,6 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ player_id: playerId }),
     }),
-  plexampPlaybackState: (playerId: number) =>
-    request<PlaybackState>("/plexamp/playback-state", {
-      method: "POST",
-      body: JSON.stringify({ player_id: playerId }),
-    }),
   plexampResume: (playerId: number) =>
     request<{ status: string; details: string }>("/plexamp/resume", {
       method: "POST",
@@ -192,11 +201,6 @@ export const api = {
     }),
   sonosStop: (speakerIds: string[]) =>
     request<{ status: string; details: string }>("/sonos/stop", {
-      method: "POST",
-      body: JSON.stringify({ speaker_ids: speakerIds }),
-    }),
-  sonosPlaybackState: (speakerIds: string[]) =>
-    request<PlaybackState>("/sonos/playback-state", {
       method: "POST",
       body: JSON.stringify({ speaker_ids: speakerIds }),
     }),

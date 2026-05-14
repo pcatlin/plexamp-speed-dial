@@ -146,6 +146,21 @@ def test_sonos_playback_state_empty(client):
     assert body["playing"] is False
 
 
+def test_playback_state_websocket_streams(client, monkeypatch):
+    async def no_sleep(_s: float = 0) -> None:
+        return
+
+    monkeypatch.setattr("app.api.routes.asyncio.sleep", no_sleep)
+
+    with client.websocket_connect("/api/v1/playback-state/ws") as ws:
+        ws.send_json({"type": "subscribe", "speaker_ids": [], "player_id": None, "interval_ms": 500})
+        first = ws.receive_json()
+        assert first["sonos"]["ok"] is True
+        assert first["sonos"]["playing"] is False
+        second = ws.receive_json()
+        assert second["sonos"]["playing"] is False
+
+
 def test_sonos_volume_requires_selected_speakers(client):
     r = client.post("/api/v1/sonos/volume", json={"speaker_ids": [], "delta": 5})
     assert r.status_code == 400
