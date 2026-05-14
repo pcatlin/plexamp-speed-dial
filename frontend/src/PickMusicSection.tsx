@@ -35,7 +35,6 @@ function IconShuffle() {
 
 type Props = {
   authConnected: boolean;
-  username: string;
   pickTab: PickTab;
   onPickTab: (tab: PickTab) => void;
   collections: { id: string; title: string }[];
@@ -54,7 +53,6 @@ type Props = {
 
 export function PickMusicSection({
   authConnected,
-  username,
   pickTab,
   onPickTab,
   collections,
@@ -246,16 +244,7 @@ export function PickMusicSection({
   return (
     <section className="card">
       <h2>Pick Music</h2>
-      {!authConnected ? (
-        <p className="hint">
-          Open <strong>Setup</strong> to configure your Plex server URL (or rely on backend env), then link your Plex account to load your
-          library.
-        </p>
-      ) : (
-        <p className="hint">
-          Signed in as <strong>{username || "owner"}</strong>. Re-link from <strong>Setup</strong> if authorization fails or the library is empty.
-        </p>
-      )}
+      {!authConnected ? <p className="hint">Plex not connected. Sign in on Setup.</p> : null}
 
       <div className="tabRow pickMusicTabs" role="tablist" aria-label="Music source">
         {TABS.map((tab) => (

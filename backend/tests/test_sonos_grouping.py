@@ -66,7 +66,6 @@ def runtime() -> SonosRuntime:
         discover_timeout=5,
         allow_network_scan=False,
         interface_addr="",
-        demo_fallback=False,
         line_in_source_name="Fridge",
         line_in_source_uid="",
     )

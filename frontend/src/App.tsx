@@ -65,7 +65,6 @@ function App() {
   }, []);
 
   const [authConnected, setAuthConnected] = useState(false);
-  const [username, setUsername] = useState("");
   const [pickTab, setPickTab] = useState<PickTab>("playlist");
   const [selectedMedia, setSelectedMedia] = useState<MediaItem | null>(null);
   const [speakers, setSpeakers] = useState<Speaker[]>([]);
@@ -118,7 +117,6 @@ function App() {
   const refreshAll = async () => {
     const authStatus = await api.authStatus();
     setAuthConnected(authStatus.connected);
-    setUsername(authStatus.username ?? "");
     const [speakerRows, playerRows, speedDialRows] = await Promise.all([api.speakers(), api.players(), api.speedDial()]);
     setSpeakers(speakerRows);
     await reloadPlayersSelection(playerRows);
@@ -245,7 +243,6 @@ function App() {
   const refreshPlexAuthFromApi = useCallback(async () => {
     const authStatus = await api.authStatus();
     setAuthConnected(authStatus.connected);
-    setUsername(authStatus.username ?? "");
     await reloadCollections(authStatus.connected);
   }, [reloadCollections]);
 
@@ -368,7 +365,6 @@ function App() {
 
         <PickMusicSection
           authConnected={authConnected}
-          username={username}
           pickTab={pickTab}
           onPickTab={handlePickTab}
           collections={collections}
@@ -392,9 +388,6 @@ function App() {
             Select Sonos outputs here to group them and switch them to the line-in source set in Setup (the player with
             Plexamp on analog in, e.g. Fridge). Leave all unchecked if you only want Plexamp without Sonos.
           </p>
-          <button type="button" className="smallBtn" onClick={() => reloadSpeakersOnly().catch(() => undefined)}>
-            Refresh speakers
-          </button>
           {speakers.length === 0 ? <p className="hint">No speakers yet — enter seed IPs under Setup when using Docker/VLAN.</p> : null}
           {speakers.map((speaker) => (
             <label key={speaker.id} className="checkboxRow">

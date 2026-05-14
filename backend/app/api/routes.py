@@ -81,7 +81,6 @@ def _serialize_runtime_setup_read(db: Session) -> RuntimeSetupRead:
         sonos_discover_timeout=row.sonos_discover_timeout,
         sonos_allow_network_scan=row.sonos_allow_network_scan,
         sonos_interface_addr=row.sonos_interface_addr or "",
-        sonos_demo_fallback=row.sonos_demo_fallback,
         sonos_line_in_source_name=getattr(row, "sonos_line_in_source_name", None) or "",
         sonos_line_in_source_uid=getattr(row, "sonos_line_in_source_uid", None) or "",
         plex_server_url_effective=effective_plex_url(row.plex_server_url),
@@ -119,7 +118,7 @@ def update_runtime_settings(payload: RuntimeSetupUpdate, db: Session = Depends(g
     row.sonos_discover_timeout = data["sonos_discover_timeout"]
     row.sonos_allow_network_scan = data["sonos_allow_network_scan"]
     row.sonos_interface_addr = data["sonos_interface_addr"].strip()
-    row.sonos_demo_fallback = data["sonos_demo_fallback"]
+    row.sonos_demo_fallback = False
     row.sonos_line_in_source_name = data["sonos_line_in_source_name"].strip()
     row.sonos_line_in_source_uid = data["sonos_line_in_source_uid"].strip()
     db.commit()

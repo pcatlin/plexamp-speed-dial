@@ -60,10 +60,6 @@ class SonosService:
             elif zones is None:
                 zones = set()
 
-        if not zones and runtime.demo_fallback:
-            _log.warning("Sonos demo fallback — skipping zone discovery for line-in orchestration")
-            return set()
-
         return zones or set()
 
     # Backwards-compatible alias (older code referred to "zone groups")
@@ -73,11 +69,6 @@ class SonosService:
     def list_speakers(self, runtime: SonosRuntime) -> list[SonosSpeaker]:
         zones = self.discover_visible_zones(runtime)
         if not zones:
-            if runtime.demo_fallback:
-                return [
-                    SonosSpeaker(id="demo-living-room", name="Living Room (demo)", ip="192.168.1.10"),
-                    SonosSpeaker(id="demo-kitchen", name="Kitchen (demo)", ip="192.168.1.11"),
-                ]
             _log.info("No Sonos zones found (Docker/multicast: set seed IPs under Setup).")
             return []
 

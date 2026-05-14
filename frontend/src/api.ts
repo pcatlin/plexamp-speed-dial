@@ -43,7 +43,6 @@ export interface RuntimeSettings {
   sonos_discover_timeout: number;
   sonos_allow_network_scan: boolean;
   sonos_interface_addr: string;
-  sonos_demo_fallback: boolean;
   sonos_line_in_source_name: string;
   sonos_line_in_source_uid: string;
   plex_server_url_effective: string;

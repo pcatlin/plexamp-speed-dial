@@ -24,7 +24,6 @@ class SonosRuntime:
     discover_timeout: int
     allow_network_scan: bool
     interface_addr: str
-    demo_fallback: bool
     line_in_source_name: str
     line_in_source_uid: str
 
@@ -69,7 +68,6 @@ def resolve_sonos_runtime(db: Session) -> SonosRuntime:
         discover_timeout=row.sonos_discover_timeout,
         allow_network_scan=row.sonos_allow_network_scan,
         interface_addr=row.sonos_interface_addr,
-        demo_fallback=row.sonos_demo_fallback,
         line_in_source_name=name_db,
         line_in_source_uid=uid_db,
     )

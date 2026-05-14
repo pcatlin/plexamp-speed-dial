@@ -1086,10 +1086,6 @@ components:
           title: Sonos Interface Addr
           description: Optional interface address for SSDP (advanced).
           default: ''
-        sonos_demo_fallback:
-          type: boolean
-          title: Sonos Demo Fallback
-          default: false
         sonos_line_in_source_name:
           type: string
           title: Sonos Line In Source Name
@@ -1142,10 +1138,6 @@ components:
           title: Sonos Interface Addr
           description: Optional interface address for SSDP (advanced).
           default: ''
-        sonos_demo_fallback:
-          type: boolean
-          title: Sonos Demo Fallback
-          default: false
         sonos_line_in_source_name:
           type: string
           title: Sonos Line In Source Name

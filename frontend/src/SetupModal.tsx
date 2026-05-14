@@ -57,7 +57,6 @@ export function SetupModal({
   const [sonosTimeout, setSonosTimeout] = useState(10);
   const [sonosScan, setSonosScan] = useState(true);
   const [sonosIface, setSonosIface] = useState("");
-  const [sonosDemo, setSonosDemo] = useState(false);
   const [sonosLineInName, setSonosLineInName] = useState("");
   const [sonosLineInUid, setSonosLineInUid] = useState("");
   const [players, setPlayers] = useState<Player[]>([]);
@@ -99,7 +98,6 @@ export function SetupModal({
     setSonosTimeout(s.sonos_discover_timeout);
     setSonosScan(s.sonos_allow_network_scan);
     setSonosIface(s.sonos_interface_addr);
-    setSonosDemo(s.sonos_demo_fallback);
     setSonosLineInName(s.sonos_line_in_source_name ?? "");
     setSonosLineInUid(s.sonos_line_in_source_uid ?? "");
   }
@@ -114,7 +112,6 @@ export function SetupModal({
         sonos_discover_timeout: sonosTimeout,
         sonos_allow_network_scan: sonosScan,
         sonos_interface_addr: sonosIface.trim(),
-        sonos_demo_fallback: sonosDemo,
         sonos_line_in_source_name: sonosLineInName.trim(),
         sonos_line_in_source_uid: sonosLineInUid.trim(),
       });
@@ -299,10 +296,6 @@ export function SetupModal({
           <label className="fieldLabel">
             Interface address (optional)
             <input type="text" className="textInput" placeholder="192.168.1.50" value={sonosIface} onChange={(e) => setSonosIface(e.target.value)} />
-          </label>
-          <label className="checkboxRow slim warning">
-            <input type="checkbox" checked={sonosDemo} onChange={(e) => setSonosDemo(e.target.checked)} />
-            Demo speaker fallback (placeholder devices if nothing discovered)
           </label>
           <label className="fieldLabel">
             Line-in source (Plexamp analog input)
