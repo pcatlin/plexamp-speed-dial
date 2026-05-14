@@ -404,7 +404,7 @@ function App() {
               </option>
             ))}
           </select>
-          <p className="hint">Add or remove Plexamp headless endpoints under Setup.</p>
+          {players.length === 0 ? <p className="hint">Add Plexamp player in Setup.</p> : null}
         </section>
 
         <section className="card sticky">
