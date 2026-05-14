@@ -444,6 +444,57 @@ class PlexService:
         ranked = sorted(best.values(), key=lambda pair: pair[1])
         return [self._item_to_media(row, "album") for row, _ in ranked[:max_out]]
 
+    def _search_tracks_merged(self, sections: list[MusicSection], q: str, *, max_out: int = 20) -> list[MediaItem]:
+        """
+        Track search with better ordering for combined artist + title queries.
+
+        Priority (lower internal score = earlier in results):
+        1. Plex hub search (fuzzy whole query, e.g. "michael bad" → *Bad* track).
+        2. Split queries: leading tokens as ``grandparentTitle`` (artist), rest as track ``title``.
+        3. Track ``title`` contains full query.
+        4. ``grandparentTitle`` contains full query (artist-only discovery).
+        """
+        qn = " ".join((q or "").split())
+        tokens = [t for t in qn.split() if t]
+        best: dict[str, tuple[object, float]] = {}
+
+        def consider(rows: list | None, base: float) -> None:
+            for i, row in enumerate(rows or []):
+                if (getattr(row, "type", "") or "").lower() != "track":
+                    continue
+                rk = getattr(row, "ratingKey", None)
+                sid = str(rk) if rk is not None else ""
+                if not sid:
+                    continue
+                score = base + i * 0.02
+                if sid not in best or score < best[sid][1]:
+                    best[sid] = (row, score)
+
+        for section in sections:
+            try:
+                hub_rows = section.hubSearch(qn, mediatype="track", limit=40)
+            except Exception:  # noqa: BLE001
+                hub_rows = []
+            consider(list(hub_rows or []), 0.0)
+
+            if len(tokens) >= 2:
+                for split_at in range(1, len(tokens)):
+                    artist_guess = " ".join(tokens[:split_at])
+                    track_guess = " ".join(tokens[split_at:])
+                    if len(artist_guess) < 2 or len(track_guess) < 1:
+                        continue
+                    rows = self._try_section_search(
+                        section, "track", 25, title=track_guess, grandparentTitle=artist_guess
+                    )
+                    tier = 1.0 + (len(tokens) - split_at) * 0.001
+                    consider(rows, tier)
+
+            consider(self._try_section_search(section, "track", 30, title=qn), 5.0)
+            consider(self._try_section_search(section, "track", 30, grandparentTitle=qn), 10.0)
+
+        ranked = sorted(best.values(), key=lambda pair: pair[1])
+        return [self._item_to_media(row, "track") for row, _ in ranked[:max_out]]
+
     def search_music(self, family: str, query: str, token: str, conn: PlexConn) -> list[MediaItem]:
         q = (query or "").strip()
         if len(q) < 2:
@@ -460,6 +511,9 @@ class PlexService:
 
         if family == "album":
             return self._search_albums_merged(sections, q, max_out=20)
+
+        if family == "track":
+            return self._search_tracks_merged(sections, q, max_out=20)
 
         seen: set[str] = set()
         out: list[MediaItem] = []
