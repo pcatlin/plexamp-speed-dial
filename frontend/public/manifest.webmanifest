@@ -1,0 +1,26 @@
+{
+  "id": "/",
+  "name": "Plexamp Sonos Speed Dial",
+  "short_name": "Speed Dial",
+  "description": "Plexamp playback with Sonos line-in from the browser.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "minimal-ui",
+  "display_override": ["minimal-ui", "standalone", "browser"],
+  "theme_color": "#374151",
+  "background_color": "#ecedf0",
+  "icons": [
+    {
+      "src": "/favicon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/favicon.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
