@@ -209,7 +209,13 @@ class PlaybackService:
         if target_speakers:
             try:
                 runtime = resolve_sonos_runtime(db)
-                sonos_note = self._sonos.group_selected_and_play_line_in(runtime, target_speakers)
+                line_sid = (getattr(player, "sonos_line_in_speaker_id", None) or "").strip()
+                sonos_note = self._sonos.group_selected_and_play_line_in(
+                    runtime,
+                    target_speakers,
+                    line_in_speaker_id=line_sid,
+                    line_in_name_legacy="",
+                )
             except Exception as exc:  # noqa: BLE001
                 _log.exception("Sonos line-in orchestration failed")
                 sonos_note = f"Sonos error: {exc}"
@@ -309,13 +315,22 @@ class PlaybackService:
             return PlayResponse(status="error", details=f"Sonos stop failed: {exc}")
         return PlayResponse(status="ok", details=msg)
 
-    def sonos_play_line_in_selected(self, speaker_ids: list[str], db: Session) -> PlayResponse:
-        """Group selected Sonos outputs and play the configured Plexamp line-in source (no new Plex queue)."""
+    def sonos_play_line_in_selected(self, speaker_ids: list[str], player_id: int, db: Session) -> PlayResponse:
+        """Group selected Sonos outputs and play line-in for the given Plexamp player's mapping (no new Plex queue)."""
         if not speaker_ids:
             return PlayResponse(status="error", details="Select at least one Sonos speaker, then press play.")
+        player = db.get(PlexampPlayer, player_id)
+        if not player:
+            return PlayResponse(status="error", details="Selected Plexamp player not found")
+        line_sid = (getattr(player, "sonos_line_in_speaker_id", None) or "").strip()
         try:
             runtime = resolve_sonos_runtime(db)
-            msg = self._sonos.group_selected_and_play_line_in(runtime, speaker_ids)
+            msg = self._sonos.group_selected_and_play_line_in(
+                runtime,
+                speaker_ids,
+                line_in_speaker_id=line_sid,
+                line_in_name_legacy="",
+            )
         except Exception as exc:  # noqa: BLE001
             _log.exception("Sonos line-in play failed")
             return PlayResponse(status="error", details=f"Sonos line-in failed: {exc}")

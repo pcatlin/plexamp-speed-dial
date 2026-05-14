@@ -270,7 +270,11 @@ function App() {
         setMessage(result.details);
         setSonosPlaying(false);
       } else {
-        const result = await api.sonosPlayLineIn(selectedSpeakers);
+        if (!selectedPlayer) {
+          setMessage("Select a Plexamp player first (line-in is configured per player in Setup).");
+          return;
+        }
+        const result = await api.sonosPlayLineIn(selectedSpeakers, selectedPlayer);
         setMessage(result.details);
         setSonosPlaying(true);
       }

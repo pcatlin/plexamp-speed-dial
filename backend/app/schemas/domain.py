@@ -76,10 +76,23 @@ class PlayerCreate(BaseModel):
     host: str
     port: int = 32500
     is_active: bool = True
+    sonos_line_in_speaker_id: str = Field(
+        default="",
+        description="Sonos speaker id (from /sonos/speakers) whose line-in carries this Plexamp; empty = none.",
+    )
 
 
 class PlayerRead(PlayerCreate):
     id: int
+
+
+class PlayerPatch(BaseModel):
+    """Partial update for a Plexamp player (Setup UI)."""
+
+    sonos_line_in_speaker_id: str | None = Field(
+        default=None,
+        description="Set to '' to clear line-in mapping; omit field to leave unchanged.",
+    )
 
 
 class PlayRequest(BaseModel):
@@ -109,6 +122,11 @@ class PlayerControlRequest(BaseModel):
 
 class SonosStopRequest(BaseModel):
     speaker_ids: list[str] = Field(default_factory=list)
+
+
+class SonosLineInPlayRequest(BaseModel):
+    speaker_ids: list[str] = Field(default_factory=list)
+    player_id: int = Field(..., description="Plexamp player whose saved line-in Sonos id is used.")
 
 
 class PlaybackStateResponse(BaseModel):
@@ -169,11 +187,6 @@ class RuntimeSetupUpdate(BaseModel):
     sonos_interface_addr: str = Field(
         default="",
         description="Optional interface address for SSDP (advanced).",
-    )
-    sonos_line_in_source_name: str = Field(default="", description="Substring of the Sonos player name that has Plexamp on line-in (e.g. Fridge).")
-    sonos_line_in_source_uid: str = Field(
-        default="",
-        description="Optional exact Sonos player UID (RINCON_…); overrides name when set.",
     )
 
 

@@ -34,6 +34,8 @@ export interface Player {
   host: string;
   port: number;
   is_active: boolean;
+  /** Sonos speaker id from /sonos/speakers; empty = no line-in routing for this Plexamp. */
+  sonos_line_in_speaker_id: string;
 }
 
 export interface RuntimeSettings {
@@ -43,8 +45,6 @@ export interface RuntimeSettings {
   sonos_discover_timeout: number;
   sonos_allow_network_scan: boolean;
   sonos_interface_addr: string;
-  sonos_line_in_source_name: string;
-  sonos_line_in_source_uid: string;
   plex_server_url_effective: string;
 }
 
@@ -162,6 +162,8 @@ export const api = {
     request<{ id: number }>("/sonos/group-presets", { method: "POST", body: JSON.stringify({ name, speaker_ids: speakerIds }) }),
   players: () => request<Player[]>("/players"),
   createPlayer: (payload: Omit<Player, "id">) => request<{ id: number }>("/players", { method: "POST", body: JSON.stringify(payload) }),
+  patchPlayer: (id: number, payload: { sonos_line_in_speaker_id: string }) =>
+    request<Player>(`/players/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
   deletePlayer: (id: number) => request<{ message: string }>(`/players/${id}`, { method: "DELETE" }),
   speedDial: () => request<SpeedDial[]>("/speed-dial"),
   createSpeedDial: (payload: Omit<SpeedDial, "id" | "has_cover_art">) =>
@@ -203,10 +205,10 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ speaker_ids: speakerIds }),
     }),
-  sonosPlayLineIn: (speakerIds: string[]) =>
+  sonosPlayLineIn: (speakerIds: string[], playerId: number) =>
     request<{ status: string; details: string }>("/sonos/play-line-in", {
       method: "POST",
-      body: JSON.stringify({ speaker_ids: speakerIds }),
+      body: JSON.stringify({ speaker_ids: speakerIds, player_id: playerId }),
     }),
   sonosVolumeAdjust: (speakerIds: string[], delta: number) =>
     request<{ status: string; details: string }>("/sonos/volume", {

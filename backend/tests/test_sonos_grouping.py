@@ -66,8 +66,6 @@ def runtime() -> SonosRuntime:
         discover_timeout=5,
         allow_network_scan=False,
         interface_addr="",
-        line_in_source_name="Fridge",
-        line_in_source_uid="",
     )
 
 
@@ -87,7 +85,7 @@ def test_group_selected_unjoins_targets_before_joining(runtime: SonosRuntime, mo
 
     monkeypatch.setattr(svc, "discover_visible_zones", fake_zones)
 
-    svc.group_selected_and_play_line_in(runtime, ["uid-move"])
+    svc.group_selected_and_play_line_in(runtime, ["uid-move"], line_in_speaker_id="uid-fridge")
 
     assert move.unjoin_calls == 1
     assert move.join_targets == []
@@ -103,7 +101,7 @@ def test_group_selected_unjoins_both_before_pairing(runtime: SonosRuntime, monke
     svc = SonosService()
     monkeypatch.setattr(svc, "discover_visible_zones", lambda rt: {alpha, beta, fridge})
 
-    svc.group_selected_and_play_line_in(runtime, ["uid-b", "uid-a"])
+    svc.group_selected_and_play_line_in(runtime, ["uid-b", "uid-a"], line_in_speaker_id="uid-fridge")
 
     assert alpha.unjoin_calls == 1
     assert beta.unjoin_calls == 1

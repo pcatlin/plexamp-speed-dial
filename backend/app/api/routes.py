@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import require_plex_creds
 from app.db.database import Base, SessionLocal, engine, get_db
 from app.db.runtime_setup_migrate import (
+    ensure_plexamp_player_sonos_line_in_column,
     ensure_runtime_setup_columns,
     ensure_runtime_setup_plex_client_identifier_column,
     ensure_speed_dial_artist_radio_column,
@@ -23,6 +24,7 @@ from app.schemas.domain import (
     MediaSuggestionsResponse,
     PlayerControlRequest,
     PlayerCreate,
+    PlayerPatch,
     PlayerRead,
     PlayRequest,
     PlayResponse,
@@ -36,6 +38,7 @@ from app.schemas.domain import (
     RuntimeSetupUpdate,
     SonosGroupPresetCreate,
     SonosGroupPresetRead,
+    SonosLineInPlayRequest,
     SonosSpeaker,
     SonosStopRequest,
     SonosVolumeAdjustRequest,
@@ -81,8 +84,6 @@ def _serialize_runtime_setup_read(db: Session) -> RuntimeSetupRead:
         sonos_discover_timeout=row.sonos_discover_timeout,
         sonos_allow_network_scan=row.sonos_allow_network_scan,
         sonos_interface_addr=row.sonos_interface_addr or "",
-        sonos_line_in_source_name=getattr(row, "sonos_line_in_source_name", None) or "",
-        sonos_line_in_source_uid=getattr(row, "sonos_line_in_source_uid", None) or "",
         plex_server_url_effective=effective_plex_url(row.plex_server_url),
     )
 
@@ -95,6 +96,7 @@ def startup() -> None:
     ensure_speed_dial_cover_column(engine)
     ensure_speed_dial_artist_radio_column(engine)
     ensure_speed_dial_shuffle_column(engine)
+    ensure_plexamp_player_sonos_line_in_column(engine)
     seed = SessionLocal()
     try:
         row = get_or_create_runtime_setup(seed)
@@ -119,8 +121,6 @@ def update_runtime_settings(payload: RuntimeSetupUpdate, db: Session = Depends(g
     row.sonos_allow_network_scan = data["sonos_allow_network_scan"]
     row.sonos_interface_addr = data["sonos_interface_addr"].strip()
     row.sonos_demo_fallback = False
-    row.sonos_line_in_source_name = data["sonos_line_in_source_name"].strip()
-    row.sonos_line_in_source_uid = data["sonos_line_in_source_uid"].strip()
     db.commit()
     db.refresh(row)
     return _serialize_runtime_setup_read(db)
@@ -374,7 +374,17 @@ def delete_preset(preset_id: int, db: Session = Depends(get_db)) -> dict[str, st
 @router.get("/players", response_model=list[PlayerRead])
 def players(db: Session = Depends(get_db)) -> list[PlayerRead]:
     rows = db.query(PlexampPlayer).all()
-    return [PlayerRead(id=row.id, name=row.name, host=row.host, port=row.port, is_active=row.is_active) for row in rows]
+    return [
+        PlayerRead(
+            id=row.id,
+            name=row.name,
+            host=row.host,
+            port=row.port,
+            is_active=row.is_active,
+            sonos_line_in_speaker_id=(getattr(row, "sonos_line_in_speaker_id", None) or "").strip(),
+        )
+        for row in rows
+    ]
 
 
 @router.post("/players", response_model=IdResponse)
@@ -384,6 +394,26 @@ def create_player(payload: PlayerCreate, db: Session = Depends(get_db)) -> IdRes
     db.commit()
     db.refresh(row)
     return IdResponse(id=row.id)
+
+
+@router.patch("/players/{player_id}", response_model=PlayerRead)
+def patch_player(player_id: int, payload: PlayerPatch, db: Session = Depends(get_db)) -> PlayerRead:
+    row = db.get(PlexampPlayer, player_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Player not found")
+    data = payload.model_dump(exclude_unset=True)
+    if "sonos_line_in_speaker_id" in data and data["sonos_line_in_speaker_id"] is not None:
+        row.sonos_line_in_speaker_id = str(data["sonos_line_in_speaker_id"]).strip()
+    db.commit()
+    db.refresh(row)
+    return PlayerRead(
+        id=row.id,
+        name=row.name,
+        host=row.host,
+        port=row.port,
+        is_active=row.is_active,
+        sonos_line_in_speaker_id=(getattr(row, "sonos_line_in_speaker_id", None) or "").strip(),
+    )
 
 
 @router.delete("/players/{player_id}")
@@ -472,8 +502,8 @@ def plexamp_playback_state(
 
 
 @router.post("/sonos/play-line-in", response_model=PlayResponse)
-def sonos_play_line_in(payload: SonosStopRequest, db: Session = Depends(get_db)) -> PlayResponse:
-    response = playback_service.sonos_play_line_in_selected(payload.speaker_ids, db)
+def sonos_play_line_in(payload: SonosLineInPlayRequest, db: Session = Depends(get_db)) -> PlayResponse:
+    response = playback_service.sonos_play_line_in_selected(payload.speaker_ids, payload.player_id, db)
     if response.status == "error":
         raise HTTPException(status_code=400, detail=response.details)
     return response

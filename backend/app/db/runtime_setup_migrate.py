@@ -87,6 +87,23 @@ def ensure_speed_dial_artist_radio_column(engine: Engine) -> None:
             _log.warning("speed_dial_favorites migrate skipped/failed: %s", exc)
 
 
+def ensure_plexamp_player_sonos_line_in_column(engine: Engine) -> None:
+    """Add plexamp_players.sonos_line_in_speaker_id when upgrading an existing DB."""
+    insp = inspect(engine)
+    if "plexamp_players" not in insp.get_table_names():
+        return
+    existing = {c["name"] for c in insp.get_columns("plexamp_players")}
+    if "sonos_line_in_speaker_id" in existing:
+        return
+    stmt = "ALTER TABLE plexamp_players ADD COLUMN sonos_line_in_speaker_id VARCHAR(255) NOT NULL DEFAULT ''"
+    with engine.begin() as conn:
+        try:
+            conn.execute(text(stmt))
+            _log.info("Applied plexamp_players migration: sonos_line_in_speaker_id")
+        except Exception as exc:  # noqa: BLE001
+            _log.warning("plexamp_players migrate skipped/failed: %s", exc)
+
+
 def ensure_speed_dial_shuffle_column(engine: Engine) -> None:
     """Add speed_dial_favorites.shuffle when upgrading an existing DB."""
     insp = inspect(engine)

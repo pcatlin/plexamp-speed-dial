@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { Player, RuntimeSettings } from "./api";
+import type { Player, RuntimeSettings, Speaker } from "./api";
 import { api } from "./api";
 
 function parsePlexampEndpoint(raw: string): { label: string; host: string; port: number } {
@@ -57,8 +57,8 @@ export function SetupModal({
   const [sonosTimeout, setSonosTimeout] = useState(10);
   const [sonosScan, setSonosScan] = useState(true);
   const [sonosIface, setSonosIface] = useState("");
-  const [sonosLineInName, setSonosLineInName] = useState("");
-  const [sonosLineInUid, setSonosLineInUid] = useState("");
+  const [newPlayerLineInId, setNewPlayerLineInId] = useState("");
+  const [sonosSpeakers, setSonosSpeakers] = useState<Speaker[]>([]);
   const [players, setPlayers] = useState<Player[]>([]);
   const [playerInput, setPlayerInput] = useState("");
   const [playerNameHint, setPlayerNameHint] = useState("");
@@ -69,9 +69,15 @@ export function SetupModal({
     setLoading(true);
     (async () => {
       try {
-        const [settings, plist, auth] = await Promise.all([api.runtimeSettings(), api.players(), api.authStatus()]);
+        const [settings, plist, auth, spk] = await Promise.all([
+          api.runtimeSettings(),
+          api.players(),
+          api.authStatus(),
+          api.speakers().catch(() => [] as Speaker[]),
+        ]);
         if (cancelled) return;
         applySettings(settings);
+        setSonosSpeakers(spk);
         setPlayers(plist);
         setAuthConnected(auth.connected);
         setAuthUsername(auth.username ?? "");
@@ -98,8 +104,6 @@ export function SetupModal({
     setSonosTimeout(s.sonos_discover_timeout);
     setSonosScan(s.sonos_allow_network_scan);
     setSonosIface(s.sonos_interface_addr);
-    setSonosLineInName(s.sonos_line_in_source_name ?? "");
-    setSonosLineInUid(s.sonos_line_in_source_uid ?? "");
   }
 
   const saveSetup = async () => {
@@ -112,10 +116,13 @@ export function SetupModal({
         sonos_discover_timeout: sonosTimeout,
         sonos_allow_network_scan: sonosScan,
         sonos_interface_addr: sonosIface.trim(),
-        sonos_line_in_source_name: sonosLineInName.trim(),
-        sonos_line_in_source_uid: sonosLineInUid.trim(),
       });
       applySettings(saved);
+      try {
+        setSonosSpeakers(await api.speakers());
+      } catch {
+        setSonosSpeakers([]);
+      }
       await afterRuntimeSaved?.().catch(() => undefined);
       onToast("Setup saved.");
     } catch (e) {
@@ -130,10 +137,17 @@ export function SetupModal({
     try {
       const { label, host, port } = parsePlexampEndpoint(playerInput || playerNameHint);
       const name = playerNameHint.trim() || label;
-      await api.createPlayer({ name, host, port, is_active: true });
+      await api.createPlayer({
+        name,
+        host,
+        port,
+        is_active: true,
+        sonos_line_in_speaker_id: newPlayerLineInId.trim(),
+      });
       setPlayers(await api.players());
       setPlayerInput("");
       setPlayerNameHint("");
+      setNewPlayerLineInId("");
       await onPlayersUpdated();
       onToast(`Added Plexamp player ${name} (${host}:${port}).`);
     } catch (e) {
@@ -188,6 +202,19 @@ export function SetupModal({
       }
     } catch (e) {
       onToast(String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const updatePlayerLineIn = async (playerId: number, sonos_line_in_speaker_id: string) => {
+    setBusy(true);
+    try {
+      await api.patchPlayer(playerId, { sonos_line_in_speaker_id });
+      setPlayers(await api.players());
+      await onPlayersUpdated();
+    } catch (e) {
+      onToast(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
     }
@@ -297,29 +324,9 @@ export function SetupModal({
             Interface address (optional)
             <input type="text" className="textInput" placeholder="192.168.1.50" value={sonosIface} onChange={(e) => setSonosIface(e.target.value)} />
           </label>
-          <label className="fieldLabel">
-            Line-in source (Plexamp analog input)
-            <input
-              type="text"
-              className="textInput"
-              placeholder="Fridge — substring of the Sonos room name"
-              value={sonosLineInName}
-              onChange={(e) => setSonosLineInName(e.target.value)}
-            />
-          </label>
-          <label className="fieldLabel">
-            Line-in source UID (optional)
-            <input
-              type="text"
-              className="textInput"
-              placeholder="RINCON_… — exact player UID; overrides name when set"
-              value={sonosLineInUid}
-              onChange={(e) => setSonosLineInUid(e.target.value)}
-            />
-          </label>
           <p className="hint">
-            After Plexamp starts playback, selected Sonos outputs are grouped and switched to this player&apos;s line-in
-            (SoCo <code>switch_to_line_in</code>).
+            After Plexamp starts playback, selected Sonos outputs can be grouped to that player&apos;s line-in (see each Plexamp player below). SoCo{" "}
+            <code>switch_to_line_in</code>.
           </p>
         </section>
 
@@ -327,7 +334,7 @@ export function SetupModal({
           <h3>Plexamp players</h3>
           <p className="hint">
             Hostname, IP, <code>http://host:32500</code>, or <code>host:32500</code>. Companion port defaults to{" "}
-            <code>32500</code>.
+            <code>32500</code>. Pick which Sonos has this Plexamp on its analog line-in (or none).
           </p>
           <div className="inlineGrow">
             <label className="fieldLabel mb0 stretch">
@@ -353,6 +360,22 @@ export function SetupModal({
                 onChange={(e) => setPlayerNameHint(e.target.value)}
               />
             </label>
+            <label className="fieldLabel mb0 stretch">
+              Line-in Sonos
+              <select
+                className="textInput"
+                value={newPlayerLineInId}
+                onChange={(e) => setNewPlayerLineInId(e.target.value)}
+                aria-label="Sonos with Plexamp on line-in for new player"
+              >
+                <option value="">None</option>
+                {sonosSpeakers.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            </label>
             <button type="button" className="nowrap" disabled={busy} onClick={() => void addPlayer()}>
               Add
             </button>
@@ -367,6 +390,23 @@ export function SetupModal({
                     {p.host}:{p.port}
                   </span>
                 </span>
+                <label className="fieldLabel mb0 nowrap">
+                  Line-in
+                  <select
+                    className="textInput"
+                    value={p.sonos_line_in_speaker_id ?? ""}
+                    disabled={busy}
+                    onChange={(e) => void updatePlayerLineIn(p.id, e.target.value)}
+                    aria-label={`Sonos line-in for ${p.name}`}
+                  >
+                    <option value="">None</option>
+                    {sonosSpeakers.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
                 <button type="button" className="danger nowrap" disabled={busy} onClick={() => void removePlayer(p.id)}>
                   Delete
                 </button>

@@ -98,15 +98,18 @@ class SonosService:
                 by_uid[u] = d
         return list(by_uid.values())
 
-    def _find_line_in_source(self, zones: set[SoCo], *, name_sub: str, uid: str) -> SoCo | None:
+    def _find_line_in_source(self, zones: set[SoCo], *, speaker_id: str, name_legacy: str) -> SoCo | None:
+        """Resolve line-in player: prefer configured speaker id (API id / SoCo uid), else legacy name substring."""
         devices = self._all_devices(zones)
-        want_uid, want_base = _normalize_sonos_uid(uid)
-        if want_uid:
-            for d in devices:
-                du = d.uid
-                if du == want_uid or (want_base is not None and du == want_base):
-                    return d
-        name_sub = (name_sub or "").strip().lower()
+        sid = (speaker_id or "").strip()
+        if sid:
+            want_uid, want_base = _normalize_sonos_uid(sid)
+            if want_uid:
+                for d in devices:
+                    du = d.uid
+                    if du == want_uid or (want_base is not None and du == want_base):
+                        return d
+        name_sub = (name_legacy or "").strip().lower()
         if name_sub:
             for d in devices:
                 pname = (d.player_name or "").lower()
@@ -127,9 +130,12 @@ class SonosService:
         self,
         runtime: SonosRuntime,
         output_speaker_ids: list[str],
+        *,
+        line_in_speaker_id: str = "",
+        line_in_name_legacy: str = "",
     ) -> str:
         """
-        Group selected Sonos outputs and play the configured line-in source (Plexamp → Fridge).
+        Group selected Sonos outputs and play line-in from the given Sonos player (e.g. Plexamp analog in).
 
         Uses SoCo ``switch_to_line_in`` / ``x-rincon-stream`` so outputs hear another player's line-in.
         """
@@ -159,13 +165,13 @@ class SonosService:
 
         line_src = self._find_line_in_source(
             zones,
-            name_sub=runtime.line_in_source_name,
-            uid=runtime.line_in_source_uid,
+            speaker_id=line_in_speaker_id,
+            name_legacy=line_in_name_legacy,
         )
         if line_src is None:
             return (
-                f"Sonos: line-in source not found (name contains {runtime.line_in_source_name!r} "
-                f"or UID {runtime.line_in_source_uid!r}). Check Setup."
+                "Sonos: line-in source not found. Open Setup → Plexamp players and choose the Sonos line-in for this player "
+                f"(saved id {line_in_speaker_id!r} or legacy name {line_in_name_legacy!r})."
             )
 
         if line_src.uid in {t.uid for t in targets}:

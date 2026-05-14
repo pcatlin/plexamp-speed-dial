@@ -40,8 +40,8 @@ class FakePlexService:
 
 
 class FakeSonosService:
-    def group_selected_and_play_line_in(self, runtime, output_speaker_ids):  # noqa: ANN001
-        return f"Sonos: ok (mock) ids={output_speaker_ids!r}"
+    def group_selected_and_play_line_in(self, runtime, output_speaker_ids, *, line_in_speaker_id="", line_in_name_legacy=""):  # noqa: ANN001
+        return f"Sonos: ok (mock) ids={output_speaker_ids!r} line_in={line_in_speaker_id!r}"
 
     def stop_selected_speakers(self, runtime, output_speaker_ids):  # noqa: ANN001
         return f"Sonos: stopped mock ids={output_speaker_ids!r}"
@@ -145,15 +145,27 @@ def test_playback_sonos_stop_empty_returns_error(db_session):
 
 def test_playback_sonos_play_line_in_empty_returns_error(db_session):
     service = PlaybackService(plex_service=FakePlexService(), sonos_service=FakeSonosService())
-    result = service.sonos_play_line_in_selected([], db_session)
+    result = service.sonos_play_line_in_selected([], 1, db_session)
     assert result.status == "error"
 
 
-def test_playback_sonos_play_line_in_ok(db_session):
+def test_playback_sonos_play_line_in_player_not_found(db_session):
     service = PlaybackService(plex_service=FakePlexService(), sonos_service=FakeSonosService())
-    result = service.sonos_play_line_in_selected(["s1"], db_session)
+    result = service.sonos_play_line_in_selected(["s1"], 999, db_session)
+    assert result.status == "error"
+    assert "not found" in result.details.lower()
+
+
+def test_playback_sonos_play_line_in_ok(db_session):
+    player = PlexampPlayer(name="Kitchen", host="plexamp.local", port=32500, is_active=True, sonos_line_in_speaker_id="fridge-uid")
+    db_session.add(player)
+    db_session.commit()
+    db_session.refresh(player)
+    service = PlaybackService(plex_service=FakePlexService(), sonos_service=FakeSonosService())
+    result = service.sonos_play_line_in_selected(["s1"], player.id, db_session)
     assert result.status == "ok"
     assert "Sonos: ok (mock)" in result.details
+    assert "fridge-uid" in result.details
 
 
 def test_playback_sonos_volume_empty_returns_error(db_session):

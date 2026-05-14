@@ -446,6 +446,35 @@ paths:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/players/{player_id}:
+    patch:
+      summary: Patch Player
+      operationId: patch_player_api_v1_players__player_id__patch
+      parameters:
+      - name: player_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Player Id
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlayerPatch'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlayerRead'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
     delete:
       summary: Delete Player
       operationId: delete_player_api_v1_players__player_id__delete
@@ -595,7 +624,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/SonosStopRequest'
+              $ref: '#/components/schemas/SonosLineInPlayRequest'
         required: true
       responses:
         '200':
@@ -920,6 +949,11 @@ components:
           type: boolean
           title: Is Active
           default: true
+        sonos_line_in_speaker_id:
+          type: string
+          title: Sonos Line In Speaker Id
+          description: Sonos speaker id from /sonos/speakers for this Plexamp's line-in; empty = none.
+          default: ''
       type: object
       required:
       - name
@@ -944,12 +978,25 @@ components:
         id:
           type: integer
           title: Id
+        sonos_line_in_speaker_id:
+          type: string
+          title: Sonos Line In Speaker Id
+          description: Sonos speaker id from /sonos/speakers for this Plexamp's line-in; empty = none.
+          default: ''
       type: object
       required:
       - name
       - host
       - id
       title: PlayerRead
+    PlayerPatch:
+      properties:
+        sonos_line_in_speaker_id:
+          type: string
+          title: Sonos Line In Speaker Id
+          description: Set to empty string to clear; omit property to leave unchanged.
+      type: object
+      title: PlayerPatch
     PlexAuthCompleteRequest:
       properties:
         pin_id:
@@ -1086,18 +1133,6 @@ components:
           title: Sonos Interface Addr
           description: Optional interface address for SSDP (advanced).
           default: ''
-        sonos_line_in_source_name:
-          type: string
-          title: Sonos Line In Source Name
-          description: Substring of the Sonos player name that has Plexamp on line-in
-            (e.g. Fridge).
-          default: ''
-        sonos_line_in_source_uid:
-          type: string
-          title: Sonos Line In Source Uid
-          description: "Optional exact Sonos player UID (RINCON_\u2026); overrides\
-            \ name when set."
-          default: ''
         plex_server_url_effective:
           type: string
           title: Plex Server Url Effective
@@ -1137,18 +1172,6 @@ components:
           type: string
           title: Sonos Interface Addr
           description: Optional interface address for SSDP (advanced).
-          default: ''
-        sonos_line_in_source_name:
-          type: string
-          title: Sonos Line In Source Name
-          description: Substring of the Sonos player name that has Plexamp on line-in
-            (e.g. Fridge).
-          default: ''
-        sonos_line_in_source_uid:
-          type: string
-          title: Sonos Line In Source Uid
-          description: "Optional exact Sonos player UID (RINCON_\u2026); overrides\
-            \ name when set."
           default: ''
       type: object
       title: RuntimeSetupUpdate
@@ -1211,6 +1234,21 @@ components:
           title: Speaker Ids
       type: object
       title: SonosStopRequest
+    SonosLineInPlayRequest:
+      properties:
+        speaker_ids:
+          items:
+            type: string
+          type: array
+          title: Speaker Ids
+        player_id:
+          type: integer
+          title: Player Id
+          description: Plexamp player whose saved line-in Sonos id is used.
+      type: object
+      required:
+      - player_id
+      title: SonosLineInPlayRequest
     SonosVolumeAdjustRequest:
       properties:
         speaker_ids:
