@@ -475,7 +475,9 @@ function App() {
         </section>
 
         </div>
+      </div>
 
+      <div className="controlRailDock">
         <aside className="controlRail" aria-label="Playback controls">
         <fieldset className="controlFrameset">
           <legend>Sonos</legend>
