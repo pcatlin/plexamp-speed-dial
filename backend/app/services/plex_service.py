@@ -25,7 +25,7 @@ class PlexService:
     def __init__(self) -> None:
         self._media_limit = settings.plex_media_limit
 
-    def _make_server_session(self, ssl_verify: bool) -> requests.Session:
+    def _make_server_session(self, ssl_verify: bool, *, request_timeout: float = 30) -> requests.Session:
         if not ssl_verify:
             try:
                 import urllib3
@@ -35,6 +35,13 @@ class PlexService:
                 pass
         session = requests.Session()
         session.verify = ssl_verify
+        base_request = session.request
+
+        def request_with_timeout(method: str, url: str, **kwargs: object) -> requests.Response:
+            kwargs.setdefault("timeout", request_timeout)
+            return base_request(method, url, **kwargs)
+
+        session.request = request_with_timeout  # type: ignore[method-assign]
         return session
 
     def _plex_tv_headers(self) -> dict[str, str]:
@@ -90,13 +97,13 @@ class PlexService:
         except Exception:  # noqa: BLE001
             return None
 
-    def connect_server(self, token: str, conn: PlexConn) -> PlexServer:
+    def connect_server(self, token: str, conn: PlexConn, *, request_timeout: float = 30) -> PlexServer:
         base = conn.base_url.strip().rstrip("/")
         if not base:
             raise ValueError(
                 "Plex Media Server URL is empty. Set it under Setup.",
             )
-        session = self._make_server_session(conn.ssl_verify)
+        session = self._make_server_session(conn.ssl_verify, request_timeout=request_timeout)
         try:
             return PlexServer(base, token, session=session)
         except Unauthorized as exc:
@@ -323,6 +330,18 @@ class PlexService:
             raise ValueError("Selected collection has no playable albums.")
         return self._item_to_media(random.choice(picks), "album")
 
+    def _tracks_preview_from_iter(self, children: object, cap: int) -> list[MediaItem]:
+        """Collect up to `cap` tracks without loading the full Plex children list into memory."""
+        out: list[MediaItem] = []
+        for child in children:
+            if len(out) >= cap:
+                break
+            ctype = (getattr(child, "type", "") or "").lower()
+            if ctype != "track":
+                continue
+            out.append(self._item_to_media(child, "track"))
+        return out
+
     def get_tracks_for_parent(
         self,
         parent_id: str,
@@ -331,6 +350,7 @@ class PlexService:
         conn: PlexConn,
         *,
         limit: int = 50,
+        request_timeout: float = 10,
     ) -> list[MediaItem]:
         """Return up to `limit` tracks (capped at 50) for a playlist, album, or artist."""
         fam = family.lower()
@@ -342,7 +362,7 @@ class PlexService:
         except ValueError as exc:
             raise ValueError(f"Invalid parent id: {parent_id!r}") from exc
 
-        server = self.connect_server(token, conn)
+        server = self.connect_server(token, conn, request_timeout=float(request_timeout))
         try:
             item = server.fetchItem(rk)
         except NotFound as exc:
@@ -357,35 +377,19 @@ class PlexService:
             if pt and pt != "audio":
                 raise ValueError("Only audio playlists can list tracks here.")
             try:
-                children = list(item.items())
+                children = item.items()
             except Exception as exc:  # noqa: BLE001
                 raise ValueError(f"Unable to load playlist items: {exc}") from exc
-        elif fam == "album":
+        else:
             tracks_fn = getattr(item, "tracks", None)
             if not callable(tracks_fn):
-                raise ValueError("Album has no track listing.")
+                raise ValueError(f"{fam.title()} has no track listing.")
             try:
-                children = list(tracks_fn())
+                children = tracks_fn()
             except Exception as exc:  # noqa: BLE001
-                raise ValueError(f"Unable to load album tracks: {exc}") from exc
-        else:  # artist
-            tracks_fn = getattr(item, "tracks", None)
-            if not callable(tracks_fn):
-                raise ValueError("Artist has no track listing.")
-            try:
-                children = list(tracks_fn())
-            except Exception as exc:  # noqa: BLE001
-                raise ValueError(f"Unable to load artist tracks: {exc}") from exc
+                raise ValueError(f"Unable to load {fam} tracks: {exc}") from exc
 
-        out: list[MediaItem] = []
-        for child in children:
-            if len(out) >= cap:
-                break
-            ctype = (getattr(child, "type", "") or "").lower()
-            if ctype != "track":
-                continue
-            out.append(self._item_to_media(child, "track"))
-        return out
+        return self._tracks_preview_from_iter(children, cap)
 
     @staticmethod
     def _try_section_search(section: MusicSection, libtype: str, maxresults: int = 25, **kwargs: object) -> list:

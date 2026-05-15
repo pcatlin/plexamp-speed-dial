@@ -88,9 +88,14 @@ export function playbackStateWebSocketUrl(): string {
   return `${wsProto}//${host}${API_BASE}/playback-state/ws`;
 }
 
+const TRACKS_FOR_PARENT_TIMEOUT_MS = 10_000;
+
 function extractApiErrorDetail(bodyText: string, status: number): string {
   const raw = bodyText.trim();
   if (!raw) return `Request failed (${status})`;
+  if (/504\s+Gateway\s+Time-?out/i.test(raw) || raw.includes("<title>504")) {
+    return "The server timed out loading tracks. Try again or choose a smaller playlist or album.";
+  }
   try {
     const parsed = JSON.parse(raw) as { detail?: unknown };
     const detail = parsed.detail;
@@ -108,16 +113,52 @@ function extractApiErrorDetail(bodyText: string, status: number): string {
   return raw;
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`, {
-    headers: { "Content-Type": "application/json" },
-    ...init,
-  });
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(extractApiErrorDetail(errorText, response.status));
+export type ApiRequestOptions = {
+  signal?: AbortSignal;
+  timeoutMs?: number;
+};
+
+async function request<T>(path: string, init?: RequestInit & ApiRequestOptions): Promise<T> {
+  const { timeoutMs, signal: outerSignal, ...fetchInit } = init ?? {};
+  const controller = new AbortController();
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+  if (timeoutMs != null) {
+    timeoutId = setTimeout(() => controller.abort(), timeoutMs);
   }
-  return response.json() as Promise<T>;
+
+  const onOuterAbort = () => controller.abort();
+  if (outerSignal) {
+    if (outerSignal.aborted) {
+      controller.abort();
+    } else {
+      outerSignal.addEventListener("abort", onOuterAbort);
+    }
+  }
+
+  try {
+    const response = await fetch(`${API_BASE}${path}`, {
+      ...fetchInit,
+      headers: { "Content-Type": "application/json", ...(fetchInit.headers as HeadersInit | undefined) },
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(extractApiErrorDetail(errorText, response.status));
+    }
+    return response.json() as Promise<T>;
+  } catch (err) {
+    if (err instanceof Error && err.name === "AbortError") {
+      if (timeoutMs != null) {
+        throw new Error(`Request timed out after ${Math.round(timeoutMs / 1000)} seconds`);
+      }
+      throw new Error("Request was cancelled");
+    }
+    throw err;
+  } finally {
+    if (timeoutId != null) clearTimeout(timeoutId);
+    outerSignal?.removeEventListener("abort", onOuterAbort);
+  }
 }
 
 export const api = {
@@ -152,9 +193,15 @@ export const api = {
   collections: () =>
     request<{ id: string; title: string }[]>(`/media/collections`),
   randomAlbum: (collectionId: string) => request<MediaItem>(`/media/random-album?collection_id=${encodeURIComponent(collectionId)}`),
-  mediaTracksForParent: (family: "playlist" | "album" | "artist", parentId: string, limit = 50) =>
+  mediaTracksForParent: (
+    family: "playlist" | "album" | "artist",
+    parentId: string,
+    limit = 50,
+    options?: ApiRequestOptions,
+  ) =>
     request<MediaItem[]>(
       `/media/tracks-for-parent?family=${encodeURIComponent(family)}&parent_id=${encodeURIComponent(parentId)}&limit=${encodeURIComponent(String(limit))}`,
+      { ...options, timeoutMs: options?.timeoutMs ?? TRACKS_FOR_PARENT_TIMEOUT_MS },
     ),
   speakers: () => request<Speaker[]>("/sonos/speakers"),
   groupPresets: () => request<GroupPreset[]>("/sonos/group-presets"),

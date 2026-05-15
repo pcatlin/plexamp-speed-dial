@@ -247,8 +247,11 @@ def media_tracks(db: Session = Depends(get_db), creds: PlexCredential = Depends(
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
+TRACKS_FOR_PARENT_TIMEOUT_SECONDS = 10.0
+
+
 @router.get("/media/tracks-for-parent", response_model=list[MediaItem])
-def media_tracks_for_parent(
+async def media_tracks_for_parent(
     family: Literal["playlist", "album", "artist"],
     parent_id: str,
     limit: int = Query(50, ge=1, le=50),
@@ -256,14 +259,25 @@ def media_tracks_for_parent(
     creds: PlexCredential = Depends(require_plex_creds),
 ):
     assert creds.auth_token
+    conn = resolve_plex_conn(db)
     try:
-        return plex_service.get_tracks_for_parent(
-            parent_id,
-            family,
-            creds.auth_token,
-            resolve_plex_conn(db),
-            limit=limit,
+        return await asyncio.wait_for(
+            asyncio.to_thread(
+                plex_service.get_tracks_for_parent,
+                parent_id,
+                family,
+                creds.auth_token,
+                conn,
+                limit=limit,
+                request_timeout=TRACKS_FOR_PARENT_TIMEOUT_SECONDS,
+            ),
+            timeout=TRACKS_FOR_PARENT_TIMEOUT_SECONDS,
         )
+    except asyncio.TimeoutError as exc:
+        raise HTTPException(
+            status_code=504,
+            detail="Loading tracks took too long (10s). Try again or choose a smaller playlist or album.",
+        ) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 

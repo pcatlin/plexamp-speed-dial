@@ -179,16 +179,18 @@ export function PickMusicSection({
       return;
     }
     const family = pickTab as "playlist" | "album" | "artist";
+    const controller = new AbortController();
     let cancelled = false;
     setPreviewTracks([]);
     setPreviewTracksLoading(true);
     api
-      .mediaTracksForParent(family, selectedMedia.id, 50)
+      .mediaTracksForParent(family, selectedMedia.id, 50, { signal: controller.signal })
       .then((rows) => {
         if (!cancelled) setPreviewTracks(rows);
       })
       .catch((err) => {
         if (!cancelled) {
+          if (err instanceof Error && err.message === "Request was cancelled") return;
           onToast(err instanceof Error ? err.message : String(err));
           setPreviewTracks([]);
         }
@@ -198,6 +200,7 @@ export function PickMusicSection({
       });
     return () => {
       cancelled = true;
+      controller.abort();
     };
   }, [authConnected, pickTab, selectedMedia?.id, selectedMedia?.type, onToast]);
 

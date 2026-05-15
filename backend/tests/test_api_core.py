@@ -10,10 +10,11 @@ def test_media_tracks_for_parent_ok(client, db_session, monkeypatch):
 
     import app.api.routes as routes_module
 
-    def fake(parent_id, family, token, conn, *, limit=50):  # noqa: ANN001
+    def fake(parent_id, family, token, conn, *, limit=50, request_timeout=10):  # noqa: ANN001
         assert parent_id == "12"
         assert family == "album"
         assert limit == 50
+        assert request_timeout == 10
         return [MediaItem(id="t1", title="Song A", subtitle="Artist — Album", type="track")]
 
     monkeypatch.setattr(routes_module.plex_service, "get_tracks_for_parent", fake)
