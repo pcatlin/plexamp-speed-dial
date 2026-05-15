@@ -4,6 +4,11 @@ import { api, API_BASE, MediaItem, Player, Speaker, SpeedDial, playbackStateWebS
 import CreditsPage from "./CreditsPage";
 import { PickMusicSection, PickTab, playMediaTypeForTab } from "./PickMusicSection";
 import { SetupModal } from "./SetupModal";
+import {
+  loadSelectedSpeakerIds,
+  reconcileSelectedSpeakerIds,
+  saveSelectedSpeakerIds,
+} from "./playToStorage";
 import { Toast } from "./Toast";
 import { useToast } from "./useToast";
 
@@ -94,7 +99,7 @@ function App() {
   const [pickTab, setPickTab] = useState<PickTab>("playlist");
   const [selectedMedia, setSelectedMedia] = useState<MediaItem | null>(null);
   const [speakers, setSpeakers] = useState<Speaker[]>([]);
-  const [selectedSpeakers, setSelectedSpeakers] = useState<string[]>([]);
+  const [selectedSpeakers, setSelectedSpeakers] = useState<string[]>(() => loadSelectedSpeakerIds());
   const [players, setPlayers] = useState<Player[]>([]);
   const [selectedPlayer, setSelectedPlayer] = useState<number | null>(null);
   const [speedDial, setSpeedDial] = useState<SpeedDial[]>([]);
@@ -143,6 +148,11 @@ function App() {
     }
   }, []);
 
+  const applySpeakerList = useCallback((speakerRows: Speaker[]) => {
+    setSpeakers(speakerRows);
+    setSelectedSpeakers((current) => reconcileSelectedSpeakerIds(current, speakerRows.map((s) => s.id)));
+  }, []);
+
   const reloadPlayersSelection = async (nextPlayers: Player[]) => {
     setPlayers(nextPlayers);
     setSelectedPlayer((current) => {
@@ -156,7 +166,7 @@ function App() {
     const authStatus = await api.authStatus();
     setAuthConnected(authStatus.connected);
     const [speakerRows, playerRows, speedDialRows] = await Promise.all([api.speakers(), api.players(), api.speedDial()]);
-    setSpeakers(speakerRows);
+    applySpeakerList(speakerRows);
     await reloadPlayersSelection(playerRows);
     setSpeedDial(speedDialRows);
     await reloadCollections(authStatus.connected);
@@ -165,6 +175,10 @@ function App() {
   useEffect(() => {
     refreshAll().catch((error) => showToast(String(error)));
   }, []);
+
+  useEffect(() => {
+    saveSelectedSpeakerIds(selectedSpeakers);
+  }, [selectedSpeakers]);
 
   useEffect(() => {
     reloadCollections(authConnected).catch(() => undefined);
@@ -295,7 +309,7 @@ function App() {
 
   const reloadSpeakersOnly = async () => {
     try {
-      setSpeakers(await api.speakers());
+      applySpeakerList(await api.speakers());
     } catch (err) {
       showToast(err instanceof Error ? err.message : String(err));
     }
