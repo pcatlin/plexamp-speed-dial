@@ -68,6 +68,14 @@ function IconVolumeUp() {
   );
 }
 
+function IconChevronDown() {
+  return (
+    <svg className="playToChevron" viewBox="0 0 24 24" aria-hidden>
+      <path fill="currentColor" d="M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z" />
+    </svg>
+  );
+}
+
 function App() {
   const [route, setRoute] = useState<"app" | "credits">(() => routeFromHash(window.location.hash));
 
@@ -104,6 +112,18 @@ function App() {
     () => players.find((player) => player.id === selectedPlayer)?.name ?? "No player selected",
     [players, selectedPlayer],
   );
+
+  const hasPlayTargetSelection = selectedSpeakers.length > 0 || selectedPlayer !== null;
+
+  const playToSummary = useMemo(() => {
+    if (!hasPlayTargetSelection) return "Nothing selected";
+    const names = speakers.filter((s) => selectedSpeakers.includes(s.id)).map((s) => s.name);
+    const speakerPart = names.length > 0 ? names.join(", ") : "No speakers";
+    const playerPart = selectedPlayer !== null ? selectedPlayerName : "No Plexamp player";
+    return `${speakerPart} · ${playerPart}`;
+  }, [hasPlayTargetSelection, speakers, selectedSpeakers, selectedPlayer, selectedPlayerName]);
+
+  const [playToDetailsOpen, setPlayToDetailsOpen] = useState(() => !hasPlayTargetSelection);
 
   const reloadCollections = useCallback(async (connected: boolean) => {
     if (!connected) {
@@ -212,6 +232,10 @@ function App() {
     setSelectedSpeakers((current) =>
       current.includes(speakerId) ? current.filter((id) => id !== speakerId) : [...current, speakerId],
     );
+  };
+
+  const togglePlayer = (playerId: number) => {
+    setSelectedPlayer((current) => (current === playerId ? null : playerId));
   };
 
   const runPlay = async (payload?: Omit<SpeedDial, "id" | "label">) => {
@@ -405,29 +429,68 @@ function App() {
           onToast={showToast}
         />
 
-        <section className="card">
-          <h2>Where to Play</h2>
-          <h3>Sonos Speakers</h3>
-          <p className="hint">
-            Which speakers to play to. Leave all unchecked if you only want Plexamp without Sonos.
-          </p>
-          {speakers.length === 0 ? <p className="hint">No speakers yet — enter seed IPs under Setup when using Docker/VLAN.</p> : null}
-          {speakers.map((speaker) => (
-            <label key={speaker.id} className="checkboxRow">
-              <input type="checkbox" checked={selectedSpeakers.includes(speaker.id)} onChange={() => toggleSpeaker(speaker.id)} />
-              {speaker.name}
-            </label>
-          ))}
-          <h3>Plexamp Player</h3>
-          <select value={selectedPlayer ?? ""} onChange={(event) => setSelectedPlayer(Number(event.target.value))}>
-            <option value="">Choose player</option>
-            {players.map((player) => (
-              <option key={player.id} value={player.id}>
-                {player.name}
-              </option>
-            ))}
-          </select>
-          {players.length === 0 ? <p className="hint">Add Plexamp player in Setup.</p> : null}
+        <section className="card playToCard">
+          <details
+            className="playToDetails"
+            open={playToDetailsOpen}
+            onToggle={(e) => setPlayToDetailsOpen(e.currentTarget.open)}
+          >
+            <summary className="playToSummary">
+              <span className="playToSummaryText">
+                <span className="playToSummaryTitle">Play to</span>
+                <span className="playToSummarySelection">{playToSummary}</span>
+              </span>
+              <IconChevronDown />
+            </summary>
+            <div className="playToBody">
+              <h3>Sonos Speakers</h3>
+              <p className="hint playToSpeakersHint">
+                Which speakers to play to. Leave all unchecked if you only want Plexamp without Sonos.
+              </p>
+              {speakers.length === 0 ? (
+                <p className="hint">No speakers yet — enter seed IPs under Setup when using Docker/VLAN.</p>
+              ) : (
+                <div className="pickGrid" role="group" aria-label="Sonos speakers">
+                  {speakers.map((speaker) => {
+                    const selected = selectedSpeakers.includes(speaker.id);
+                    return (
+                      <button
+                        key={speaker.id}
+                        type="button"
+                        className={`pickGridBtn${selected ? " pickGridBtn--selected" : ""}`}
+                        aria-pressed={selected}
+                        onClick={() => toggleSpeaker(speaker.id)}
+                      >
+                        {speaker.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+              <h3 className="playToPlayerHeading">Plexamp Player</h3>
+              <p className="hint playToPlayerHint">Choose which Plexamp player plays the music.</p>
+              {players.length === 0 ? (
+                <p className="hint">Add Plexamp player in Setup.</p>
+              ) : (
+                <div className="pickGrid" role="group" aria-label="Plexamp players">
+                  {players.map((player) => {
+                    const selected = selectedPlayer === player.id;
+                    return (
+                      <button
+                        key={player.id}
+                        type="button"
+                        className={`pickGridBtn${selected ? " pickGridBtn--selected" : ""}`}
+                        aria-pressed={selected}
+                        onClick={() => togglePlayer(player.id)}
+                      >
+                        {player.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </details>
         </section>
 
         <section className="card sticky">

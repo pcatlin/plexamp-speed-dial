@@ -207,6 +207,121 @@
   margin-bottom: 0.5rem;
 }
 
+.playToDetails {
+  margin: 0;
+}
+
+.playToDetails > summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+}
+
+.playToSummaryText {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.playToChevron {
+  width: 1.35rem;
+  height: 1.35rem;
+  flex-shrink: 0;
+  color: #6b7280;
+  transition: transform 0.2s ease;
+}
+
+.playToDetails[open] > summary .playToChevron {
+  transform: rotate(180deg);
+}
+
+.playToDetails > summary::-webkit-details-marker {
+  display: none;
+}
+
+.playToSummaryTitle {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.playToSummarySelection {
+  font-size: 0.88rem;
+  font-weight: 500;
+  color: #6b7280;
+  line-height: 1.35;
+}
+
+.playToBody {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid #e5e7eb;
+}
+
+.playToBody h3 {
+  margin: 0 0 0.35rem;
+  font-size: 1rem;
+}
+
+.playToSpeakersHint {
+  margin-top: 0.1rem;
+  margin-bottom: 0.5rem;
+}
+
+.playToBody .playToPlayerHeading {
+  margin-top: 1rem;
+}
+
+.playToPlayerHint {
+  margin-top: 0.15rem;
+  margin-bottom: 0.5rem;
+}
+
+.pickGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(8rem, 1fr));
+  gap: 0.55rem;
+}
+
+.pickGridBtn {
+  display: block;
+  width: 100%;
+  padding: 0.7rem 0.75rem;
+  font-size: 0.92rem;
+  font-weight: 500;
+  line-height: 1.25;
+  text-align: center;
+  color: #1f2937;
+  background: #fff;
+  border: 2px solid #c9ced6;
+  border-radius: 10px;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.pickGridBtn:hover {
+  border-color: #9ca3af;
+}
+
+.pickGridBtn--selected {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 1px #2563eb;
+  background: #f8fbff;
+}
+
+.pickGridBtn:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
 .pickPanel .artistRadioHint {
   margin-top: -0.15rem;
   margin-bottom: 0.65rem;
