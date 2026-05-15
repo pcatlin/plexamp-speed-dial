@@ -441,23 +441,25 @@ export function PickMusicSection({
               <span className="trackPreviewCount"> (showing {previewTracks.length})</span>
             ) : null}
           </div>
-          {previewTracksLoading ? (
-            <p className="hint subtle">Loading tracks…</p>
-          ) : previewTracks.length > 0 ? (
-            <ol className="trackPreviewList" aria-label="Tracks in this selection">
-              {previewTracks.map((track, index) => (
-                <li key={track.id} className="trackPreviewRow">
-                  <span className="trackPreviewIdx">{index + 1}</span>
-                  <span className="trackPreviewCell">
-                    <span className="trackPreviewTitle">{track.title}</span>
-                    {track.subtitle ? <span className="trackPreviewSub">{track.subtitle}</span> : null}
-                  </span>
-                </li>
-              ))}
-            </ol>
-          ) : (
-            <p className="hint subtle">No tracks returned for this item.</p>
-          )}
+          <div className="trackPreviewBody">
+            {previewTracksLoading ? (
+              <p className="hint subtle trackPreviewPlaceholder">Loading tracks…</p>
+            ) : previewTracks.length > 0 ? (
+              <ol className="trackPreviewList" aria-label="Tracks in this selection">
+                {previewTracks.map((track, index) => (
+                  <li key={track.id} className="trackPreviewRow">
+                    <span className="trackPreviewIdx">{index + 1}</span>
+                    <span className="trackPreviewCell">
+                      <span className="trackPreviewTitle">{track.title}</span>
+                      {track.subtitle ? <span className="trackPreviewSub">{track.subtitle}</span> : null}
+                    </span>
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <p className="hint subtle trackPreviewPlaceholder">No tracks returned for this item.</p>
+            )}
+          </div>
         </div>
       ) : null}
     </section>

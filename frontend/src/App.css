@@ -340,6 +340,14 @@
   margin-top: 0.85rem;
 }
 
+.trackPreviewBody {
+  min-height: 256px;
+}
+
+.trackPreviewPlaceholder {
+  margin: 0.35rem 0 0;
+}
+
 .trackPreviewCount {
   font-weight: 400;
   color: #6b7280;
@@ -349,7 +357,7 @@
   margin: 0.35rem 0 0;
   padding: 0;
   list-style: none;
-  max-height: min(50vh, 16rem);
+  max-height: min(50vh, 256px);
   overflow-y: auto;
   border: 1px solid #e5e7eb;
   border-radius: 8px;
