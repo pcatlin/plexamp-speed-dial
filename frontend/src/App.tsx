@@ -4,6 +4,8 @@ import { api, API_BASE, MediaItem, Player, Speaker, SpeedDial, playbackStateWebS
 import CreditsPage from "./CreditsPage";
 import { PickMusicSection, PickTab, playMediaTypeForTab } from "./PickMusicSection";
 import { SetupModal } from "./SetupModal";
+import { Toast } from "./Toast";
+import { useToast } from "./useToast";
 
 function routeFromHash(hash: string): "app" | "credits" {
   const path = hash.replace(/^#/, "");
@@ -50,6 +52,22 @@ function IconSkipNext() {
   );
 }
 
+function IconVolumeDown() {
+  return (
+    <svg className="mediaCtrlIcon" viewBox="0 0 24 24" aria-hidden>
+      <path fill="currentColor" d="M18.5 12c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM5 9v6h4l5 5V4L9 9H5z" />
+    </svg>
+  );
+}
+
+function IconVolumeUp() {
+  return (
+    <svg className="mediaCtrlIcon" viewBox="0 0 24 24" aria-hidden>
+      <path fill="currentColor" d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z" />
+    </svg>
+  );
+}
+
 function App() {
   const [route, setRoute] = useState<"app" | "credits">(() => routeFromHash(window.location.hash));
 
@@ -72,12 +90,12 @@ function App() {
   const [players, setPlayers] = useState<Player[]>([]);
   const [selectedPlayer, setSelectedPlayer] = useState<number | null>(null);
   const [speedDial, setSpeedDial] = useState<SpeedDial[]>([]);
-  const [message, setMessage] = useState("Ready.");
+  const { toast, showToast } = useToast();
   const [collections, setCollections] = useState<{ id: string; title: string }[]>([]);
   const [selectedCollectionId, setSelectedCollectionId] = useState("");
   const [setupOpen, setSetupOpen] = useState(false);
   const [artistRadio, setArtistRadio] = useState(true);
-  const [shufflePlaylist, setShufflePlaylist] = useState(false);
+  const [shufflePlaylist, setShufflePlaylist] = useState(true);
   const [shuffleArtist, setShuffleArtist] = useState(false);
   const [sonosPlaying, setSonosPlaying] = useState<boolean | null>(null);
   const [plexampPlaying, setPlexampPlaying] = useState<boolean | null>(null);
@@ -99,7 +117,7 @@ function App() {
       setSelectedCollectionId(rows[0]?.id ?? "");
     } catch (err) {
       const detail = err instanceof Error ? err.message : String(err);
-      setMessage(`Collections failed: ${detail}`);
+      showToast(`Collections failed: ${detail}`);
       setCollections([]);
       setSelectedCollectionId("");
     }
@@ -125,7 +143,7 @@ function App() {
   };
 
   useEffect(() => {
-    refreshAll().catch((error) => setMessage(String(error)));
+    refreshAll().catch((error) => showToast(String(error)));
   }, []);
 
   useEffect(() => {
@@ -202,7 +220,7 @@ function App() {
     const playerId = payload?.player_id ?? selectedPlayer;
     const speakerIds = payload?.speaker_ids ?? selectedSpeakers;
     if (!mediaId || !playerId) {
-      setMessage("Select media and Plexamp player first.");
+      showToast("Select media and Plexamp player first.");
       return;
     }
     const shufflePlay =
@@ -217,12 +235,12 @@ function App() {
       ...(mediaType === "artist" ? { artist_radio: payload?.artist_radio ?? artistRadio } : {}),
       shuffle: shufflePlay,
     });
-    setMessage(result.details);
+    showToast(result.details);
   };
 
   const saveSpeedDial = async () => {
     if (!selectedMedia || !selectedPlayer) {
-      setMessage("Select media and player before saving.");
+      showToast("Select media and player before saving.");
       return;
     }
     const mt = playMediaTypeForTab(pickTab);
@@ -237,7 +255,7 @@ function App() {
       ...(mt === "playlist" || mt === "artist" ? { shuffle: mt === "playlist" ? shufflePlaylist : shuffleArtist } : {}),
     });
     setSpeedDial(await api.speedDial());
-    setMessage("Saved to speed dial.");
+    showToast("Saved to speed dial.");
   };
 
   const refreshPlexAuthFromApi = useCallback(async () => {
@@ -255,90 +273,90 @@ function App() {
     try {
       setSpeakers(await api.speakers());
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : String(err));
+      showToast(err instanceof Error ? err.message : String(err));
     }
   };
 
   const toggleSonosLineInTransport = async () => {
     if (selectedSpeakers.length === 0) {
-      setMessage("Select at least one Sonos speaker to play line-in.");
+      showToast("Select at least one Sonos speaker to play line-in.");
       return;
     }
     try {
       if (sonosPlaying) {
         const result = await api.sonosStop(selectedSpeakers);
-        setMessage(result.details);
+        showToast(result.details);
         setSonosPlaying(false);
       } else {
         if (!selectedPlayer) {
-          setMessage("Select a Plexamp player first (line-in is configured per player in Setup).");
+          showToast("Select a Plexamp player first (line-in is configured per player in Setup).");
           return;
         }
         const result = await api.sonosPlayLineIn(selectedSpeakers, selectedPlayer);
-        setMessage(result.details);
+        showToast(result.details);
         setSonosPlaying(true);
       }
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : String(err));
+      showToast(err instanceof Error ? err.message : String(err));
     }
   };
 
   const skipNextPlexamp = async () => {
     if (!selectedPlayer) {
-      setMessage("Select a Plexamp player first.");
+      showToast("Select a Plexamp player first.");
       return;
     }
     const result = await api.plexampSkipNext(selectedPlayer);
-    setMessage(result.details);
+    showToast(result.details);
   };
 
   const skipPreviousPlexamp = async () => {
     if (!selectedPlayer) {
-      setMessage("Select a Plexamp player first.");
+      showToast("Select a Plexamp player first.");
       return;
     }
     const result = await api.plexampSkipPrevious(selectedPlayer);
-    setMessage(result.details);
+    showToast(result.details);
   };
 
   const togglePlexampPlayPause = async () => {
     if (!selectedPlayer) {
-      setMessage("Select a Plexamp player first.");
+      showToast("Select a Plexamp player first.");
       return;
     }
     try {
       if (plexampPlaying) {
         const result = await api.plexampPause(selectedPlayer);
-        setMessage(result.details);
+        showToast(result.details);
         setPlexampPlaying(false);
       } else {
         const result = await api.plexampResume(selectedPlayer);
-        setMessage(result.details);
+        showToast(result.details);
         setPlexampPlaying(true);
       }
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : String(err));
+      showToast(err instanceof Error ? err.message : String(err));
     }
   };
 
   const adjustSonosVolume = async (delta: number) => {
     if (selectedSpeakers.length === 0) {
-      setMessage("Select at least one Sonos speaker to change volume.");
+      showToast("Select at least one Sonos speaker to change volume.");
       return;
     }
     const result = await api.sonosVolumeAdjust(selectedSpeakers, delta);
-    setMessage(result.details);
+    showToast(result.details);
   };
 
   const deleteSpeedDial = async (id: number) => {
     await api.deleteSpeedDial(id);
     setSpeedDial(await api.speedDial());
-    setMessage("Removed from speed dial.");
+    showToast("Removed from speed dial.");
   };
 
   const playSpeedDialFavorite = async (favorite: SpeedDial) => {
     const result = await api.speedDialPlay(favorite.id);
-    setMessage(result.details);
+    showToast(result.details);
   };
 
   if (route === "credits") {
@@ -346,8 +364,10 @@ function App() {
   }
 
   return (
-    <div className="appShell">
-      <div className="appMain">
+    <>
+      <Toast toast={toast} />
+      <div className="appShell">
+        <div className="appMain">
         <header className="headerRow">
           <h1>Plexamp Sonos Speed Dial</h1>
           <button type="button" className="ghost" onClick={() => setSetupOpen(true)}>
@@ -364,7 +384,7 @@ function App() {
           }}
           afterRuntimeSaved={reloadSpeakersOnly}
           onPlexAuthRefresh={refreshPlexAuthFromApi}
-          onToast={(t) => setMessage(t)}
+          onToast={showToast}
         />
 
         <PickMusicSection
@@ -382,7 +402,7 @@ function App() {
           onShufflePlaylistChange={setShufflePlaylist}
           shuffleArtist={shuffleArtist}
           onShuffleArtistChange={setShuffleArtist}
-          onToast={setMessage}
+          onToast={showToast}
         />
 
         <section className="card">
@@ -412,10 +432,10 @@ function App() {
 
         <section className="card sticky">
           <div className="stickyActions">
-            <button type="button" className="primary" onClick={() => runPlay().catch((error) => setMessage(error.message))}>
+            <button type="button" className="primary" onClick={() => runPlay().catch((error) => showToast(error.message))}>
               Start
             </button>
-            <button type="button" onClick={() => saveSpeedDial().catch((error) => setMessage(error.message))}>
+            <button type="button" onClick={() => saveSpeedDial().catch((error) => showToast(error.message))}>
               Add to speed dial
             </button>
           </div>
@@ -430,7 +450,7 @@ function App() {
                 <button
                   type="button"
                   className="favoritePlay"
-                  onClick={() => playSpeedDialFavorite(favorite).catch((error) => setMessage(error.message))}
+                  onClick={() => playSpeedDialFavorite(favorite).catch((error) => showToast(error.message))}
                 >
                   {favorite.has_cover_art ? (
                     <img
@@ -446,7 +466,7 @@ function App() {
                   ) : null}
                   <span className="favoriteLabel">{favorite.label}</span>
                 </button>
-                <button className="danger" onClick={() => deleteSpeedDial(favorite.id).catch((error) => setMessage(error.message))}>
+                <button className="danger" onClick={() => deleteSpeedDial(favorite.id).catch((error) => showToast(error.message))}>
                   Delete
                 </button>
               </div>
@@ -454,15 +474,9 @@ function App() {
           </div>
         </section>
 
-        <p className="message">{message}</p>
-        <footer className="creditsFooter">
-          <a href="#/credits" className="creditsLink">
-            Credits
-          </a>
-        </footer>
-      </div>
+        </div>
 
-      <aside className="controlRail" aria-label="Playback controls">
+        <aside className="controlRail" aria-label="Playback controls">
         <fieldset className="controlFrameset">
           <legend>Sonos</legend>
           <div className="mediaToolbar mediaToolbarStack" role="group" aria-label="Sonos selected speakers">
@@ -471,7 +485,7 @@ function App() {
               className="iconBtn"
               aria-label={sonosPlaying ? "Stop selected Sonos speakers" : "Play line-in on selected Sonos speakers"}
               title={sonosPlaying ? "Stop selected speakers" : "Play line-in on selected speakers"}
-              onClick={() => toggleSonosLineInTransport().catch((e) => setMessage(e.message))}
+              onClick={() => toggleSonosLineInTransport().catch((e) => showToast(e.message))}
             >
               {sonosPlaying ? <IconStop /> : <IconPlay />}
             </button>
@@ -480,22 +494,18 @@ function App() {
               className="iconBtn"
               aria-label="Lower volume on selected Sonos speakers"
               title="Volume down (selected speakers)"
-              onClick={() => adjustSonosVolume(-5).catch((e) => setMessage(e.message))}
+              onClick={() => adjustSonosVolume(-5).catch((e) => showToast(e.message))}
             >
-              <span className="volStepLabel" aria-hidden>
-                −
-              </span>
+              <IconVolumeDown />
             </button>
             <button
               type="button"
               className="iconBtn"
               aria-label="Raise volume on selected Sonos speakers"
               title="Volume up (selected speakers)"
-              onClick={() => adjustSonosVolume(5).catch((e) => setMessage(e.message))}
+              onClick={() => adjustSonosVolume(5).catch((e) => showToast(e.message))}
             >
-              <span className="volStepLabel" aria-hidden>
-                +
-              </span>
+              <IconVolumeUp />
             </button>
           </div>
         </fieldset>
@@ -512,7 +522,7 @@ function App() {
                   ? "Pause Plexamp playback"
                   : "Resume playback on Plexamp (current queue; does not start a new queue)"
               }
-              onClick={() => togglePlexampPlayPause().catch((e) => setMessage(e.message))}
+              onClick={() => togglePlexampPlayPause().catch((e) => showToast(e.message))}
             >
               {plexampPlaying ? <IconPause /> : <IconPlay />}
             </button>
@@ -521,17 +531,18 @@ function App() {
               className="iconBtn"
               aria-label="Previous track"
               title="Previous track"
-              onClick={() => skipPreviousPlexamp().catch((e) => setMessage(e.message))}
+              onClick={() => skipPreviousPlexamp().catch((e) => showToast(e.message))}
             >
               <IconSkipPrevious />
             </button>
-            <button type="button" className="iconBtn" aria-label="Next track" title="Next track" onClick={() => skipNextPlexamp().catch((e) => setMessage(e.message))}>
+            <button type="button" className="iconBtn" aria-label="Next track" title="Next track" onClick={() => skipNextPlexamp().catch((e) => showToast(e.message))}>
               <IconSkipNext />
             </button>
           </div>
         </fieldset>
-      </aside>
-    </div>
+        </aside>
+      </div>
+    </>
   );
 }
 

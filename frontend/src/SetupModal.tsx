@@ -97,8 +97,8 @@ export function SetupModal({
   }, [open]);
 
   function applySettings(s: RuntimeSettings) {
-    setPlexUrl(s.plex_server_url);
-    setPlexUrlEffective(s.plex_server_url_effective);
+    setPlexUrl(s.plex_server_url ?? "");
+    setPlexUrlEffective(s.plex_server_url_effective ?? "");
     setPlexSslVerify(s.plex_ssl_verify);
     setSonosSeeds(s.sonos_seed_ips);
     setSonosTimeout(s.sonos_discover_timeout);
@@ -237,7 +237,7 @@ export function SetupModal({
 
   if (!open) return null;
 
-  const hasBaseUrl = plexUrl.trim().length > 0;
+  const hasBaseUrl = (plexUrl ?? "").trim().length > 0;
 
   return (
     <div className="modalBackdrop" role="presentation" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
@@ -412,6 +412,11 @@ export function SetupModal({
             Save connection settings
           </button>
         </div>
+        <footer className="modalCreditsFooter">
+          <a href="#/credits" className="creditsLink" onClick={() => onClose()}>
+            Credits
+          </a>
+        </footer>
       </div>
     </div>
   );

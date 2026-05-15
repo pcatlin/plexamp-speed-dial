@@ -4,6 +4,15 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import App from "./App";
 
 const responses: Record<string, unknown> = {
+  "/settings/runtime": {
+    plex_server_url: "http://192.168.1.10:32400",
+    plex_ssl_verify: true,
+    sonos_seed_ips: "",
+    sonos_discover_timeout: 10,
+    sonos_allow_network_scan: true,
+    sonos_interface_addr: "",
+    plex_server_url_effective: "http://192.168.1.10:32400",
+  },
   "/auth/plex/status": { connected: true, username: "owner" },
   "/media/playlists": [{ id: "playlist-1", title: "Top Mix", type: "playlist" }],
   "/sonos/speakers": [{ id: "s1", name: "Living Room", ip: "192.168.1.10" }],
@@ -95,13 +104,15 @@ describe("App", () => {
     });
     const startButton = screen.getByRole("button", { name: "Start" });
     fireEvent.click(startButton);
-    await waitFor(() => expect(screen.getByText("Playing now")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Playing now"));
   });
 
-  it("opens credits from footer link and returns via hash", async () => {
+  it("opens credits from setup modal link and returns via hash", async () => {
     render(<App />);
     await waitFor(() => expect(screen.getByText("Plexamp Sonos Speed Dial")).toBeInTheDocument());
 
+    fireEvent.click(screen.getByRole("button", { name: "Setup" }));
+    await waitFor(() => expect(screen.getByRole("dialog")).toBeInTheDocument());
     fireEvent.click(screen.getByRole("link", { name: "Credits" }));
     await waitFor(() => expect(screen.getByRole("heading", { name: "Credits", level: 1 })).toBeInTheDocument());
 
