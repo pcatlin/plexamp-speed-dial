@@ -131,6 +131,94 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PlexServerTestResponse'
+  /api/v1/plex/utilities/audio-playlists/{playlist_id}/tidal-tracks:
+    get:
+      summary: Plex Utilities Playlist Tidal Tracks
+      operationId: plex_utilities_playlist_tidal_tracks_api_v1_plex_utilities_audio_playlists__playlist_id__tidal_tracks_get
+      parameters:
+      - name: playlist_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Playlist Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TidalTrackRead'
+                title: Response Plex Utilities Playlist Tidal Tracks Api V1 Plex Utilities
+                  Audio Playlists  Playlist Id  Tidal Tracks Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    delete:
+      summary: Plex Utilities Delete Playlist Tidal Tracks
+      description: Remove all TIDAL tracks from the audio playlist (``playlist_id``
+        only).
+      operationId: plex_utilities_delete_playlist_tidal_tracks_api_v1_plex_utilities_audio_playlists__playlist_id__tidal_tracks_delete
+      parameters:
+      - name: playlist_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Playlist Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TidalTracksDeleteResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/plex/utilities/tidal-tracks:
+    get:
+      summary: Plex Utilities Server Tidal Tracks
+      operationId: plex_utilities_server_tidal_tracks_api_v1_plex_utilities_tidal_tracks_get
+      parameters:
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 2000
+          minimum: 1
+          default: 500
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServerTidalTracksResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/media/playlists:
     get:
       summary: Media Playlists
@@ -457,11 +545,11 @@ paths:
           type: integer
           title: Player Id
       requestBody:
+        required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/PlayerPatch'
-        required: true
       responses:
         '200':
           description: Successful Response
@@ -616,6 +704,29 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/plexamp/playback-state:
+    post:
+      summary: Plexamp Playback State
+      operationId: plexamp_playback_state_api_v1_plexamp_playback_state_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlayerControlRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlaybackStateResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/sonos/play-line-in:
     post:
       summary: Sonos Play Line In
@@ -662,10 +773,32 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/sonos/playback-state:
+    post:
+      summary: Sonos Playback State
+      operationId: sonos_playback_state_api_v1_sonos_playback_state_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SonosStopRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlaybackStateResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/sonos/volume:
     post:
-      summary: Sonos Volume Adjust
-      description: Applies a relative volume step to each selected zone (SetRelativeVolume), including every checked speaker in a bonded group.
+      summary: Sonos Volume
       operationId: sonos_volume_api_v1_sonos_volume_post
       requestBody:
         content:
@@ -924,6 +1057,32 @@ components:
       - status
       - details
       title: PlayResponse
+    PlaybackStateResponse:
+      properties:
+        ok:
+          type: boolean
+          title: Ok
+          default: true
+        playing:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Playing
+        state:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: State
+          description: Raw state string when available (e.g. Sonos transport or Plex
+            timeline).
+        error:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Error
+      type: object
+      title: PlaybackStateResponse
+      description: Playback snapshot for UI toggles (Sonos transport / Plexamp timeline).
     PlayerControlRequest:
       properties:
         player_id:
@@ -952,13 +1111,25 @@ components:
         sonos_line_in_speaker_id:
           type: string
           title: Sonos Line In Speaker Id
-          description: Sonos speaker id from /sonos/speakers for this Plexamp's line-in; empty = none.
+          description: Sonos speaker id (from /sonos/speakers) whose line-in carries
+            this Plexamp; empty = none.
           default: ''
       type: object
       required:
       - name
       - host
       title: PlayerCreate
+    PlayerPatch:
+      properties:
+        sonos_line_in_speaker_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Sonos Line In Speaker Id
+          description: Set to '' to clear line-in mapping; omit field to leave unchanged.
+      type: object
+      title: PlayerPatch
+      description: Partial update for a Plexamp player (Setup UI).
     PlayerRead:
       properties:
         name:
@@ -975,28 +1146,21 @@ components:
           type: boolean
           title: Is Active
           default: true
-        id:
-          type: integer
-          title: Id
         sonos_line_in_speaker_id:
           type: string
           title: Sonos Line In Speaker Id
-          description: Sonos speaker id from /sonos/speakers for this Plexamp's line-in; empty = none.
+          description: Sonos speaker id (from /sonos/speakers) whose line-in carries
+            this Plexamp; empty = none.
           default: ''
+        id:
+          type: integer
+          title: Id
       type: object
       required:
       - name
       - host
       - id
       title: PlayerRead
-    PlayerPatch:
-      properties:
-        sonos_line_in_speaker_id:
-          type: string
-          title: Sonos Line In Speaker Id
-          description: Set to empty string to clear; omit property to leave unchanged.
-      type: object
-      title: PlayerPatch
     PlexAuthCompleteRequest:
       properties:
         pin_id:
@@ -1176,6 +1340,37 @@ components:
       type: object
       title: RuntimeSetupUpdate
       description: Editable fields from the Setup modal (stored in DB).
+    ServerTidalTracksResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/TidalTrackRead'
+          type: array
+          title: Items
+        truncated:
+          type: boolean
+          title: Truncated
+          default: false
+        offset:
+          type: integer
+          title: Offset
+          default: 0
+        limit:
+          type: integer
+          title: Limit
+          default: 0
+        scanned_sections:
+          items:
+            type: string
+          type: array
+          title: Scanned Sections
+        note:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Note
+      type: object
+      title: ServerTidalTracksResponse
     SonosGroupPresetCreate:
       properties:
         name:
@@ -1208,6 +1403,21 @@ components:
       - name
       - id
       title: SonosGroupPresetRead
+    SonosLineInPlayRequest:
+      properties:
+        speaker_ids:
+          items:
+            type: string
+          type: array
+          title: Speaker Ids
+        player_id:
+          type: integer
+          title: Player Id
+          description: Plexamp player whose saved line-in Sonos id is used.
+      type: object
+      required:
+      - player_id
+      title: SonosLineInPlayRequest
     SonosSpeaker:
       properties:
         id:
@@ -1234,21 +1444,6 @@ components:
           title: Speaker Ids
       type: object
       title: SonosStopRequest
-    SonosLineInPlayRequest:
-      properties:
-        speaker_ids:
-          items:
-            type: string
-          type: array
-          title: Speaker Ids
-        player_id:
-          type: integer
-          title: Player Id
-          description: Plexamp player whose saved line-in Sonos id is used.
-      type: object
-      required:
-      - player_id
-      title: SonosLineInPlayRequest
     SonosVolumeAdjustRequest:
       properties:
         speaker_ids:
@@ -1258,10 +1453,10 @@ components:
           title: Speaker Ids
         delta:
           type: integer
+          maximum: 100.0
+          minimum: -100.0
           title: Delta
           description: Volume change in percent points (e.g. -5 or +5).
-          maximum: 100
-          minimum: -100
       type: object
       required:
       - delta
@@ -1376,6 +1571,63 @@ components:
       - player_id
       - id
       title: SpeedDialRead
+    TidalTrackRead:
+      properties:
+        id:
+          type: string
+          title: Id
+        title:
+          type: string
+          title: Title
+        subtitle:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Subtitle
+        playlist_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Playlist Id
+        playlist_item_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Playlist Item Id
+        guid:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Guid
+        library_section:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Library Section
+      type: object
+      required:
+      - id
+      - title
+      title: TidalTrackRead
+    TidalTracksDeleteResponse:
+      properties:
+        removed_count:
+          type: integer
+          title: Removed Count
+        removed_ids:
+          items:
+            type: string
+          type: array
+          title: Removed Ids
+        removed_playlist_item_ids:
+          items:
+            type: string
+          type: array
+          title: Removed Playlist Item Ids
+      type: object
+      required:
+      - removed_count
+      title: TidalTracksDeleteResponse
     ValidationError:
       properties:
         loc:

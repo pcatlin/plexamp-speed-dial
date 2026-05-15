@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import random
 from urllib.parse import urlencode
 
@@ -7,13 +8,23 @@ import requests
 import requests.exceptions as requests_exc
 import plexapi
 from plexapi import utils as plex_utils
-from plexapi.exceptions import NotFound, Unauthorized
+from plexapi.exceptions import BadRequest, NotFound, Unauthorized
+from plexapi.playlist import Playlist
 from plexapi.library import MusicSection
 from plexapi.myplex import MyPlexAccount
 from plexapi.server import PlexServer
 
 from app.core.config import settings
-from app.schemas.domain import CollectionItem, MediaItem, MediaSuggestionsResponse, PlexAuthStartResponse, PlexServerTestResponse
+from app.schemas.domain import (
+    CollectionItem,
+    MediaItem,
+    MediaSuggestionsResponse,
+    PlexAuthStartResponse,
+    PlexServerTestResponse,
+    ServerTidalTracksResponse,
+    TidalTrackRead,
+    TidalTracksDeleteResponse,
+)
 from app.services.runtime_setup import PlexConn
 
 
@@ -631,3 +642,240 @@ class PlexService:
         raw_ct = response.headers.get("Content-Type") or "image/jpeg"
         media_type = raw_ct.split(";")[0].strip()
         return response.content, media_type
+
+    @staticmethod
+    def _rating_key_id(item: object) -> str:
+        """Stable string id for API responses; Plex TIDAL items often have NaN ratingKey → ``nan``."""
+        rk = getattr(item, "ratingKey", None)
+        if rk is None:
+            return ""
+        if isinstance(rk, float) and math.isnan(rk):
+            return "nan"
+        text = str(rk).strip()
+        if text.lower() == "nan":
+            return "nan"
+        return text
+
+    @staticmethod
+    def _is_tidal_track(item: object) -> bool:
+        """TIDAL items in Plex often lack a library ratingKey (serialized as id ``nan``)."""
+        if PlexService._rating_key_id(item) == "nan":
+            return True
+        guid = (getattr(item, "guid", None) or "").lower()
+        if "tidal" in guid:
+            return True
+        guids = getattr(item, "guids", None)
+        if guids:
+            for entry in guids:
+                gid = (getattr(entry, "id", None) or "").lower()
+                if "tidal" in gid:
+                    return True
+        for media in getattr(item, "media", []) or []:
+            for part in getattr(media, "parts", []) or []:
+                for attr in ("key", "file", "decision"):
+                    val = (getattr(part, attr, None) or "").lower()
+                    if "tidal" in val:
+                        return True
+        source = (getattr(item, "sourceTitle", None) or getattr(item, "source", None) or "").lower()
+        return "tidal" in source
+
+    @staticmethod
+    def _track_dedup_key(item: object) -> str:
+        rid = PlexService._rating_key_id(item)
+        if rid and rid != "nan":
+            return rid
+        guid = (getattr(item, "guid", None) or "").strip()
+        if guid:
+            return f"guid:{guid}"
+        pl_item = getattr(item, "playlistItemID", None)
+        if pl_item is not None:
+            return f"playlistItem:{pl_item}"
+        title = (getattr(item, "title", None) or "").strip()
+        return f"title:{title}"
+
+    @staticmethod
+    def _playlist_item_sort_key(item: object) -> int:
+        pl_item_id = getattr(item, "playlistItemID", None)
+        try:
+            return int(pl_item_id)
+        except (TypeError, ValueError):
+            return 0
+
+    @staticmethod
+    def _remove_playlist_items(playlist: Playlist, items: list[object]) -> None:
+        """Delete playlist rows by playlistItemID (highest id first so Plex does not renumber mid-run)."""
+        ordered = sorted(items, key=PlexService._playlist_item_sort_key, reverse=True)
+        for item in ordered:
+            pl_item_id = getattr(item, "playlistItemID", None)
+            if pl_item_id is None:
+                title = getattr(item, "title", None) or "track"
+                raise ValueError(f'No playlistItemID for "{title}"; cannot remove from playlist.')
+            key = f"{playlist.key}/items/{pl_item_id}"
+            playlist._server.query(key, method=playlist._server._session.delete)
+
+    def _collect_tidal_playlist_tracks(self, playlist: Playlist) -> list[object]:
+        try:
+            children = list(playlist.items())
+        except Exception as exc:  # noqa: BLE001
+            raise ValueError(f"Unable to load playlist items: {exc}") from exc
+        tidal: list[object] = []
+        for child in children:
+            if (getattr(child, "type", "") or "").lower() != "track":
+                continue
+            if not self._is_tidal_track(child):
+                continue
+            tidal.append(child)
+        return tidal
+
+    def _track_to_tidal_read(
+        self,
+        track: object,
+        *,
+        playlist_id: str | None = None,
+        library_section: str | None = None,
+    ) -> TidalTrackRead:
+        pl_item = getattr(track, "playlistItemID", None)
+        return TidalTrackRead(
+            id=self._rating_key_id(track) or "nan",
+            title=getattr(track, "title", None) or "Untitled",
+            subtitle=self._subtitle(track),
+            playlist_id=playlist_id,
+            playlist_item_id=str(pl_item) if pl_item is not None else None,
+            guid=getattr(track, "guid", None),
+            library_section=library_section,
+        )
+
+    def _parse_rating_key(self, raw_id: str, *, label: str = "id") -> int:
+        try:
+            return int(str(raw_id).strip())
+        except ValueError as exc:
+            raise ValueError(f"Invalid {label}: {raw_id!r}") from exc
+
+    def _fetch_audio_playlist(self, server: PlexServer, playlist_id: str) -> Playlist:
+        rk = self._parse_rating_key(playlist_id, label="playlist_id")
+        try:
+            item = server.fetchItem(rk)
+        except NotFound as exc:
+            raise ValueError(f"Plex playlist not found: {rk}") from exc
+        if not isinstance(item, Playlist):
+            raise ValueError(f"Item {rk} is not a playlist.")
+        pt = (getattr(item, "playlistType", None) or "").lower()
+        if pt and pt != "audio":
+            raise ValueError("Only audio playlists are supported.")
+        return item
+
+    def list_tidal_tracks_in_playlist(self, playlist_id: str, token: str, conn: PlexConn) -> list[TidalTrackRead]:
+        server = self.connect_server(token, conn)
+        playlist = self._fetch_audio_playlist(server, playlist_id)
+        playlist.reload()
+        pid = str(getattr(playlist, "ratingKey", playlist_id))
+        return [
+            self._track_to_tidal_read(child, playlist_id=pid)
+            for child in self._collect_tidal_playlist_tracks(playlist)
+        ]
+
+    def delete_tidal_tracks_in_playlist(
+        self,
+        playlist_id: str,
+        token: str,
+        conn: PlexConn,
+    ) -> TidalTracksDeleteResponse:
+        """Remove every TIDAL track from the audio playlist (playlist id only; no request body)."""
+        server = self.connect_server(token, conn)
+        playlist = self._fetch_audio_playlist(server, playlist_id)
+        if playlist.smart:
+            raise ValueError("Cannot remove tracks from a smart playlist.")
+        playlist.reload()
+        tidal = self._collect_tidal_playlist_tracks(playlist)
+
+        if not tidal:
+            return TidalTracksDeleteResponse(removed_count=0, removed_ids=[])
+
+        removed_ids = [self._rating_key_id(t) or "nan" for t in tidal]
+        removed_playlist_item_ids = [
+            str(getattr(t, "playlistItemID"))
+            for t in tidal
+            if getattr(t, "playlistItemID", None) is not None
+        ]
+        try:
+            self._remove_playlist_items(playlist, tidal)
+        except BadRequest as exc:
+            raise ValueError(str(exc)) from exc
+        return TidalTracksDeleteResponse(
+            removed_count=len(removed_ids),
+            removed_ids=removed_ids,
+            removed_playlist_item_ids=removed_playlist_item_ids,
+        )
+
+    def list_server_tidal_tracks(
+        self,
+        token: str,
+        conn: PlexConn,
+        *,
+        limit: int = 500,
+        offset: int = 0,
+    ) -> ServerTidalTracksResponse:
+        """Scan Music libraries for TIDAL tracks (best-effort; capped by limit/offset)."""
+        cap = max(1, min(int(limit), self._media_limit))
+        off = max(0, int(offset))
+        server = self.connect_server(token, conn)
+        sections = self._music_sections(server)
+        if not sections:
+            raise ValueError("No Plex music libraries found.")
+
+        seen: set[str] = set()
+        items: list[TidalTrackRead] = []
+        scanned: list[str] = []
+        skipped = 0
+        truncated = False
+        batch = 100
+
+        for section in sections:
+            scanned.append(section.title)
+            start = 0
+            while True:
+                try:
+                    rows = section.search(
+                        libtype="track",
+                        maxresults=batch,
+                        container_start=start,
+                        container_size=batch,
+                    )
+                except Exception:  # noqa: BLE001
+                    break
+                if not rows:
+                    break
+                for row in rows:
+                    if (getattr(row, "type", "") or "").lower() != "track":
+                        continue
+                    if not self._is_tidal_track(row):
+                        continue
+                    rk = self._track_dedup_key(row)
+                    if not rk or rk in seen:
+                        continue
+                    seen.add(rk)
+                    if skipped < off:
+                        skipped += 1
+                        continue
+                    items.append(self._track_to_tidal_read(row, library_section=section.title))
+                    if len(items) >= cap:
+                        truncated = True
+                        break
+                if truncated or len(rows) < batch:
+                    break
+                start += batch
+            if truncated:
+                break
+
+        note = (
+            "Scans Music library sections only; TIDAL items that exist only inside playlists "
+            "may be missing. Use the playlist TIDAL endpoints for playlist-specific cleanup."
+        )
+        return ServerTidalTracksResponse(
+            items=items,
+            truncated=truncated,
+            offset=off,
+            limit=cap,
+            scanned_sections=scanned,
+            note=note,
+        )

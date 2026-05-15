@@ -42,8 +42,11 @@ from app.schemas.domain import (
     SonosSpeaker,
     SonosStopRequest,
     SonosVolumeAdjustRequest,
+    ServerTidalTracksResponse,
     SpeedDialCreate,
     SpeedDialRead,
+    TidalTrackRead,
+    TidalTracksDeleteResponse,
 )
 from app.services.playback_service import PlaybackService
 from app.services.plex_service import PlexService, PlexTvHttpError
@@ -209,6 +212,64 @@ def plex_server_test(
 ) -> PlexServerTestResponse:
     assert creds.auth_token
     return plex_service.probe_server_connection(creds.auth_token, resolve_plex_conn(db))
+
+
+@router.get(
+    "/plex/utilities/audio-playlists/{playlist_id}/tidal-tracks",
+    response_model=list[TidalTrackRead],
+)
+def plex_utilities_playlist_tidal_tracks(
+    playlist_id: str,
+    db: Session = Depends(get_db),
+    creds: PlexCredential = Depends(require_plex_creds),
+):
+    assert creds.auth_token
+    try:
+        return plex_service.list_tidal_tracks_in_playlist(
+            playlist_id, creds.auth_token, resolve_plex_conn(db)
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.delete(
+    "/plex/utilities/audio-playlists/{playlist_id}/tidal-tracks",
+    response_model=TidalTracksDeleteResponse,
+)
+def plex_utilities_delete_playlist_tidal_tracks(
+    playlist_id: str,
+    db: Session = Depends(get_db),
+    creds: PlexCredential = Depends(require_plex_creds),
+):
+    """Remove all TIDAL tracks from the audio playlist (``playlist_id`` only)."""
+    assert creds.auth_token
+    try:
+        return plex_service.delete_tidal_tracks_in_playlist(
+            playlist_id,
+            creds.auth_token,
+            resolve_plex_conn(db),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get("/plex/utilities/tidal-tracks", response_model=ServerTidalTracksResponse)
+def plex_utilities_server_tidal_tracks(
+    limit: int = Query(500, ge=1, le=2000),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+    creds: PlexCredential = Depends(require_plex_creds),
+):
+    assert creds.auth_token
+    try:
+        return plex_service.list_server_tidal_tracks(
+            creds.auth_token,
+            resolve_plex_conn(db),
+            limit=limit,
+            offset=offset,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.get("/media/playlists")

@@ -195,3 +195,28 @@ class RuntimeSetupRead(RuntimeSetupUpdate):
         default="",
         description="Same as plex_server_url from Setup (DB); exposed for the UI.",
     )
+
+
+class TidalTrackRead(BaseModel):
+    id: str
+    title: str
+    subtitle: str | None = None
+    playlist_id: str | None = None
+    playlist_item_id: str | None = None
+    guid: str | None = None
+    library_section: str | None = None
+
+
+class TidalTracksDeleteResponse(BaseModel):
+    removed_count: int
+    removed_ids: list[str] = Field(default_factory=list)
+    removed_playlist_item_ids: list[str] = Field(default_factory=list)
+
+
+class ServerTidalTracksResponse(BaseModel):
+    items: list[TidalTrackRead] = Field(default_factory=list)
+    truncated: bool = False
+    offset: int = 0
+    limit: int = 0
+    scanned_sections: list[str] = Field(default_factory=list)
+    note: str | None = None

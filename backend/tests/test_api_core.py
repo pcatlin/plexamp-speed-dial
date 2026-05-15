@@ -385,3 +385,111 @@ def test_speed_dial_cover_thumb_saved_and_served(client, db_session, monkeypatch
     assert cover.status_code == 200
     assert cover.headers.get("content-type", "").startswith("image/jpeg")
     assert cover.content == b"\xff\xd8\xff"
+
+
+def test_plex_utilities_playlist_tidal_tracks(client, db_session, monkeypatch):
+    from app.models import PlexCredential
+    from app.schemas.domain import TidalTrackRead
+
+    db_session.add(PlexCredential(auth_token="stub-token", is_connected=True))
+    db_session.commit()
+
+    import app.api.routes as routes_module
+
+    def fake(pid, token, conn):  # noqa: ANN001
+        assert pid == "42"
+        return [
+            TidalTrackRead(
+                id="100",
+                title="Tidal Song",
+                subtitle="Artist — Album",
+                playlist_id="42",
+                guid="com.plexapp.agents.tidal://1",
+            )
+        ]
+
+    monkeypatch.setattr(routes_module.plex_service, "list_tidal_tracks_in_playlist", fake)
+
+    r = client.get("/api/v1/plex/utilities/audio-playlists/42/tidal-tracks")
+    assert r.status_code == 200
+    assert r.json()[0]["title"] == "Tidal Song"
+
+
+def test_plex_utilities_delete_playlist_tidal_tracks(client, db_session, monkeypatch):
+    from app.models import PlexCredential
+    from app.schemas.domain import TidalTracksDeleteResponse
+
+    db_session.add(PlexCredential(auth_token="stub-token", is_connected=True))
+    db_session.commit()
+
+    import app.api.routes as routes_module
+
+    def fake(pid, token, conn):  # noqa: ANN001
+        assert pid == "42"
+        return TidalTracksDeleteResponse(
+            removed_count=2,
+            removed_ids=["nan", "nan"],
+            removed_playlist_item_ids=["900", "901"],
+        )
+
+    monkeypatch.setattr(routes_module.plex_service, "delete_tidal_tracks_in_playlist", fake)
+
+    r = client.delete("/api/v1/plex/utilities/audio-playlists/42/tidal-tracks")
+    assert r.status_code == 200
+    assert r.json()["removed_count"] == 2
+
+
+def test_plex_utilities_server_tidal_tracks(client, db_session, monkeypatch):
+    from app.models import PlexCredential
+    from app.schemas.domain import ServerTidalTracksResponse, TidalTrackRead
+
+    db_session.add(PlexCredential(auth_token="stub-token", is_connected=True))
+    db_session.commit()
+
+    import app.api.routes as routes_module
+
+    def fake(token, conn, *, limit=500, offset=0):  # noqa: ANN001
+        assert limit == 10
+        assert offset == 5
+        return ServerTidalTracksResponse(
+            items=[TidalTrackRead(id="1", title="A", guid="tidal://x")],
+            truncated=True,
+            offset=5,
+            limit=10,
+            scanned_sections=["Music"],
+        )
+
+    monkeypatch.setattr(routes_module.plex_service, "list_server_tidal_tracks", fake)
+
+    r = client.get("/api/v1/plex/utilities/tidal-tracks?limit=10&offset=5")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["truncated"] is True
+    assert body["items"][0]["title"] == "A"
+
+
+def test_plex_service_is_tidal_track_detects_guid():
+    from app.services.plex_service import PlexService
+
+    class Item:
+        guid = "com.plexapp.agents.tidal://album/123"
+        type = "track"
+        title = "x"
+        ratingKey = 1
+
+    assert PlexService._is_tidal_track(Item()) is True
+
+    class NanTidal:
+        ratingKey = float("nan")
+        type = "track"
+        title = "stream"
+
+    assert PlexService._is_tidal_track(NanTidal()) is True
+    assert PlexService._rating_key_id(NanTidal()) == "nan"
+
+    class Local:
+        guid = "com.plexapp.agents.none://local"
+        type = "track"
+        ratingKey = 2
+
+    assert PlexService._is_tidal_track(Local()) is False
