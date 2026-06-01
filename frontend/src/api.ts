@@ -80,10 +80,21 @@ export interface PlaybackState {
   error?: string | null;
 }
 
+/** Pioneer AVR snapshot from playback WebSocket or ``/audio-output/status``. */
+export interface ReceiverState {
+  ok: boolean;
+  power_on: boolean | null;
+  input_code: string | null;
+  volume_db: number | null;
+  volume_muted?: boolean;
+  error?: string | null;
+}
+
 /** Combined snapshot pushed by ``/playback-state/ws``. */
 export interface PlaybackSnapshotMessage {
   sonos: PlaybackState;
   plexamp: PlaybackState;
+  receiver: ReceiverState;
 }
 
 /** WebSocket URL for combined Sonos + Plexamp playback snapshots (same host as REST). */
@@ -232,6 +243,13 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ player_id: playerId }),
     }),
+  audioOutputStatus: (playerId: number) =>
+    request<{
+      power_on: boolean | null;
+      input_code: string | null;
+      volume_level: number | null;
+      volume_db: number | null;
+    }>(`/audio-output/status?player_id=${encodeURIComponent(String(playerId))}`),
   deletePlayer: (id: number) => request<{ message: string }>(`/players/${id}`, { method: "DELETE" }),
   speedDial: () => request<SpeedDial[]>("/speed-dial"),
   createSpeedDial: (payload: Omit<SpeedDial, "id" | "has_cover_art">) =>

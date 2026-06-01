@@ -9,7 +9,18 @@ import {
   reconcileSelectedSpeakerIds,
   saveSelectedSpeakerIds,
 } from "./playToStorage";
-import { outputKindForPlayer } from "./audioOutput";
+import { outputKindForPlayer, presetLabelForCode } from "./audioOutput";
+import {
+  IconChevronDown,
+  IconPause,
+  IconPlay,
+  IconPowerOff,
+  IconSkipNext,
+  IconSkipPrevious,
+  IconStop,
+  IconVolumeDown,
+  IconVolumeUp,
+} from "./icons";
 import { Toast } from "./Toast";
 import { useToast } from "./useToast";
 
@@ -18,69 +29,12 @@ function routeFromHash(hash: string): "app" | "credits" {
   return path === "/credits" || path.startsWith("/credits?") ? "credits" : "app";
 }
 
-function IconPlay() {
-  return (
-    <svg className="mediaCtrlIcon" viewBox="0 0 24 24" aria-hidden>
-      <path fill="currentColor" d="M8 5v14l11-7L8 5z" />
-    </svg>
-  );
-}
-
-function IconStop() {
-  return (
-    <svg className="mediaCtrlIcon" viewBox="0 0 24 24" aria-hidden>
-      <path fill="currentColor" d="M6 6h12v12H6V6z" />
-    </svg>
-  );
-}
-
-function IconPause() {
-  return (
-    <svg className="mediaCtrlIcon" viewBox="0 0 24 24" aria-hidden>
-      <path fill="currentColor" d="M6 5h4v14H6V5zm8 0h4v14h-4V5z" />
-    </svg>
-  );
-}
-
-function IconSkipPrevious() {
-  return (
-    <svg className="mediaCtrlIcon" viewBox="0 0 24 24" aria-hidden>
-      <path fill="currentColor" d="M6 6h2v12H6V6zm3 6l9-6v12l-9-6z" />
-    </svg>
-  );
-}
-
-function IconSkipNext() {
-  return (
-    <svg className="mediaCtrlIcon" viewBox="0 0 24 24" aria-hidden>
-      <path fill="currentColor" d="M6 18V6l9 6-9 6zm10-12h2v12h-2V6z" />
-    </svg>
-  );
-}
-
-function IconVolumeDown() {
-  return (
-    <svg className="mediaCtrlIcon" viewBox="0 0 24 24" aria-hidden>
-      <path fill="currentColor" d="M18.5 12c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM5 9v6h4l5 5V4L9 9H5z" />
-    </svg>
-  );
-}
-
-function IconVolumeUp() {
-  return (
-    <svg className="mediaCtrlIcon" viewBox="0 0 24 24" aria-hidden>
-      <path fill="currentColor" d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z" />
-    </svg>
-  );
-}
-
-function IconChevronDown() {
-  return (
-    <svg className="playToChevron" viewBox="0 0 24 24" aria-hidden>
-      <path fill="currentColor" d="M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z" />
-    </svg>
-  );
-}
+type ReceiverStatus = {
+  power_on: boolean | null;
+  input_code: string | null;
+  volume_db: number | null;
+  volume_muted: boolean;
+};
 
 function App() {
   const [route, setRoute] = useState<"app" | "credits">(() => routeFromHash(window.location.hash));
@@ -114,6 +68,7 @@ function App() {
   const [sonosPlaying, setSonosPlaying] = useState<boolean | null>(null);
   const [plexampPlaying, setPlexampPlaying] = useState<boolean | null>(null);
   const [receiverPowerOn, setReceiverPowerOn] = useState(false);
+  const [receiverStatus, setReceiverStatus] = useState<ReceiverStatus | null>(null);
 
   const selectedPlayerRow = useMemo(
     () => players.find((player) => player.id === selectedPlayer),
@@ -123,6 +78,46 @@ function App() {
   const selectedPlayerName = selectedPlayerRow?.name ?? "No player selected";
 
   const outputKind = outputKindForPlayer(selectedPlayerRow);
+
+  const applyReceiverSnapshot = useCallback((receiver: {
+    ok?: boolean;
+    power_on?: boolean | null;
+    input_code?: string | null;
+    volume_db?: number | null;
+    volume_muted?: boolean;
+  } | undefined) => {
+    if (!receiver?.ok) {
+      return;
+    }
+    const volumeMuted = receiver.volume_muted ?? false;
+    setReceiverStatus((prev) => ({
+      power_on: receiver.power_on ?? prev?.power_on ?? null,
+      input_code: receiver.input_code ?? prev?.input_code ?? null,
+      volume_muted: volumeMuted,
+      volume_db: volumeMuted ? null : receiver.volume_db ?? prev?.volume_db ?? null,
+    }));
+    if (receiver.power_on !== null && receiver.power_on !== undefined) {
+      setReceiverPowerOn(receiver.power_on);
+    }
+  }, []);
+
+  const receiverStatusLine = useMemo(() => {
+    const power =
+      receiverStatus?.power_on === true
+        ? "On"
+        : receiverStatus?.power_on === false
+          ? "Standby"
+          : "—";
+    const input = receiverStatus?.input_code
+      ? presetLabelForCode(receiverStatus.input_code)
+      : "—";
+    const volume = receiverStatus?.volume_muted
+      ? "−∞ dB"
+      : receiverStatus?.volume_db != null
+        ? `${receiverStatus.volume_db.toFixed(1)} dB`
+        : "—";
+    return `${power} · ${input} · ${volume}`;
+  }, [receiverStatus, selectedPlayerRow]);
 
   const hasPlayTargetSelection = selectedSpeakers.length > 0 || selectedPlayer !== null;
 
@@ -196,9 +191,11 @@ function App() {
   useEffect(() => {
     const wantSonos = outputKind === "sonos" && selectedSpeakers.length > 0;
     const wantPlex = authConnected && selectedPlayer !== null;
-    if (!wantSonos && !wantPlex) {
+    const wantReceiver = outputKind === "pioneer" && selectedPlayer !== null;
+    if (!wantSonos && !wantPlex && !wantReceiver) {
       setSonosPlaying(null);
       setPlexampPlaying(null);
+      setReceiverStatus(null);
       return;
     }
     const url = playbackStateWebSocketUrl();
@@ -211,7 +208,7 @@ function App() {
         JSON.stringify({
           type: "subscribe",
           speaker_ids: selectedSpeakers,
-          player_id: wantPlex ? selectedPlayer : null,
+          player_id: selectedPlayer,
         }),
       );
     };
@@ -221,6 +218,13 @@ function App() {
         const data = JSON.parse(ev.data) as {
           sonos?: { ok?: boolean; playing?: boolean | null };
           plexamp?: { ok?: boolean; playing?: boolean | null };
+          receiver?: {
+            ok?: boolean;
+            power_on?: boolean | null;
+            input_code?: string | null;
+            volume_db?: number | null;
+            volume_muted?: boolean;
+          };
         };
         const s = data.sonos;
         if (wantSonos) {
@@ -236,6 +240,11 @@ function App() {
         } else {
           setPlexampPlaying(null);
         }
+        if (wantReceiver) {
+          applyReceiverSnapshot(data.receiver);
+        } else {
+          setReceiverStatus(null);
+        }
       } catch {
         /* ignore malformed frame */
       }
@@ -249,7 +258,7 @@ function App() {
       cancelled = true;
       ws.close();
     };
-  }, [selectedSpeakers, authConnected, selectedPlayer, outputKind]);
+  }, [selectedSpeakers, authConnected, selectedPlayer, outputKind, applyReceiverSnapshot]);
 
   const toggleSpeaker = (speakerId: string) => {
     setSelectedSpeakers((current) =>
@@ -599,6 +608,9 @@ function App() {
         {outputKind === "pioneer" ? (
           <fieldset className="controlFrameset">
             <legend>Receiver</legend>
+            <p className="receiverStatusRow" aria-live="polite">
+              {receiverStatusLine}
+            </p>
             <div className="mediaToolbar mediaToolbarStack" role="group" aria-label="Pioneer AV receiver">
               <button
                 type="button"
@@ -607,7 +619,7 @@ function App() {
                 title={receiverPowerOn ? "Standby" : "Power on"}
                 onClick={() => toggleReceiverPower().catch((e) => showToast(e.message))}
               >
-                {receiverPowerOn ? "Standby" : "Power"}
+                <IconPowerOff />
               </button>
               <button
                 type="button"

@@ -796,6 +796,30 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/audio-output/status:
+    get:
+      summary: Audio Output Status
+      operationId: audio_output_status_api_v1_audio_output_status_get
+      parameters:
+      - name: player_id
+        in: query
+        required: true
+        schema:
+          type: integer
+          title: Player Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AudioOutputStatusResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/audio-output/volume:
     post:
       summary: Audio Output Volume
@@ -1038,6 +1062,66 @@ components:
       required:
       - player_id
       title: AudioOutputTestRequest
+    AudioOutputStatusResponse:
+      properties:
+        power_on:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Power On
+        input_code:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Input Code
+        volume_level:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Volume Level
+        volume_db:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Volume Db
+        volume_muted:
+          type: boolean
+          title: Volume Muted
+          default: false
+      type: object
+      title: AudioOutputStatusResponse
+    ReceiverStateResponse:
+      properties:
+        ok:
+          type: boolean
+          title: Ok
+          default: true
+        power_on:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Power On
+        input_code:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Input Code
+        volume_db:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Volume Db
+        volume_muted:
+          type: boolean
+          title: Volume Muted
+          default: false
+        error:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Error
+      type: object
+      title: ReceiverStateResponse
     AudioOutputVolumeRequest:
       properties:
         player_id:

@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.models import PlexampPlayer
 from app.services.audio_output import pioneer_eiscp
 from app.services.audio_output.sonos_route import line_in_speaker_id_from_config, play_line_in
+from app.schemas.domain import ReceiverStateResponse
 from app.services.audio_output.types import (
     AudioOutput,
     audio_output_from_player_row,
@@ -96,6 +97,34 @@ class AudioOutputRouter:
         except OSError as exc:
             raise ValueError(f"Pioneer power failed: {exc}") from exc
         return f"Pioneer: {'on' if on else 'standby'} ({cfg.host})."
+
+    def pioneer_status(self, player: PlexampPlayer) -> pioneer_eiscp.PioneerReceiverStatus:
+        output = self.output_for_player(player)
+        if output.kind != "pioneer":
+            raise ValueError("Status is only available for Pioneer audio output.")
+        cfg = parse_pioneer_config(output)
+        if not cfg.host:
+            raise ValueError("Pioneer receiver IP is not configured in Setup.")
+        try:
+            return pioneer_eiscp.query_status(cfg.host, port=cfg.port)
+        except OSError as exc:
+            raise ValueError(f"Pioneer status failed: {exc}") from exc
+
+    def receiver_state(self, player: PlexampPlayer) -> ReceiverStateResponse:
+        output = self.output_for_player(player)
+        if output.kind != "pioneer":
+            return ReceiverStateResponse(ok=True, power_on=None, input_code=None, volume_db=None)
+        try:
+            status = self.pioneer_status(player)
+        except ValueError as exc:
+            return ReceiverStateResponse(ok=False, error=str(exc))
+        return ReceiverStateResponse(
+            ok=True,
+            power_on=status.power_on,
+            input_code=status.input_code,
+            volume_db=status.volume_db,
+            volume_muted=status.volume_muted,
+        )
 
     def test_output(self, player: PlexampPlayer) -> str:
         output = self.output_for_player(player)

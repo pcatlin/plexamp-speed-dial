@@ -9,7 +9,7 @@ export default function CreditsPage() {
         <p className="creditsLead">Third-party libraries and assets used by Plexamp Sonos Speed Dial.</p>
 
         <section className="creditsSection">
-          <h2>Icon</h2>
+          <h2>Icons</h2>
           <p>
             <a
               href="https://www.flaticon.com/free-icons/google-play-music"
@@ -19,6 +19,12 @@ export default function CreditsPage() {
             >
               Google play music icons created by IYAHICON - Flaticon
             </a>
+          </p>
+          <p>
+            <a href="https://fontawesome.com" target="_blank" rel="noopener noreferrer">
+              Font Awesome
+            </a>{" "}
+            (playback and control icons)
           </p>
         </section>
 

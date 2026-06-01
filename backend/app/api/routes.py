@@ -23,6 +23,7 @@ from app.schemas.common import HealthResponse, IdResponse
 from app.schemas.domain import (
     AudioOutput,
     AudioOutputPowerRequest,
+    AudioOutputStatusResponse,
     AudioOutputTestRequest,
     AudioOutputVolumeRequest,
     MediaItem,
@@ -34,6 +35,7 @@ from app.schemas.domain import (
     PlayRequest,
     PlayResponse,
     PlaybackStateResponse,
+    ReceiverStateResponse,
     PlexAuthCompleteRequest,
     PlexAuthStatusResponse,
     PlexAuthStartResponse,
@@ -79,21 +81,34 @@ def _player_read(row: PlexampPlayer) -> PlayerRead:
     )
 
 
+def _fetch_receiver_state(player_id: int, db: Session) -> ReceiverStateResponse:
+    player = db.get(PlexampPlayer, player_id)
+    if not player:
+        return ReceiverStateResponse(ok=False, error="Player not found")
+    return audio_output_router.receiver_state(player)
+
+
 def _fetch_playback_snapshot(speaker_ids: list[str], player_id: int | None) -> dict[str, Any]:
-    """Blocking: read Sonos + Plexamp playback state (own DB session for threadpool use)."""
+    """Blocking: read Sonos + Plexamp + Pioneer receiver state (own DB session for threadpool use)."""
     db = SessionLocal()
     try:
         sonos = playback_service.sonos_playback_state(speaker_ids, db)
+        receiver = ReceiverStateResponse(ok=True, power_on=None, input_code=None, volume_db=None)
         if player_id is None:
             plex = PlaybackStateResponse(ok=True, playing=None, state=None)
         else:
+            receiver = _fetch_receiver_state(player_id, db)
             creds = db.query(PlexCredential).first()
             conn = resolve_plex_conn(db)
             if creds and creds.auth_token and conn.base_url.strip():
                 plex = playback_service.plexamp_playback_state(player_id, db, auth_token=creds.auth_token)
             else:
                 plex = PlaybackStateResponse(ok=True, playing=None, state=None)
-        return {"sonos": sonos.model_dump(), "plexamp": plex.model_dump()}
+        return {
+            "sonos": sonos.model_dump(),
+            "plexamp": plex.model_dump(),
+            "receiver": receiver.model_dump(),
+        }
     finally:
         db.close()
 
@@ -618,7 +633,7 @@ async def playback_state_websocket(websocket: WebSocket) -> None:
     Stream combined Sonos + Plexamp playback snapshots over one connection (avoids REST polling spam).
 
     First message must be JSON: ``{"type": "subscribe", "speaker_ids": [...], "player_id": null|int, "interval_ms"?: 500-30000}``.
-    Server then sends ``{"sonos": {...}, "plexamp": {...}}`` repeatedly on that interval until disconnect.
+    Server then sends ``{"sonos": {...}, "plexamp": {...}, "receiver": {...}}`` repeatedly on that interval until disconnect.
     """
     await websocket.accept()
     try:
@@ -666,6 +681,24 @@ async def playback_state_websocket(websocket: WebSocket) -> None:
             await asyncio.sleep(interval_s)
     except WebSocketDisconnect:
         return
+
+
+@router.get("/audio-output/status", response_model=AudioOutputStatusResponse)
+def audio_output_status(player_id: int = Query(...), db: Session = Depends(get_db)) -> AudioOutputStatusResponse:
+    player = db.get(PlexampPlayer, player_id)
+    if not player:
+        raise HTTPException(status_code=404, detail="Player not found")
+    try:
+        status = audio_output_router.pioneer_status(player)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return AudioOutputStatusResponse(
+        power_on=status.power_on,
+        input_code=status.input_code,
+        volume_level=status.volume_level,
+        volume_db=status.volume_db,
+        volume_muted=status.volume_muted,
+    )
 
 
 @router.post("/audio-output/volume", response_model=PlayResponse)

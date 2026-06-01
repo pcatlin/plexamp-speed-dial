@@ -158,6 +158,8 @@ def test_playback_state_websocket_streams(client, monkeypatch):
         first = ws.receive_json()
         assert first["sonos"]["ok"] is True
         assert first["sonos"]["playing"] is False
+        assert "receiver" in first
+        assert first["receiver"]["ok"] is True
         second = ws.receive_json()
         assert second["sonos"]["playing"] is False
 

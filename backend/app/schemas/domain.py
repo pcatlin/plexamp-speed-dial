@@ -111,6 +111,25 @@ class AudioOutputTestRequest(BaseModel):
     player_id: int
 
 
+class AudioOutputStatusResponse(BaseModel):
+    power_on: bool | None = None
+    input_code: str | None = None
+    volume_level: int | None = None
+    volume_db: float | None = None
+    volume_muted: bool = False
+
+
+class ReceiverStateResponse(BaseModel):
+    """Pioneer AVR snapshot for UI status (also streamed on the playback WebSocket)."""
+
+    ok: bool = True
+    power_on: bool | None = None
+    input_code: str | None = None
+    volume_db: float | None = None
+    volume_muted: bool = False
+    error: str | None = None
+
+
 class PlayRequest(BaseModel):
     media_type: MediaType
     media_id: str

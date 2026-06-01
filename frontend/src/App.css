@@ -231,8 +231,12 @@
 
 .playToChevron {
   width: 1.35rem;
-  height: 1.35rem;
+  font-size: 1.15rem;
+  line-height: 1;
   flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   color: #6b7280;
   transition: transform 0.2s ease;
 }
@@ -512,8 +516,11 @@ button.iconBtn.primary {
 
 .mediaCtrlIcon {
   width: 1.4rem;
-  height: 1.4rem;
-  display: block;
+  font-size: 1.25rem;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .volStepLabel {
@@ -794,6 +801,14 @@ button.smallBtn {
 .iconBtn--active {
   outline: 2px solid #2563eb;
   outline-offset: 2px;
+}
+
+.receiverStatusRow {
+  margin: 0 0 0.5rem;
+  font-size: 0.88rem;
+  line-height: 1.35;
+  color: #374151;
+  text-align: center;
 }
 
 .playerMeta {
