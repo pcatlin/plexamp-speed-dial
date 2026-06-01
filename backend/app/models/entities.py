@@ -43,6 +43,8 @@ class PlexampPlayer(Base):
     port = Column(Integer, nullable=False, default=32500)
     is_active = Column(Boolean, nullable=False, default=True)
     sonos_line_in_speaker_id = Column(String(255), nullable=False, default="")
+    audio_output_kind = Column(String(32), nullable=False, default="none")
+    audio_output_config = Column(JSON, nullable=False, default=dict)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 

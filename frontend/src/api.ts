@@ -28,14 +28,20 @@ export interface GroupPreset {
   speaker_ids: string[];
 }
 
+export type AudioOutputKind = "none" | "sonos" | "pioneer";
+
+export interface AudioOutput {
+  kind: AudioOutputKind;
+  config: Record<string, unknown>;
+}
+
 export interface Player {
   id: number;
   name: string;
   host: string;
   port: number;
   is_active: boolean;
-  /** Sonos speaker id from /sonos/speakers; empty = no line-in routing for this Plexamp. */
-  sonos_line_in_speaker_id: string;
+  audio_output: AudioOutput;
 }
 
 export interface RuntimeSettings {
@@ -209,8 +215,23 @@ export const api = {
     request<{ id: number }>("/sonos/group-presets", { method: "POST", body: JSON.stringify({ name, speaker_ids: speakerIds }) }),
   players: () => request<Player[]>("/players"),
   createPlayer: (payload: Omit<Player, "id">) => request<{ id: number }>("/players", { method: "POST", body: JSON.stringify(payload) }),
-  patchPlayer: (id: number, payload: { sonos_line_in_speaker_id: string }) =>
+  patchPlayer: (id: number, payload: { audio_output: AudioOutput }) =>
     request<Player>(`/players/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
+  audioOutputVolume: (playerId: number, delta: number) =>
+    request<{ status: string; details: string }>("/audio-output/volume", {
+      method: "POST",
+      body: JSON.stringify({ player_id: playerId, delta }),
+    }),
+  audioOutputPower: (playerId: number, on: boolean) =>
+    request<{ status: string; details: string }>("/audio-output/power", {
+      method: "POST",
+      body: JSON.stringify({ player_id: playerId, on }),
+    }),
+  audioOutputTest: (playerId: number) =>
+    request<{ status: string; details: string }>("/audio-output/test", {
+      method: "POST",
+      body: JSON.stringify({ player_id: playerId }),
+    }),
   deletePlayer: (id: number) => request<{ message: string }>(`/players/${id}`, { method: "DELETE" }),
   speedDial: () => request<SpeedDial[]>("/speed-dial"),
   createSpeedDial: (payload: Omit<SpeedDial, "id" | "has_cover_art">) =>

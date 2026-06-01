@@ -796,6 +796,75 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/audio-output/volume:
+    post:
+      summary: Audio Output Volume
+      operationId: audio_output_volume_api_v1_audio_output_volume_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AudioOutputVolumeRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlayResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/audio-output/power:
+    post:
+      summary: Audio Output Power
+      operationId: audio_output_power_api_v1_audio_output_power_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AudioOutputPowerRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlayResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/audio-output/test:
+    post:
+      summary: Audio Output Test
+      operationId: audio_output_test_api_v1_audio_output_test_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AudioOutputTestRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlayResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/sonos/volume:
     post:
       summary: Sonos Volume
@@ -931,6 +1000,59 @@ paths:
                 $ref: '#/components/schemas/HTTPValidationError'
 components:
   schemas:
+    AudioOutput:
+      properties:
+        kind:
+          type: string
+          enum:
+          - none
+          - sonos
+          - pioneer
+          title: Kind
+          default: none
+        config:
+          additionalProperties: true
+          type: object
+          title: Config
+      type: object
+      title: AudioOutput
+    AudioOutputPowerRequest:
+      properties:
+        player_id:
+          type: integer
+          title: Player Id
+        'on':
+          type: boolean
+          title: 'On'
+      type: object
+      required:
+      - player_id
+      - 'on'
+      title: AudioOutputPowerRequest
+    AudioOutputTestRequest:
+      properties:
+        player_id:
+          type: integer
+          title: Player Id
+      type: object
+      required:
+      - player_id
+      title: AudioOutputTestRequest
+    AudioOutputVolumeRequest:
+      properties:
+        player_id:
+          type: integer
+          title: Player Id
+        delta:
+          type: integer
+          maximum: 30.0
+          minimum: -30.0
+          title: Delta
+      type: object
+      required:
+      - player_id
+      - delta
+      title: AudioOutputVolumeRequest
     HTTPValidationError:
       properties:
         detail:
@@ -1108,12 +1230,8 @@ components:
           type: boolean
           title: Is Active
           default: true
-        sonos_line_in_speaker_id:
-          type: string
-          title: Sonos Line In Speaker Id
-          description: Sonos speaker id (from /sonos/speakers) whose line-in carries
-            this Plexamp; empty = none.
-          default: ''
+        audio_output:
+          $ref: '#/components/schemas/AudioOutput'
       type: object
       required:
       - name
@@ -1121,12 +1239,10 @@ components:
       title: PlayerCreate
     PlayerPatch:
       properties:
-        sonos_line_in_speaker_id:
+        audio_output:
           anyOf:
-          - type: string
+          - $ref: '#/components/schemas/AudioOutput'
           - type: 'null'
-          title: Sonos Line In Speaker Id
-          description: Set to '' to clear line-in mapping; omit field to leave unchanged.
       type: object
       title: PlayerPatch
       description: Partial update for a Plexamp player (Setup UI).
@@ -1146,12 +1262,8 @@ components:
           type: boolean
           title: Is Active
           default: true
-        sonos_line_in_speaker_id:
-          type: string
-          title: Sonos Line In Speaker Id
-          description: Sonos speaker id (from /sonos/speakers) whose line-in carries
-            this Plexamp; empty = none.
-          default: ''
+        audio_output:
+          $ref: '#/components/schemas/AudioOutput'
         id:
           type: integer
           title: Id

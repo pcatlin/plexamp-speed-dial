@@ -9,6 +9,7 @@ import {
   reconcileSelectedSpeakerIds,
   saveSelectedSpeakerIds,
 } from "./playToStorage";
+import { outputKindForPlayer } from "./audioOutput";
 import { Toast } from "./Toast";
 import { useToast } from "./useToast";
 
@@ -112,21 +113,29 @@ function App() {
   const [shuffleArtist, setShuffleArtist] = useState(false);
   const [sonosPlaying, setSonosPlaying] = useState<boolean | null>(null);
   const [plexampPlaying, setPlexampPlaying] = useState<boolean | null>(null);
+  const [receiverPowerOn, setReceiverPowerOn] = useState(false);
 
-  const selectedPlayerName = useMemo(
-    () => players.find((player) => player.id === selectedPlayer)?.name ?? "No player selected",
+  const selectedPlayerRow = useMemo(
+    () => players.find((player) => player.id === selectedPlayer),
     [players, selectedPlayer],
   );
+
+  const selectedPlayerName = selectedPlayerRow?.name ?? "No player selected";
+
+  const outputKind = outputKindForPlayer(selectedPlayerRow);
 
   const hasPlayTargetSelection = selectedSpeakers.length > 0 || selectedPlayer !== null;
 
   const playToSummary = useMemo(() => {
     if (!hasPlayTargetSelection) return "Nothing selected";
+    const playerPart = selectedPlayer !== null ? selectedPlayerName : "No Plexamp player";
+    if (outputKind === "pioneer") {
+      return `Pioneer AVR · ${playerPart}`;
+    }
     const names = speakers.filter((s) => selectedSpeakers.includes(s.id)).map((s) => s.name);
     const speakerPart = names.length > 0 ? names.join(", ") : "No speakers";
-    const playerPart = selectedPlayer !== null ? selectedPlayerName : "No Plexamp player";
     return `${speakerPart} · ${playerPart}`;
-  }, [hasPlayTargetSelection, speakers, selectedSpeakers, selectedPlayer, selectedPlayerName]);
+  }, [hasPlayTargetSelection, speakers, selectedSpeakers, selectedPlayer, selectedPlayerName, outputKind]);
 
   const [playToDetailsOpen, setPlayToDetailsOpen] = useState(() => !hasPlayTargetSelection);
 
@@ -185,7 +194,7 @@ function App() {
   }, [authConnected, reloadCollections]);
 
   useEffect(() => {
-    const wantSonos = selectedSpeakers.length > 0;
+    const wantSonos = outputKind === "sonos" && selectedSpeakers.length > 0;
     const wantPlex = authConnected && selectedPlayer !== null;
     if (!wantSonos && !wantPlex) {
       setSonosPlaying(null);
@@ -240,7 +249,7 @@ function App() {
       cancelled = true;
       ws.close();
     };
-  }, [selectedSpeakers, authConnected, selectedPlayer]);
+  }, [selectedSpeakers, authConnected, selectedPlayer, outputKind]);
 
   const toggleSpeaker = (speakerId: string) => {
     setSelectedSpeakers((current) =>
@@ -274,6 +283,9 @@ function App() {
       shuffle: shufflePlay,
     });
     showToast(result.details);
+    if (outputKindForPlayer(players.find((p) => p.id === playerId)) === "pioneer") {
+      setReceiverPowerOn(true);
+    }
   };
 
   const saveSpeedDial = async () => {
@@ -377,6 +389,26 @@ function App() {
     }
   };
 
+  const adjustReceiverVolume = async (delta: number) => {
+    if (!selectedPlayer) {
+      showToast("Select a Plexamp player first.");
+      return;
+    }
+    const result = await api.audioOutputVolume(selectedPlayer, delta);
+    showToast(result.details);
+  };
+
+  const toggleReceiverPower = async () => {
+    if (!selectedPlayer) {
+      showToast("Select a Plexamp player first.");
+      return;
+    }
+    const next = !receiverPowerOn;
+    const result = await api.audioOutputPower(selectedPlayer, next);
+    setReceiverPowerOn(next);
+    showToast(result.details);
+  };
+
   const adjustSonosVolume = async (delta: number) => {
     if (selectedSpeakers.length === 0) {
       showToast("Select at least one Sonos speaker to change volume.");
@@ -457,29 +489,37 @@ function App() {
               <IconChevronDown />
             </summary>
             <div className="playToBody">
-              <h3>Sonos Speakers</h3>
-              <p className="hint playToSpeakersHint">
-                Which speakers to play to. Leave all unchecked if you only want Plexamp without Sonos.
-              </p>
-              {speakers.length === 0 ? (
-                <p className="hint">No speakers yet — enter seed IPs under Setup when using Docker/VLAN.</p>
+              {outputKind === "pioneer" ? (
+                <p className="hint playToSpeakersHint">
+                  This Plexamp player is routed to a Pioneer receiver in Setup. Sonos speakers are not used for Start.
+                </p>
               ) : (
-                <div className="pickGrid" role="group" aria-label="Sonos speakers">
-                  {speakers.map((speaker) => {
-                    const selected = selectedSpeakers.includes(speaker.id);
-                    return (
-                      <button
-                        key={speaker.id}
-                        type="button"
-                        className={`pickGridBtn${selected ? " pickGridBtn--selected" : ""}`}
-                        aria-pressed={selected}
-                        onClick={() => toggleSpeaker(speaker.id)}
-                      >
-                        {speaker.name}
-                      </button>
-                    );
-                  })}
-                </div>
+                <>
+                  <h3>Sonos Speakers</h3>
+                  <p className="hint playToSpeakersHint">
+                    Which speakers to play to. Leave all unchecked if you only want Plexamp without Sonos.
+                  </p>
+                  {speakers.length === 0 ? (
+                    <p className="hint">No speakers yet — enter seed IPs under Setup when using Docker/VLAN.</p>
+                  ) : (
+                    <div className="pickGrid" role="group" aria-label="Sonos speakers">
+                      {speakers.map((speaker) => {
+                        const selected = selectedSpeakers.includes(speaker.id);
+                        return (
+                          <button
+                            key={speaker.id}
+                            type="button"
+                            className={`pickGridBtn${selected ? " pickGridBtn--selected" : ""}`}
+                            aria-pressed={selected}
+                            onClick={() => toggleSpeaker(speaker.id)}
+                          >
+                            {speaker.name}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </>
               )}
               <h3 className="playToPlayerHeading">Plexamp Player</h3>
               <p className="hint playToPlayerHint">Choose which Plexamp player plays the music.</p>
@@ -556,38 +596,73 @@ function App() {
 
       <div className="controlRailDock">
         <aside className="controlRail" aria-label="Playback controls">
-        <fieldset className="controlFrameset">
-          <legend>Sonos</legend>
-          <div className="mediaToolbar mediaToolbarStack" role="group" aria-label="Sonos selected speakers">
-            <button
-              type="button"
-              className="iconBtn"
-              aria-label={sonosPlaying ? "Stop selected Sonos speakers" : "Play line-in on selected Sonos speakers"}
-              title={sonosPlaying ? "Stop selected speakers" : "Play line-in on selected speakers"}
-              onClick={() => toggleSonosLineInTransport().catch((e) => showToast(e.message))}
-            >
-              {sonosPlaying ? <IconStop /> : <IconPlay />}
-            </button>
-            <button
-              type="button"
-              className="iconBtn"
-              aria-label="Lower volume on selected Sonos speakers"
-              title="Volume down (selected speakers)"
-              onClick={() => adjustSonosVolume(-5).catch((e) => showToast(e.message))}
-            >
-              <IconVolumeDown />
-            </button>
-            <button
-              type="button"
-              className="iconBtn"
-              aria-label="Raise volume on selected Sonos speakers"
-              title="Volume up (selected speakers)"
-              onClick={() => adjustSonosVolume(5).catch((e) => showToast(e.message))}
-            >
-              <IconVolumeUp />
-            </button>
-          </div>
-        </fieldset>
+        {outputKind === "pioneer" ? (
+          <fieldset className="controlFrameset">
+            <legend>Receiver</legend>
+            <div className="mediaToolbar mediaToolbarStack" role="group" aria-label="Pioneer AV receiver">
+              <button
+                type="button"
+                className={`iconBtn${receiverPowerOn ? "" : " iconBtn--active"}`}
+                aria-label={receiverPowerOn ? "Standby" : "Power on"}
+                title={receiverPowerOn ? "Standby" : "Power on"}
+                onClick={() => toggleReceiverPower().catch((e) => showToast(e.message))}
+              >
+                {receiverPowerOn ? "Standby" : "Power"}
+              </button>
+              <button
+                type="button"
+                className="iconBtn"
+                aria-label="Lower receiver volume"
+                title="Volume down"
+                onClick={() => adjustReceiverVolume(-5).catch((e) => showToast(e.message))}
+              >
+                <IconVolumeDown />
+              </button>
+              <button
+                type="button"
+                className="iconBtn"
+                aria-label="Raise receiver volume"
+                title="Volume up"
+                onClick={() => adjustReceiverVolume(5).catch((e) => showToast(e.message))}
+              >
+                <IconVolumeUp />
+              </button>
+            </div>
+          </fieldset>
+        ) : outputKind === "sonos" || selectedSpeakers.length > 0 ? (
+          <fieldset className="controlFrameset">
+            <legend>Sonos</legend>
+            <div className="mediaToolbar mediaToolbarStack" role="group" aria-label="Sonos selected speakers">
+              <button
+                type="button"
+                className="iconBtn"
+                aria-label={sonosPlaying ? "Stop selected Sonos speakers" : "Play line-in on selected Sonos speakers"}
+                title={sonosPlaying ? "Stop selected speakers" : "Play line-in on selected speakers"}
+                onClick={() => toggleSonosLineInTransport().catch((e) => showToast(e.message))}
+              >
+                {sonosPlaying ? <IconStop /> : <IconPlay />}
+              </button>
+              <button
+                type="button"
+                className="iconBtn"
+                aria-label="Lower volume on selected Sonos speakers"
+                title="Volume down (selected speakers)"
+                onClick={() => adjustSonosVolume(-5).catch((e) => showToast(e.message))}
+              >
+                <IconVolumeDown />
+              </button>
+              <button
+                type="button"
+                className="iconBtn"
+                aria-label="Raise volume on selected Sonos speakers"
+                title="Volume up (selected speakers)"
+                onClick={() => adjustSonosVolume(5).catch((e) => showToast(e.message))}
+              >
+                <IconVolumeUp />
+              </button>
+            </div>
+          </fieldset>
+        ) : null}
 
         <fieldset className="controlFrameset">
           <legend>Plexamp</legend>

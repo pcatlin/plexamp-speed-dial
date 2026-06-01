@@ -16,7 +16,16 @@ const responses: Record<string, unknown> = {
   "/auth/plex/status": { connected: true, username: "owner" },
   "/media/playlists": [{ id: "playlist-1", title: "Top Mix", type: "playlist" }],
   "/sonos/speakers": [{ id: "s1", name: "Living Room", ip: "192.168.1.10" }],
-  "/players": [{ id: 1, name: "Plexamp Kitchen", host: "host", port: 32500, is_active: true }],
+  "/players": [
+    {
+      id: 1,
+      name: "Plexamp Kitchen",
+      host: "host",
+      port: 32500,
+      is_active: true,
+      audio_output: { kind: "none", config: {} },
+    },
+  ],
   "/speed-dial": [],
   "/play": { status: "ok", details: "Playing now" },
   "/media/collections": [{ id: "col-1", title: "Test Collection" }],

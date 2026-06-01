@@ -8,9 +8,9 @@ The stack is API-first (FastAPI + OpenAPI), with a React single-page UI served b
 
 ## Standout features
 
-### Plexamp → Sonos via Line-In
+### Plexamp → Sonos or Pioneer AVR
 
-Each Plexamp player can be bound to a Sonos speaker that exposes Line-In. On play, the backend coordinates Plexamp’s companion HTTP API (queue creation, play/pause/skip) with Sonos control (switch input, group speakers, volume). You can also target Plexamp only and skip Sonos routing.
+Each Plexamp player can be bound to **Sonos line-in**, a **Pioneer AV receiver** (ISCP over LAN, e.g. VSX-LX505), or **none**. On play, the backend starts Plexamp’s queue, then either groups Sonos speakers to the configured line-in source or powers on the Pioneer amp and switches to the configured input. The bottom control bar shows Sonos or **Receiver** (volume, power/standby) depending on the selected player’s route.
 
 ### Flexible “pick music” browsing
 

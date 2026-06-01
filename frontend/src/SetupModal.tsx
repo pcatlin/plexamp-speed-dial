@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
-import type { Player, RuntimeSettings, Speaker } from "./api";
+import type { AudioOutput, Player, RuntimeSettings, Speaker } from "./api";
 import { api } from "./api";
+import { defaultAudioOutput } from "./audioOutput";
+import { PlayerAudioRouteFields, audioOutputFromPlayer } from "./PlayerAudioRouteFields";
 
 function parsePlexampEndpoint(raw: string): { label: string; host: string; port: number } {
   const s = raw.trim();
@@ -57,11 +59,12 @@ export function SetupModal({
   const [sonosTimeout, setSonosTimeout] = useState(10);
   const [sonosScan, setSonosScan] = useState(true);
   const [sonosIface, setSonosIface] = useState("");
-  const [newPlayerLineInId, setNewPlayerLineInId] = useState("");
+  const [newPlayerAudioOutput, setNewPlayerAudioOutput] = useState<AudioOutput>(defaultAudioOutput);
   const [sonosSpeakers, setSonosSpeakers] = useState<Speaker[]>([]);
   const [players, setPlayers] = useState<Player[]>([]);
   const [playerInput, setPlayerInput] = useState("");
   const [playerNameHint, setPlayerNameHint] = useState("");
+  const [testPlayerId, setTestPlayerId] = useState<number | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -142,12 +145,12 @@ export function SetupModal({
         host,
         port,
         is_active: true,
-        sonos_line_in_speaker_id: newPlayerLineInId.trim(),
+        audio_output: newPlayerAudioOutput,
       });
       setPlayers(await api.players());
       setPlayerInput("");
       setPlayerNameHint("");
-      setNewPlayerLineInId("");
+      setNewPlayerAudioOutput(defaultAudioOutput());
       await onPlayersUpdated();
       onToast(`Added Plexamp player ${name} (${host}:${port}).`);
     } catch (e) {
@@ -207,16 +210,28 @@ export function SetupModal({
     }
   };
 
-  const updatePlayerLineIn = async (playerId: number, sonos_line_in_speaker_id: string) => {
+  const updatePlayerAudioOutput = async (playerId: number, audio_output: AudioOutput) => {
     setBusy(true);
     try {
-      await api.patchPlayer(playerId, { sonos_line_in_speaker_id });
+      await api.patchPlayer(playerId, { audio_output });
       setPlayers(await api.players());
       await onPlayersUpdated();
     } catch (e) {
       onToast(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
+    }
+  };
+
+  const testPlayerAudioOutput = async (playerId: number) => {
+    setTestPlayerId(playerId);
+    try {
+      const result = await api.audioOutputTest(playerId);
+      onToast(result.details);
+    } catch (e) {
+      onToast(e instanceof Error ? e.message : String(e));
+    } finally {
+      setTestPlayerId(null);
     }
   };
 
@@ -325,7 +340,8 @@ export function SetupModal({
         <section className="modalSection">
           <h3>Plexamp players</h3>
           <p className="hint">
-            Hostname, or IP of new Plexamp player. Pick which Sonos has this Plexamp on its analog line-in (or none).
+            Hostname or IP of each Plexamp player. Route its analog output through Sonos line-in, a Pioneer AV receiver, or
+            none (Plexamp only).
           </p>
           <div className="inlineGrow">
             <label className="fieldLabel mb0 stretch">
@@ -351,26 +367,17 @@ export function SetupModal({
                 onChange={(e) => setPlayerNameHint(e.target.value)}
               />
             </label>
-            <label className="fieldLabel mb0 stretch">
-              Line-in Sonos
-              <select
-                className="textInput"
-                value={newPlayerLineInId}
-                onChange={(e) => setNewPlayerLineInId(e.target.value)}
-                aria-label="Sonos with Plexamp on line-in for new player"
-              >
-                <option value="">None</option>
-                {sonosSpeakers.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
-            </label>
             <button type="button" className="nowrap" disabled={busy} onClick={() => void addPlayer()}>
               Add
             </button>
           </div>
+          <PlayerAudioRouteFields
+            idPrefix="new-player"
+            value={newPlayerAudioOutput}
+            onChange={setNewPlayerAudioOutput}
+            sonosSpeakers={sonosSpeakers}
+            disabled={busy}
+          />
           <ul className="playerList">
             {players.map((p) => (
               <li key={p.id}>
@@ -381,23 +388,17 @@ export function SetupModal({
                     {p.host}
                   </span>
                 </span>
-                <label className="fieldLabel mb0 nowrap">
-                  Line-in
-                  <select
-                    className="textInput"
-                    value={p.sonos_line_in_speaker_id ?? ""}
+                <div className="playerRouteCell">
+                  <PlayerAudioRouteFields
+                    idPrefix={`player-${p.id}`}
+                    value={audioOutputFromPlayer(p)}
+                    onChange={(next) => void updatePlayerAudioOutput(p.id, next)}
+                    sonosSpeakers={sonosSpeakers}
                     disabled={busy}
-                    onChange={(e) => void updatePlayerLineIn(p.id, e.target.value)}
-                    aria-label={`Sonos line-in for ${p.name}`}
-                  >
-                    <option value="">None</option>
-                    {sonosSpeakers.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                    onTest={() => testPlayerAudioOutput(p.id)}
+                    testBusy={testPlayerId === p.id}
+                  />
+                </div>
                 <button type="button" className="danger nowrap" disabled={busy} onClick={() => void removePlayer(p.id)}>
                   Delete
                 </button>

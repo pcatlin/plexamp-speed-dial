@@ -22,6 +22,7 @@ from app.services.plexamp_client import (
     plexamp_timeline_implies_playing,
     plexamp_timeline_state,
 )
+from app.services.audio_output.router import AudioOutputRouter
 from app.services.runtime_setup import resolve_plex_conn, resolve_sonos_runtime
 from app.services.sonos_service import SonosService
 
@@ -43,9 +44,11 @@ class PlaybackService:
         self,
         plex_service: PlexService | None = None,
         sonos_service: SonosService | None = None,
+        audio_output_router: AudioOutputRouter | None = None,
     ) -> None:
         self._plex = plex_service or PlexService()
         self._sonos = sonos_service or SonosService()
+        self._audio_output = audio_output_router or AudioOutputRouter(sonos_service=self._sonos)
 
     @staticmethod
     def _plexamp_base_for_player(player: PlexampPlayer) -> tuple[str | None, str | None]:
@@ -205,26 +208,14 @@ class PlaybackService:
                 ),
             )
 
-        sonos_note = ""
-        if target_speakers:
-            try:
-                runtime = resolve_sonos_runtime(db)
-                line_sid = (getattr(player, "sonos_line_in_speaker_id", None) or "").strip()
-                sonos_note = self._sonos.group_selected_and_play_line_in(
-                    runtime,
-                    target_speakers,
-                    line_in_speaker_id=line_sid,
-                    line_in_name_legacy="",
-                )
-            except Exception as exc:  # noqa: BLE001
-                _log.exception("Sonos line-in orchestration failed")
-                sonos_note = f"Sonos error: {exc}"
+        output_note = self._audio_output.prepare_for_play(
+            player,
+            db,
+            target_speaker_ids=target_speakers,
+        )
 
         title = getattr(item, "title", "") or getattr(item, "tag", "") or payload.media_id
-        if target_speakers:
-            tail = sonos_note if sonos_note else f"Sonos: no line-in action ({speaker_note})."
-        else:
-            tail = "No Sonos outputs selected."
+        tail = output_note
         play_kind = effective_type
         if effective_type == "track":
             play_kind = "track radio"
@@ -322,15 +313,14 @@ class PlaybackService:
         player = db.get(PlexampPlayer, player_id)
         if not player:
             return PlayResponse(status="error", details="Selected Plexamp player not found")
-        line_sid = (getattr(player, "sonos_line_in_speaker_id", None) or "").strip()
-        try:
-            runtime = resolve_sonos_runtime(db)
-            msg = self._sonos.group_selected_and_play_line_in(
-                runtime,
-                speaker_ids,
-                line_in_speaker_id=line_sid,
-                line_in_name_legacy="",
+        route = self._audio_output.output_for_player(player)
+        if route.kind != "sonos":
+            return PlayResponse(
+                status="error",
+                details="Selected Plexamp player is not configured for Sonos line-in (check Setup).",
             )
+        try:
+            msg = self._audio_output.prepare_for_play(player, db, target_speaker_ids=speaker_ids)
         except Exception as exc:  # noqa: BLE001
             _log.exception("Sonos line-in play failed")
             return PlayResponse(status="error", details=f"Sonos line-in failed: {exc}")

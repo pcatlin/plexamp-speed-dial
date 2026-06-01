@@ -15,7 +15,7 @@ Sonos speakers without the clunky Plexamp casting.
 - Select playback target:
   - one or more Sonos speakers (via Line-In)
   - ignore this and just control Plexamp only
-- Manage multiple Plexamp players
+- Manage multiple Plexamp players (route each to Sonos line-in, a Pioneer AV receiver, or none)
 - Save one-tap speed-dial favorites and delete them
 - Direct basic control Plexamp and Sonos speakers (Play, Pause, Volume, Skip, Prev)
 - Simple API-first backend with OpenAPI docs
@@ -42,6 +42,7 @@ Base path: `http://localhost:8000/api/v1`
 - `POST /play`
 - `POST /plexamp/skip-next` · `POST /plexamp/skip-previous` · `POST /plexamp/pause` · `POST /plexamp/resume`
 - `POST /sonos/stop` · `POST /sonos/play-line-in`
+- `POST /audio-output/volume` · `POST /audio-output/power` · `POST /audio-output/test` (Pioneer AVR when configured)
 - `GET|POST|DELETE /speed-dial`
 
 ### Play request example
@@ -183,4 +184,5 @@ npm test
 - For **HTTPS** to Plex with a self-signed certificate, try plain **`http://...:32400`**, or turn off **Verify HTTPS certificates** in Setup (trusted LAN only).
 - Media lists require at least one **Music** library on the Plex server that your account can read.
 - **Sonos in Docker:** discovery uses SSDP multicast, which usually **does not cross Docker’s default bridge**. Enter **seed IPs** under Setup (comma-separated LAN IPs of any Sonos player). On **Linux** you can alternatively run the API with **`network_mode: host`** (not supported the same way on Docker Desktop for Mac).
+- **Pioneer AV receiver (e.g. VSX-LX505):** In Setup → Plexamp players, choose **Pioneer AVR**, enter the receiver LAN IP, and pick the **input** where Plexamp is connected (HDMI 1/2, etc.). On the receiver: connect Ethernet, enable **network / IP control** (and **network standby** if power-on from the app fails). Default ISCP port is **60128**. Use **Test receiver** in Setup — it must report that ISCP responded. **Start** powers on the amp and switches input; the bottom **Receiver** bar controls volume and standby. The API container must reach the amp on your LAN (same as Sonos seed IPs in Docker).
 - **Cloudflare Access / tunnel:** The web manifest is inlined in `index.html` so the browser does not fetch `/manifest.webmanifest` (that URL often redirects to the Access login page and triggers CORS errors). PWA install still needs **`/sw.js`** and **`/favicon.png`** reachable without an Access redirect. In Zero Trust → your application → **Policies**, add a **Bypass** (or **Service Auth**) rule for paths such as `/sw.js`, `/favicon.png`, and optionally `/assets/*`. The main app and `/api/*` can stay behind Access.

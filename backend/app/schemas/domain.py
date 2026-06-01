@@ -71,15 +71,20 @@ class SonosGroupPresetRead(SonosGroupPresetCreate):
     id: int
 
 
+AudioOutputKind = Literal["none", "sonos", "pioneer"]
+
+
+class AudioOutput(BaseModel):
+    kind: AudioOutputKind = "none"
+    config: dict[str, object] = Field(default_factory=dict)
+
+
 class PlayerCreate(BaseModel):
     name: str
     host: str
     port: int = 32500
     is_active: bool = True
-    sonos_line_in_speaker_id: str = Field(
-        default="",
-        description="Sonos speaker id (from /sonos/speakers) whose line-in carries this Plexamp; empty = none.",
-    )
+    audio_output: AudioOutput = Field(default_factory=AudioOutput)
 
 
 class PlayerRead(PlayerCreate):
@@ -89,10 +94,21 @@ class PlayerRead(PlayerCreate):
 class PlayerPatch(BaseModel):
     """Partial update for a Plexamp player (Setup UI)."""
 
-    sonos_line_in_speaker_id: str | None = Field(
-        default=None,
-        description="Set to '' to clear line-in mapping; omit field to leave unchanged.",
-    )
+    audio_output: AudioOutput | None = None
+
+
+class AudioOutputVolumeRequest(BaseModel):
+    player_id: int
+    delta: int = Field(..., ge=-30, le=30)
+
+
+class AudioOutputPowerRequest(BaseModel):
+    player_id: int
+    on: bool
+
+
+class AudioOutputTestRequest(BaseModel):
+    player_id: int
 
 
 class PlayRequest(BaseModel):

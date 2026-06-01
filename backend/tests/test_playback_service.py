@@ -68,7 +68,15 @@ def test_playback_service_uses_preset_speakers(db_session, patched_play_queue):
     db_session.add(PlexCredential(auth_token="dummy-token", is_connected=True))
     db_session.commit()
 
-    player = PlexampPlayer(name="Kitchen", host="plexamp.local", port=32500, is_active=True)
+    player = PlexampPlayer(
+        name="Kitchen",
+        host="plexamp.local",
+        port=32500,
+        is_active=True,
+        sonos_line_in_speaker_id="line-src",
+        audio_output_kind="sonos",
+        audio_output_config={"speaker_id": "line-src"},
+    )
     preset = SonosGroupPreset(name="Downstairs", speaker_ids=["s1", "s2"])
     db_session.add_all([player, preset])
     db_session.commit()
@@ -157,7 +165,15 @@ def test_playback_sonos_play_line_in_player_not_found(db_session):
 
 
 def test_playback_sonos_play_line_in_ok(db_session):
-    player = PlexampPlayer(name="Kitchen", host="plexamp.local", port=32500, is_active=True, sonos_line_in_speaker_id="fridge-uid")
+    player = PlexampPlayer(
+        name="Kitchen",
+        host="plexamp.local",
+        port=32500,
+        is_active=True,
+        sonos_line_in_speaker_id="fridge-uid",
+        audio_output_kind="sonos",
+        audio_output_config={"speaker_id": "fridge-uid"},
+    )
     db_session.add(player)
     db_session.commit()
     db_session.refresh(player)

@@ -718,11 +718,82 @@ button.smallBtn {
 
 .playerList li {
   display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.65rem;
+  padding: 0.65rem 0;
+  border-bottom: 1px solid #efefef;
+}
+
+.playerList li .playerMeta {
+  display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
-  padding: 0.45rem 0;
-  border-bottom: 1px solid #efefef;
+  flex-wrap: wrap;
+}
+
+.playerRouteCell {
+  flex: 1 1 100%;
+  min-width: 0;
+}
+
+.audioRouteBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  margin-top: 0.35rem;
+}
+
+.audioRouteKinds {
+  border: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem 1rem;
+}
+
+.audioRouteKindOption {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.92rem;
+  cursor: pointer;
+}
+
+.audioRoutePioneerFields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem 0.65rem;
+  align-items: end;
+}
+
+.audioRoutePioneerFields .hint {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 520px) {
+  .audioRoutePioneerFields {
+    grid-template-columns: 1fr;
+  }
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.iconBtn--active {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
 }
 
 .playerMeta {

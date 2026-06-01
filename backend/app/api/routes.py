@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import require_plex_creds
 from app.db.database import Base, SessionLocal, engine, get_db
 from app.db.runtime_setup_migrate import (
+    ensure_plexamp_player_audio_output_columns,
     ensure_plexamp_player_sonos_line_in_column,
     ensure_runtime_setup_columns,
     ensure_runtime_setup_plex_client_identifier_column,
@@ -20,6 +21,10 @@ from app.models import PlexCredential, PlexampPlayer, SonosGroupPreset, SpeedDia
 from app.plexapi_identity import apply_stable_plexapi_headers, log_plex_account_linked
 from app.schemas.common import HealthResponse, IdResponse
 from app.schemas.domain import (
+    AudioOutput,
+    AudioOutputPowerRequest,
+    AudioOutputTestRequest,
+    AudioOutputVolumeRequest,
     MediaItem,
     MediaSuggestionsResponse,
     PlayerControlRequest,
@@ -48,6 +53,8 @@ from app.schemas.domain import (
     TidalTrackRead,
     TidalTracksDeleteResponse,
 )
+from app.services.audio_output.router import AudioOutputRouter
+from app.services.audio_output.types import apply_audio_output_to_row, audio_output_from_player_row
 from app.services.playback_service import PlaybackService
 from app.services.plex_service import PlexService, PlexTvHttpError
 from app.services.runtime_setup import effective_plex_url, get_or_create_runtime_setup, resolve_plex_conn, resolve_sonos_runtime
@@ -56,7 +63,20 @@ from app.services.sonos_service import SonosService
 router = APIRouter()
 plex_service = PlexService()
 sonos_service = SonosService()
-playback_service = PlaybackService()
+audio_output_router = AudioOutputRouter(sonos_service=sonos_service)
+playback_service = PlaybackService(audio_output_router=audio_output_router)
+
+
+def _player_read(row: PlexampPlayer) -> PlayerRead:
+    ao = audio_output_from_player_row(row)
+    return PlayerRead(
+        id=row.id,
+        name=row.name,
+        host=row.host,
+        port=row.port,
+        is_active=row.is_active,
+        audio_output=AudioOutput(kind=ao.kind, config=ao.config),
+    )
 
 
 def _fetch_playback_snapshot(speaker_ids: list[str], player_id: int | None) -> dict[str, Any]:
@@ -100,6 +120,7 @@ def startup() -> None:
     ensure_speed_dial_artist_radio_column(engine)
     ensure_speed_dial_shuffle_column(engine)
     ensure_plexamp_player_sonos_line_in_column(engine)
+    ensure_plexamp_player_audio_output_columns(engine)
     seed = SessionLocal()
     try:
         row = get_or_create_runtime_setup(seed)
@@ -449,22 +470,20 @@ def delete_preset(preset_id: int, db: Session = Depends(get_db)) -> dict[str, st
 @router.get("/players", response_model=list[PlayerRead])
 def players(db: Session = Depends(get_db)) -> list[PlayerRead]:
     rows = db.query(PlexampPlayer).all()
-    return [
-        PlayerRead(
-            id=row.id,
-            name=row.name,
-            host=row.host,
-            port=row.port,
-            is_active=row.is_active,
-            sonos_line_in_speaker_id=(getattr(row, "sonos_line_in_speaker_id", None) or "").strip(),
-        )
-        for row in rows
-    ]
+    return [_player_read(row) for row in rows]
 
 
 @router.post("/players", response_model=IdResponse)
 def create_player(payload: PlayerCreate, db: Session = Depends(get_db)) -> IdResponse:
-    row = PlexampPlayer(**payload.model_dump())
+    from app.services.audio_output.types import AudioOutput as InternalAudioOutput
+
+    data = payload.model_dump()
+    audio = AudioOutput.model_validate(data.pop("audio_output", {}) or {})
+    row = PlexampPlayer(**data)
+    apply_audio_output_to_row(
+        row,
+        InternalAudioOutput(kind=audio.kind, config=dict(audio.config)),
+    )
     db.add(row)
     db.commit()
     db.refresh(row)
@@ -477,18 +496,14 @@ def patch_player(player_id: int, payload: PlayerPatch, db: Session = Depends(get
     if not row:
         raise HTTPException(status_code=404, detail="Player not found")
     data = payload.model_dump(exclude_unset=True)
-    if "sonos_line_in_speaker_id" in data and data["sonos_line_in_speaker_id"] is not None:
-        row.sonos_line_in_speaker_id = str(data["sonos_line_in_speaker_id"]).strip()
+    if "audio_output" in data and data["audio_output"] is not None:
+        audio = AudioOutput.model_validate(data["audio_output"])
+        from app.services.audio_output.types import AudioOutput as InternalAudioOutput
+
+        apply_audio_output_to_row(row, InternalAudioOutput(kind=audio.kind, config=dict(audio.config)))
     db.commit()
     db.refresh(row)
-    return PlayerRead(
-        id=row.id,
-        name=row.name,
-        host=row.host,
-        port=row.port,
-        is_active=row.is_active,
-        sonos_line_in_speaker_id=(getattr(row, "sonos_line_in_speaker_id", None) or "").strip(),
-    )
+    return _player_read(row)
 
 
 @router.delete("/players/{player_id}")
@@ -651,6 +666,42 @@ async def playback_state_websocket(websocket: WebSocket) -> None:
             await asyncio.sleep(interval_s)
     except WebSocketDisconnect:
         return
+
+
+@router.post("/audio-output/volume", response_model=PlayResponse)
+def audio_output_volume(payload: AudioOutputVolumeRequest, db: Session = Depends(get_db)) -> PlayResponse:
+    player = db.get(PlexampPlayer, payload.player_id)
+    if not player:
+        raise HTTPException(status_code=404, detail="Player not found")
+    try:
+        details = audio_output_router.adjust_volume(player, payload.delta)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return PlayResponse(status="ok", details=details)
+
+
+@router.post("/audio-output/power", response_model=PlayResponse)
+def audio_output_power(payload: AudioOutputPowerRequest, db: Session = Depends(get_db)) -> PlayResponse:
+    player = db.get(PlexampPlayer, payload.player_id)
+    if not player:
+        raise HTTPException(status_code=404, detail="Player not found")
+    try:
+        details = audio_output_router.set_power(player, on=payload.on)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return PlayResponse(status="ok", details=details)
+
+
+@router.post("/audio-output/test", response_model=PlayResponse)
+def audio_output_test(payload: AudioOutputTestRequest, db: Session = Depends(get_db)) -> PlayResponse:
+    player = db.get(PlexampPlayer, payload.player_id)
+    if not player:
+        raise HTTPException(status_code=404, detail="Player not found")
+    try:
+        details = audio_output_router.test_output(player)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return PlayResponse(status="ok", details=details)
 
 
 @router.post("/sonos/volume", response_model=PlayResponse)

@@ -104,6 +104,61 @@ def ensure_plexamp_player_sonos_line_in_column(engine: Engine) -> None:
             _log.warning("plexamp_players migrate skipped/failed: %s", exc)
 
 
+def ensure_plexamp_player_audio_output_columns(engine: Engine) -> None:
+    """Add audio_output_kind/config and backfill from sonos_line_in_speaker_id."""
+    insp = inspect(engine)
+    if "plexamp_players" not in insp.get_table_names():
+        return
+    existing = {c["name"] for c in insp.get_columns("plexamp_players")}
+    alters: list[str] = []
+    if "audio_output_kind" not in existing:
+        alters.append(
+            "ALTER TABLE plexamp_players ADD COLUMN audio_output_kind VARCHAR(32) NOT NULL DEFAULT 'none'",
+        )
+    if "audio_output_config" not in existing:
+        # JSON for Postgres; SQLite accepts JSON type via SQLAlchemy on create_all for new DBs.
+        alters.append(
+            "ALTER TABLE plexamp_players ADD COLUMN audio_output_config JSON NOT NULL DEFAULT '{}'",
+        )
+    with engine.begin() as conn:
+        for stmt in alters:
+            try:
+                conn.execute(text(stmt))
+                _log.info("Applied plexamp_players migration: %s", stmt.split("ADD COLUMN")[1].strip().split()[0])
+            except Exception as exc:  # noqa: BLE001
+                _log.warning("plexamp_players migrate skipped/failed (%s): %s", stmt[:80], exc)
+
+    insp = inspect(engine)
+    existing = {c["name"] for c in insp.get_columns("plexamp_players")}
+    if "audio_output_kind" not in existing:
+        return
+
+    from app.db.database import SessionLocal
+    from app.models import PlexampPlayer
+
+    db = SessionLocal()
+    try:
+        for row in db.query(PlexampPlayer).all():
+            legacy = (row.sonos_line_in_speaker_id or "").strip()
+            kind = (getattr(row, "audio_output_kind", None) or "none").strip()
+            config = getattr(row, "audio_output_config", None)
+            if not isinstance(config, dict):
+                config = {}
+            if legacy and kind in ("", "none"):
+                row.audio_output_kind = "sonos"
+                row.audio_output_config = {"speaker_id": legacy}
+            elif not kind:
+                row.audio_output_kind = "none"
+            if row.audio_output_config is None:
+                row.audio_output_config = {}
+        db.commit()
+    except Exception as exc:  # noqa: BLE001
+        db.rollback()
+        _log.warning("plexamp_players audio_output backfill failed: %s", exc)
+    finally:
+        db.close()
+
+
 def ensure_speed_dial_shuffle_column(engine: Engine) -> None:
     """Add speed_dial_favorites.shuffle when upgrading an existing DB."""
     insp = inspect(engine)
