@@ -190,7 +190,7 @@ function App() {
 
   useEffect(() => {
     const wantSonos = outputKind === "sonos" && selectedSpeakers.length > 0;
-    const wantPlex = authConnected && selectedPlayer !== null;
+    const wantPlex = selectedPlayer !== null;
     const wantReceiver = outputKind === "pioneer" && selectedPlayer !== null;
     if (!wantSonos && !wantPlex && !wantReceiver) {
       setSonosPlaying(null);
@@ -457,6 +457,9 @@ function App() {
         <SetupModal
           open={setupOpen}
           onClose={() => setSetupOpen(false)}
+          onPlayerPatched={async (player) => {
+            setPlayers((current) => current.map((p) => (p.id === player.id ? player : p)));
+          }}
           onPlayersUpdated={async () => {
             const plist = await api.players();
             await reloadPlayersSelection(plist);

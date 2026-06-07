@@ -12,6 +12,8 @@ import requests.exceptions as requests_exc
 
 _log = logging.getLogger(__name__)
 
+_TIMELINE_TYPE_PRIORITY = ("music", "audio", "video", "photo")
+
 
 def sanitize_plexamp_base(player_url: str) -> str:
     """Ensure scheme and default companion port 32500 for Plexamp headless player."""
@@ -121,24 +123,72 @@ def plexamp_playback_command(
     return requests.get(url, timeout=timeout)
 
 
+def _timeline_element_type(el: ET.Element) -> str:
+    for attr in ("type", "itemType", "mtype"):
+        value = (el.get(attr) or "").strip().lower()
+        if value:
+            return value
+    return ""
+
+
 def _timeline_state_from_xml(text: str) -> str | None:
-    """Parse Plex companion timeline XML for the first Timeline ``state`` attribute."""
+    """Parse Plex companion timeline XML, preferring the music timeline over photo/video entries."""
     if not text or not text.strip():
         return None
-    m = re.search(r"<Timeline[^>]*\sstate=\"([^\"]+)\"", text, re.IGNORECASE)
-    if m:
-        return m.group(1).strip()
     try:
         root = ET.fromstring(text)
     except ET.ParseError:
+        root = None
+
+    timelines: list[tuple[str, str]] = []
+    if root is not None:
+        for el in root.iter():
+            tag = el.tag.split("}")[-1] if "}" in el.tag else el.tag
+            if tag != "Timeline":
+                continue
+            state = (el.get("state") or "").strip()
+            if state:
+                timelines.append((_timeline_element_type(el), state))
+
+    if not timelines:
+        m = re.search(
+            r'<Timeline[^>]*\btype="([^"]+)"[^>]*\bstate="([^"]+)"',
+            text,
+            re.IGNORECASE,
+        )
+        if m:
+            timelines.append((m.group(1).strip().lower(), m.group(2).strip()))
+        else:
+            m = re.search(r'<Timeline[^>]*\bstate="([^"]+)"', text, re.IGNORECASE)
+            if m:
+                timelines.append(("", m.group(1).strip()))
+
+    if not timelines:
         return None
-    for el in root.iter():
-        tag = el.tag.split("}")[-1] if "}" in el.tag else el.tag
-        if tag == "Timeline":
-            st = el.get("state")
-            if st:
-                return st.strip()
-    return None
+
+    for preferred in _TIMELINE_TYPE_PRIORITY:
+        for timeline_type, state in timelines:
+            if timeline_type == preferred:
+                return state
+
+    return timelines[0][1]
+
+
+def _plexamp_request_headers() -> dict[str, str]:
+    try:
+        from app.plexapi_identity import PLEX_DEVICE_NAME, PLEX_PRODUCT, current_plex_client_identifier
+
+        client_id = current_plex_client_identifier()
+    except Exception:  # noqa: BLE001
+        return {"Accept": "application/xml"}
+    if not client_id:
+        return {"Accept": "application/xml"}
+    return {
+        "Accept": "application/xml",
+        "X-Plex-Client-Identifier": client_id,
+        "X-Plex-Product": PLEX_PRODUCT,
+        "X-Plex-Device-Name": PLEX_DEVICE_NAME,
+    }
 
 
 def plexamp_timeline_state(
@@ -161,7 +211,7 @@ def plexamp_timeline_state(
         url = f"{base}/player/timeline/poll?{urlencode(params)}"
         safe = re.sub(r"token=[^&]*", "token=<redacted>", url)
         try:
-            resp = requests.get(url, timeout=timeout)
+            resp = requests.get(url, timeout=timeout, headers=_plexamp_request_headers())
         except requests_exc.RequestException as exc:
             _log.debug("Plexamp timeline poll transport error %s: %s", safe, exc)
             continue

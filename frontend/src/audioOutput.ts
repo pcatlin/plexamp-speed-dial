@@ -66,6 +66,17 @@ export function presetLabelForCode(code: string): string {
   return hit?.label ?? `Custom (${code})`;
 }
 
+export function audioOutputsEqual(a: AudioOutput, b: AudioOutput): boolean {
+  if (a.kind !== b.kind) return false;
+  const aConfig = a.config ?? {};
+  const bConfig = b.config ?? {};
+  const keys = new Set([...Object.keys(aConfig), ...Object.keys(bConfig)]);
+  for (const key of keys) {
+    if (String(aConfig[key] ?? "") !== String(bConfig[key] ?? "")) return false;
+  }
+  return true;
+}
+
 export function buildAudioOutput(
   kind: AudioOutputKind,
   sonosSpeakerId: string,

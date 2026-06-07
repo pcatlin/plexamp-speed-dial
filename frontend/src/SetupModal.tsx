@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { AudioOutput, Player, RuntimeSettings, Speaker } from "./api";
 import { api } from "./api";
-import { defaultAudioOutput } from "./audioOutput";
+import { audioOutputsEqual, defaultAudioOutput } from "./audioOutput";
 import { PlayerAudioRouteFields, audioOutputFromPlayer } from "./PlayerAudioRouteFields";
 
 function parsePlexampEndpoint(raw: string): { label: string; host: string; port: number } {
@@ -34,6 +34,7 @@ type Props = {
   open: boolean;
   onClose: () => void;
   onPlayersUpdated: () => Promise<void>;
+  onPlayerPatched?: (player: Player) => Promise<void>;
   afterRuntimeSaved?: () => Promise<void>;
   /** Sync parent after Plex OAuth completes (reload library, etc.). */
   onPlexAuthRefresh?: () => Promise<void>;
@@ -44,6 +45,7 @@ export function SetupModal({
   open,
   onClose,
   onPlayersUpdated,
+  onPlayerPatched,
   afterRuntimeSaved,
   onPlexAuthRefresh,
   onToast,
@@ -62,6 +64,7 @@ export function SetupModal({
   const [newPlayerAudioOutput, setNewPlayerAudioOutput] = useState<AudioOutput>(defaultAudioOutput);
   const [sonosSpeakers, setSonosSpeakers] = useState<Speaker[]>([]);
   const [players, setPlayers] = useState<Player[]>([]);
+  const [playerAudioDrafts, setPlayerAudioDrafts] = useState<Record<number, AudioOutput>>({});
   const [playerInput, setPlayerInput] = useState("");
   const [playerNameHint, setPlayerNameHint] = useState("");
   const [testPlayerId, setTestPlayerId] = useState<number | null>(null);
@@ -82,6 +85,9 @@ export function SetupModal({
         applySettings(settings);
         setSonosSpeakers(spk);
         setPlayers(plist);
+        setPlayerAudioDrafts(
+          Object.fromEntries(plist.map((p) => [p.id, audioOutputFromPlayer(p)] as const)),
+        );
         setAuthConnected(auth.connected);
         setAuthUsername(auth.username ?? "");
         setPlayerInput("");
@@ -210,12 +216,21 @@ export function SetupModal({
     }
   };
 
-  const updatePlayerAudioOutput = async (playerId: number, audio_output: AudioOutput) => {
+  const setPlayerAudioDraft = (playerId: number, audio_output: AudioOutput) => {
+    setPlayerAudioDrafts((current) => ({ ...current, [playerId]: audio_output }));
+  };
+
+  const commitPlayerAudioOutput = async (playerId: number, audio_output: AudioOutput) => {
+    const saved = players.find((p) => p.id === playerId);
+    if (saved && audioOutputsEqual(audioOutputFromPlayer(saved), audio_output)) {
+      return;
+    }
     setBusy(true);
     try {
-      await api.patchPlayer(playerId, { audio_output });
-      setPlayers(await api.players());
-      await onPlayersUpdated();
+      const updated = await api.patchPlayer(playerId, { audio_output });
+      setPlayers((current) => current.map((p) => (p.id === playerId ? updated : p)));
+      setPlayerAudioDrafts((current) => ({ ...current, [playerId]: audio_output }));
+      await onPlayerPatched?.(updated);
     } catch (e) {
       onToast(e instanceof Error ? e.message : String(e));
     } finally {
@@ -391,8 +406,9 @@ export function SetupModal({
                 <div className="playerRouteCell">
                   <PlayerAudioRouteFields
                     idPrefix={`player-${p.id}`}
-                    value={audioOutputFromPlayer(p)}
-                    onChange={(next) => void updatePlayerAudioOutput(p.id, next)}
+                    value={playerAudioDrafts[p.id] ?? audioOutputFromPlayer(p)}
+                    onChange={(next) => setPlayerAudioDraft(p.id, next)}
+                    onCommit={(next) => void commitPlayerAudioOutput(p.id, next)}
                     sonosSpeakers={sonosSpeakers}
                     disabled={busy}
                     onTest={() => testPlayerAudioOutput(p.id)}

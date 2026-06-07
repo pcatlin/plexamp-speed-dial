@@ -14,7 +14,10 @@ import {
 
 type Props = {
   value: AudioOutput;
+  /** Update local draft (e.g. while typing). */
   onChange: (next: AudioOutput) => void;
+  /** Persist draft to server; omit for forms that save on explicit action. */
+  onCommit?: (next: AudioOutput) => void;
   sonosSpeakers: Speaker[];
   disabled?: boolean;
   idPrefix: string;
@@ -25,6 +28,7 @@ type Props = {
 export function PlayerAudioRouteFields({
   value,
   onChange,
+  onCommit,
   sonosSpeakers,
   disabled,
   idPrefix,
@@ -38,14 +42,34 @@ export function PlayerAudioRouteFields({
   const presetMatch = PIONEER_INPUT_PRESETS.some((p) => p.code === inputCode);
   const selectInputValue = customInput || !presetMatch ? "__custom__" : inputCode;
 
-  const emit = (
+  const build = (
+    nextKind: AudioOutputKind,
+    sonosId: string,
+    host: string,
+    code: string,
+    port: number,
+  ) => buildAudioOutput(nextKind, sonosId, host, code, port);
+
+  const emitDraft = (
     nextKind: AudioOutputKind,
     sonosId: string,
     host: string,
     code: string,
     port: number,
   ) => {
-    onChange(buildAudioOutput(nextKind, sonosId, host, code, port));
+    onChange(build(nextKind, sonosId, host, code, port));
+  };
+
+  const emitCommit = (
+    nextKind: AudioOutputKind,
+    sonosId: string,
+    host: string,
+    code: string,
+    port: number,
+  ) => {
+    const next = build(nextKind, sonosId, host, code, port);
+    onChange(next);
+    onCommit?.(next);
   };
 
   const sonosId = sonosSpeakerIdFromOutput(value);
@@ -65,7 +89,7 @@ export function PlayerAudioRouteFields({
               name={kindName}
               value={opt.id}
               checked={kind === opt.id}
-              onChange={() => emit(opt.id, sonosId, host, inputCode, port)}
+              onChange={() => emitCommit(opt.id, sonosId, host, inputCode, port)}
             />
             {opt.label}
           </label>
@@ -79,7 +103,7 @@ export function PlayerAudioRouteFields({
             className="textInput"
             value={sonosId}
             disabled={disabled}
-            onChange={(e) => emit("sonos", e.target.value, host, inputCode, port)}
+            onChange={(e) => emitCommit("sonos", e.target.value, host, inputCode, port)}
           >
             <option value="">Select speaker…</option>
             {sonosSpeakers.map((s) => (
@@ -101,7 +125,8 @@ export function PlayerAudioRouteFields({
               placeholder="192.168.1.50"
               value={host}
               disabled={disabled}
-              onChange={(e) => emit("pioneer", sonosId, e.target.value, inputCode, port)}
+              onChange={(e) => emitDraft("pioneer", sonosId, e.target.value, inputCode, port)}
+              onBlur={(e) => onCommit?.(build("pioneer", sonosId, e.target.value, inputCode, port))}
             />
           </label>
           <label className="fieldLabel mb0 stretch">
@@ -117,7 +142,7 @@ export function PlayerAudioRouteFields({
                   return;
                 }
                 setCustomInput(false);
-                emit("pioneer", sonosId, host, v, port);
+                emitCommit("pioneer", sonosId, host, v, port);
               }}
             >
               {PIONEER_INPUT_PRESETS.map((p) => (
@@ -137,7 +162,10 @@ export function PlayerAudioRouteFields({
                 maxLength={2}
                 value={inputCode}
                 disabled={disabled}
-                onChange={(e) => emit("pioneer", sonosId, host, e.target.value.toUpperCase(), port)}
+                onChange={(e) => emitDraft("pioneer", sonosId, host, e.target.value.toUpperCase(), port)}
+                onBlur={(e) =>
+                  onCommit?.(build("pioneer", sonosId, host, e.target.value.toUpperCase(), port))
+                }
               />
             </label>
           ) : (
@@ -155,7 +183,10 @@ export function PlayerAudioRouteFields({
               max={65535}
               value={port}
               disabled={disabled}
-              onChange={(e) => emit("pioneer", sonosId, host, inputCode, Number(e.target.value) || 60128)}
+              onChange={(e) => emitDraft("pioneer", sonosId, host, inputCode, Number(e.target.value) || 60128)}
+              onBlur={(e) =>
+                onCommit?.(build("pioneer", sonosId, host, inputCode, Number(e.target.value) || 60128))
+              }
             />
           </label>
           {onTest ? (

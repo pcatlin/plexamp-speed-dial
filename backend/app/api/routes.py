@@ -484,7 +484,7 @@ def delete_preset(preset_id: int, db: Session = Depends(get_db)) -> dict[str, st
 
 @router.get("/players", response_model=list[PlayerRead])
 def players(db: Session = Depends(get_db)) -> list[PlayerRead]:
-    rows = db.query(PlexampPlayer).all()
+    rows = db.query(PlexampPlayer).order_by(PlexampPlayer.id.asc()).all()
     return [_player_read(row) for row in rows]
 
 
