@@ -25,6 +25,11 @@ def test_normalize_input_code_remaps_legacy_hdmi2():
     assert pioneer_eiscp.normalize_input_code("22") == "02"
 
 
+def test_normalize_input_code_preserves_cd():
+    assert pioneer_eiscp.normalize_input_code("23") == "23"
+    assert pioneer_eiscp.normalize_input_code("44") == "23"
+
+
 def test_is_query_answer_skips_echo():
     assert not pioneer_eiscp._is_query_answer("PWRQSTN", "PWRQSTN")
     assert pioneer_eiscp._is_query_answer("PWRQSTN", "PWR01")

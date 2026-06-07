@@ -14,11 +14,10 @@ export const PIONEER_INPUT_PRESETS: { label: string; code: string }[] = [
   { label: "Phono", code: "22" },
 ];
 
-/** Earlier builds used incorrect ISCP codes for HDMI presets; remap saved configs. */
+/** Earlier builds used incorrect ISCP codes for HDMI presets; remap saved configs. "23" is CD — do not remap. */
 const LEGACY_PIONEER_INPUT_CODES: Record<string, string> = {
   "12": "10",
   "22": "02",
-  "23": "01",
   "24": "11",
   "42": "22",
   "44": "23",

@@ -15,10 +15,10 @@ DEFAULT_TIMEOUT = 4.0
 PIONEER_MVL_DB_OFFSET = 82.0
 
 # Earlier UI builds used wrong SLI codes for HDMI presets (e.g. 22 = phono, not HDMI 2).
+# Remap codes saved by older UI builds. Do not remap "23" — it is CD on VSX-LX505 (old builds wrongly used it for HDMI 3).
 _LEGACY_INPUT_CODES: dict[str, str] = {
     "12": "10",
     "22": "02",
-    "23": "01",
     "24": "11",
     "42": "22",
     "44": "23",
