@@ -448,7 +448,7 @@ function App() {
       <div className="appShell">
         <div className="appMain">
         <header className="headerRow">
-          <h1>Plexamp Sonos Speed Dial</h1>
+          <h1>Plexamp Speed Dial</h1>
           <button type="button" className="ghost" onClick={() => setSetupOpen(true)}>
             Setup
           </button>
@@ -570,7 +570,7 @@ function App() {
           </div>
         </section>
 
-        <section className="card">
+        <section className="card speedDialCard">
           <h2>Speed Dial</h2>
           {speedDial.length === 0 ? <p>No favorites yet.</p> : null}
           <div className="grid">

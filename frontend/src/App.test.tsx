@@ -106,7 +106,7 @@ describe("App", () => {
   it("renders and executes play action", async () => {
     render(<App />);
 
-    await waitFor(() => expect(screen.getByText("Plexamp Sonos Speed Dial")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Plexamp Speed Dial")).toBeInTheDocument());
     await waitFor(() => {
       const sel = document.getElementById("pick-playlist") as HTMLSelectElement | null;
       expect(sel?.value).toBe("playlist-1");
@@ -118,7 +118,7 @@ describe("App", () => {
 
   it("opens credits from setup modal link and returns via hash", async () => {
     render(<App />);
-    await waitFor(() => expect(screen.getByText("Plexamp Sonos Speed Dial")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Plexamp Speed Dial")).toBeInTheDocument());
 
     fireEvent.click(screen.getByRole("button", { name: "Setup" }));
     await waitFor(() => expect(screen.getByRole("dialog")).toBeInTheDocument());
@@ -126,6 +126,6 @@ describe("App", () => {
     await waitFor(() => expect(screen.getByRole("heading", { name: "Credits", level: 1 })).toBeInTheDocument());
 
     fireEvent.click(screen.getByRole("link", { name: /Back to app/i }));
-    await waitFor(() => expect(screen.getByRole("heading", { name: "Plexamp Sonos Speed Dial", level: 1 })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Plexamp Speed Dial", level: 1 })).toBeInTheDocument());
   });
 });
