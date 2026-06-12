@@ -577,19 +577,6 @@ class PlexService:
                     return rows
             return self._try_section_search(section, libtype, 20, sort="titleSort")
 
-        def unplayed_for_section(section: MusicSection) -> list:
-            rows = self._try_section_search(section, libtype, 20, unwatched=True)
-            if rows:
-                return rows
-            for kwargs in (
-                {"lastViewedAt__lte": "1970-01-02"},
-                {"viewCount__lte": 0},
-            ):
-                rows = self._try_section_search(section, libtype, 20, **kwargs)
-                if rows:
-                    return rows
-            return []
-
         def random_for_section(section: MusicSection) -> list:
             rows = self._try_section_search(section, libtype, 40, sort="random")
             if rows:
@@ -601,7 +588,6 @@ class PlexService:
 
         return MediaSuggestionsResponse(
             most_played=merge_unique(most_for_section, 10),
-            unplayed=merge_unique(unplayed_for_section, 10),
             random=merge_unique(random_for_section, 10),
         )
 

@@ -15,7 +15,6 @@ class MediaItem(BaseModel):
 
 class MediaSuggestionsResponse(BaseModel):
     most_played: list[MediaItem] = Field(default_factory=list)
-    unplayed: list[MediaItem] = Field(default_factory=list)
     random: list[MediaItem] = Field(default_factory=list)
 
 

@@ -1193,11 +1193,6 @@ components:
             $ref: '#/components/schemas/MediaItem'
           type: array
           title: Most Played
-        unplayed:
-          items:
-            $ref: '#/components/schemas/MediaItem'
-          type: array
-          title: Unplayed
         random:
           items:
             $ref: '#/components/schemas/MediaItem'

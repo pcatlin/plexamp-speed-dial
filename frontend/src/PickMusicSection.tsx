@@ -11,7 +11,6 @@ export function playMediaTypeForTab(tab: PickTab): "playlist" | "album" | "artis
 
 type MediaSuggestions = {
   most_played: MediaItem[];
-  unplayed: MediaItem[];
   random: MediaItem[];
 };
 
@@ -196,7 +195,7 @@ export function PickMusicSection({
 
   const allSuggestionItems = useMemo(() => {
     if (!suggestions) return [] as MediaItem[];
-    return [...suggestions.most_played, ...suggestions.unplayed, ...suggestions.random];
+    return [...suggestions.most_played, ...suggestions.random];
   }, [suggestions]);
 
   const pickFromSuggestionSelect = useCallback(
@@ -354,21 +353,11 @@ export function PickMusicSection({
             value={suggestionSelect}
             onChange={(e) => pickFromSuggestionSelect(e.target.value)}
           >
-            <option value="">Choose from most played, unplayed, or random…</option>
+            <option value="">Choose from most played or random…</option>
             {suggestions && suggestions.most_played.length > 0 ? (
               <optgroup label="Most played">
                 {suggestions.most_played.map((item) => (
                   <option key={`m-${item.id}`} value={item.id}>
-                    {item.title}
-                    {item.subtitle ? ` — ${item.subtitle}` : ""}
-                  </option>
-                ))}
-              </optgroup>
-            ) : null}
-            {suggestions && suggestions.unplayed.length > 0 ? (
-              <optgroup label="Unplayed">
-                {suggestions.unplayed.map((item) => (
-                  <option key={`u-${item.id}`} value={item.id}>
                     {item.title}
                     {item.subtitle ? ` — ${item.subtitle}` : ""}
                   </option>

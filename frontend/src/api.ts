@@ -12,7 +12,6 @@ export interface MediaItem {
 
 export interface MediaSuggestions {
   most_played: MediaItem[];
-  unplayed: MediaItem[];
   random: MediaItem[];
 }
 
