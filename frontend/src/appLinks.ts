@@ -7,6 +7,13 @@ function isAndroid(): boolean {
   return typeof navigator !== "undefined" && /android/i.test(navigator.userAgent);
 }
 
+/** True on iOS and Android clients where native app links work from the browser. */
+export function isMobileAppClient(): boolean {
+  if (typeof navigator === "undefined") return false;
+  const ua = navigator.userAgent;
+  return /android/i.test(ua) || /iPhone|iPad|iPod/i.test(ua);
+}
+
 function playStoreUrl(packageName: string): string {
   return `https://play.google.com/store/apps/details?id=${packageName}`;
 }
@@ -31,8 +38,8 @@ export function sonosAppHref(): string {
 }
 
 export function plexampAppHref(): string {
-  if (!isAndroid()) return "plexamp://";
-  return androidViewIntent(PLEXAMP_ANDROID_PACKAGE, "plexamp");
+  if (isAndroid()) return androidViewIntent(PLEXAMP_ANDROID_PACKAGE, "plexamp");
+  return "plexamp://";
 }
 
 function attemptAndroidAppOpen(

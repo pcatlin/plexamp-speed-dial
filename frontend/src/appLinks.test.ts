@@ -2,11 +2,33 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   PLEXAMP_ANDROID_PACKAGE,
   SONOS_ANDROID_PACKAGE,
+  isMobileAppClient,
   openPlexampApp,
   openSonosApp,
   plexampAppHref,
   sonosAppHref,
 } from "./appLinks";
+
+describe("isMobileAppClient", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("is true on iPhone", () => {
+    vi.stubGlobal("navigator", { userAgent: "iPhone" });
+    expect(isMobileAppClient()).toBe(true);
+  });
+
+  it("is true on Android", () => {
+    vi.stubGlobal("navigator", { userAgent: "Android 14" });
+    expect(isMobileAppClient()).toBe(true);
+  });
+
+  it("is false on Mac desktop Safari", () => {
+    vi.stubGlobal("navigator", { userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/605.1.15" });
+    expect(isMobileAppClient()).toBe(false);
+  });
+});
 
 describe("sonosAppHref", () => {
   afterEach(() => {

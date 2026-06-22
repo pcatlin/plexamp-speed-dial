@@ -10,7 +10,13 @@ import {
   saveSelectedSpeakerIds,
 } from "./playToStorage";
 import { outputKindForPlayer, presetLabelForCode } from "./audioOutput";
-import { openPlexampApp, openSonosApp, plexampAppHref, sonosAppHref } from "./appLinks";
+import {
+  isMobileAppClient,
+  openPlexampApp,
+  openSonosApp,
+  plexampAppHref,
+  sonosAppHref,
+} from "./appLinks";
 import {
   IconChevronDown,
   IconPause,
@@ -723,12 +729,16 @@ function App() {
         <fieldset className="controlFrameset">
           <ControlFramesetLegend
             title="Plexamp"
-            appLink={{
-              href: plexampAppHref(),
-              label: "Open Plexamp app",
-              icon: <IconLaunchApp />,
-              onOpen: openPlexampApp,
-            }}
+            appLink={
+              isMobileAppClient()
+                ? {
+                    href: plexampAppHref(),
+                    label: "Open Plexamp app",
+                    icon: <IconLaunchApp />,
+                    onOpen: openPlexampApp,
+                  }
+                : undefined
+            }
           />
           <div className="mediaToolbar mediaToolbarStack" role="group" aria-label="Plexamp transport">
             <button
