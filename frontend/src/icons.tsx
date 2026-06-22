@@ -46,3 +46,7 @@ export function IconShuffle() {
 export function IconPowerOff() {
   return <FaIcon icon="fa-power-off" />;
 }
+
+export function IconLaunchApp() {
+  return <FaIcon icon="fa-arrow-up-right-from-square" />;
+}

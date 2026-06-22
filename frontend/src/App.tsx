@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import "./App.css";
 import { api, API_BASE, MediaItem, Player, Speaker, SpeedDial, playbackStateWebSocketUrl } from "./api";
 import CreditsPage from "./CreditsPage";
@@ -10,10 +10,12 @@ import {
   saveSelectedSpeakerIds,
 } from "./playToStorage";
 import { outputKindForPlayer, presetLabelForCode } from "./audioOutput";
+import { openPlexampApp, openSonosApp, plexampAppHref, sonosAppHref } from "./appLinks";
 import {
   IconChevronDown,
   IconPause,
   IconPlay,
+  IconLaunchApp,
   IconPowerOff,
   IconSkipNext,
   IconSkipPrevious,
@@ -27,6 +29,36 @@ import { useToast } from "./useToast";
 function routeFromHash(hash: string): "app" | "credits" {
   const path = hash.replace(/^#/, "");
   return path === "/credits" || path.startsWith("/credits?") ? "credits" : "app";
+}
+
+type ControlFramesetLegendProps = {
+  title: string;
+  appLink?: {
+    href: string;
+    label: string;
+    icon: ReactNode;
+    mobileOnly?: boolean;
+    onOpen?: (event: { preventDefault: () => void }) => void;
+  };
+};
+
+function ControlFramesetLegend({ title, appLink }: ControlFramesetLegendProps) {
+  return (
+    <legend className="controlFramesetLegend">
+      <span>{title}</span>
+      {appLink ? (
+        <a
+          href={appLink.href}
+          className={`controlFramesetAppLink${appLink.mobileOnly ? " controlFramesetAppLink--mobileOnly" : ""}`}
+          aria-label={appLink.label}
+          title={appLink.label}
+          onClick={(event) => appLink.onOpen?.(event)}
+        >
+          {appLink.icon}
+        </a>
+      ) : null}
+    </legend>
+  );
 }
 
 type ReceiverStatus = {
@@ -646,7 +678,16 @@ function App() {
           </fieldset>
         ) : outputKind === "sonos" || selectedSpeakers.length > 0 ? (
           <fieldset className="controlFrameset">
-            <legend>Sonos</legend>
+            <ControlFramesetLegend
+              title="Sonos"
+              appLink={{
+                href: sonosAppHref(),
+                label: "Open Sonos app",
+                icon: <IconLaunchApp />,
+                mobileOnly: true,
+                onOpen: openSonosApp,
+              }}
+            />
             <div className="mediaToolbar mediaToolbarStack" role="group" aria-label="Sonos selected speakers">
               <button
                 type="button"
@@ -680,7 +721,15 @@ function App() {
         ) : null}
 
         <fieldset className="controlFrameset">
-          <legend>Plexamp</legend>
+          <ControlFramesetLegend
+            title="Plexamp"
+            appLink={{
+              href: plexampAppHref(),
+              label: "Open Plexamp app",
+              icon: <IconLaunchApp />,
+              onOpen: openPlexampApp,
+            }}
+          />
           <div className="mediaToolbar mediaToolbarStack" role="group" aria-label="Plexamp transport">
             <button
               type="button"
