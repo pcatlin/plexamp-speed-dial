@@ -174,3 +174,20 @@ def ensure_speed_dial_shuffle_column(engine: Engine) -> None:
             _log.info("Applied speed_dial_favorites migration: shuffle")
         except Exception as exc:  # noqa: BLE001
             _log.warning("speed_dial_favorites migrate skipped/failed: %s", exc)
+
+
+def ensure_speed_dial_initial_volumes_column(engine: Engine) -> None:
+    """Add speed_dial_favorites.initial_volumes when upgrading an existing DB."""
+    insp = inspect(engine)
+    if "speed_dial_favorites" not in insp.get_table_names():
+        return
+    existing = {c["name"] for c in insp.get_columns("speed_dial_favorites")}
+    if "initial_volumes" in existing:
+        return
+    stmt = "ALTER TABLE speed_dial_favorites ADD COLUMN initial_volumes JSON"
+    with engine.begin() as conn:
+        try:
+            conn.execute(text(stmt))
+            _log.info("Applied speed_dial_favorites migration: initial_volumes")
+        except Exception as exc:  # noqa: BLE001
+            _log.warning("speed_dial_favorites migrate skipped/failed: %s", exc)

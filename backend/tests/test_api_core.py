@@ -134,6 +134,29 @@ def test_speed_dial_create_list_delete(client):
     assert listed_after.json() == []
 
 
+def test_speed_dial_create_stores_initial_volumes(client):
+    player_id = client.post(
+        "/api/v1/players",
+        json={"name": "Kitchen", "host": "plexamp.local", "port": 32500, "is_active": True},
+    ).json()["id"]
+
+    created = client.post(
+        "/api/v1/speed-dial",
+        json={
+            "label": "Evening",
+            "media_type": "playlist",
+            "media_id": "playlist-2",
+            "player_id": player_id,
+            "speaker_ids": ["s1"],
+            "initial_volumes": {"sonos": {"s1": 20}, "pioneer": 35},
+        },
+    )
+    assert created.status_code == 200
+
+    listed = client.get("/api/v1/speed-dial").json()
+    assert listed[0]["initial_volumes"] == {"sonos": {"s1": 20}, "pioneer": 35}
+
+
 def test_sonos_stop_requires_selected_speakers(client):
     r = client.post("/api/v1/sonos/stop", json={"speaker_ids": []})
     assert r.status_code == 400
@@ -250,6 +273,45 @@ def test_speed_dial_play_by_id(client, db_session, monkeypatch):
     assert seen["payload"].speaker_ids == ["s1"]
     assert seen["payload"].artist_radio is True
     assert seen["payload"].shuffle is False
+
+
+def test_speed_dial_play_passes_stored_initial_volumes(client, db_session, monkeypatch):
+    from app.models import PlexCredential
+    from app.schemas.domain import InitialVolumes, PlayResponse
+
+    db_session.add(PlexCredential(auth_token="stub-token", is_connected=True))
+    db_session.commit()
+
+    import app.api.routes as routes_module
+
+    seen: dict = {}
+
+    def fake_play(payload, db, *, auth_token):  # noqa: ANN001
+        seen["payload"] = payload
+        return PlayResponse(status="ok", details="played")
+
+    monkeypatch.setattr(routes_module.playback_service, "play", fake_play)
+
+    player_id = client.post(
+        "/api/v1/players",
+        json={"name": "Kitchen", "host": "plexamp.local", "port": 32500, "is_active": True},
+    ).json()["id"]
+
+    favorite_id = client.post(
+        "/api/v1/speed-dial",
+        json={
+            "label": "Loud",
+            "media_type": "album",
+            "media_id": "42",
+            "player_id": player_id,
+            "speaker_ids": ["s1"],
+            "initial_volumes": {"sonos": {"s1": 25}, "pioneer": 40},
+        },
+    ).json()["id"]
+
+    r = client.post(f"/api/v1/speed-dial/{favorite_id}/play")
+    assert r.status_code == 200
+    assert seen["payload"].initial_volumes == InitialVolumes(sonos={"s1": 25}, pioneer=40)
 
 
 def test_speed_dial_play_passes_stored_shuffle(client, db_session, monkeypatch):

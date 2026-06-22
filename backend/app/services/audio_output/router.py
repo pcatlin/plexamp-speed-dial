@@ -7,13 +7,14 @@ from sqlalchemy.orm import Session
 from app.models import PlexampPlayer
 from app.services.audio_output import pioneer_eiscp
 from app.services.audio_output.sonos_route import line_in_speaker_id_from_config, play_line_in
-from app.schemas.domain import ReceiverStateResponse
+from app.schemas.domain import InitialVolumes, ReceiverStateResponse
 from app.services.audio_output.types import (
     AudioOutput,
     audio_output_from_player_row,
     parse_pioneer_config,
     parse_sonos_config,
 )
+from app.services.runtime_setup import resolve_sonos_runtime
 from app.services.sonos_service import SonosService
 
 _log = logging.getLogger(__name__)
@@ -33,6 +34,7 @@ class AudioOutputRouter:
         db: Session,
         *,
         target_speaker_ids: list[str],
+        initial_volumes: InitialVolumes | None = None,
     ) -> str:
         output = self.output_for_player(player)
         kind = output.kind
@@ -49,11 +51,13 @@ class AudioOutputRouter:
             if not line_sid:
                 return "Sonos: no line-in speaker configured for this player in Setup."
             try:
+                sonos_volumes = initial_volumes.sonos if initial_volumes and initial_volumes.sonos else None
                 return play_line_in(
                     self._sonos,
                     db,
                     target_speaker_ids=target_speaker_ids,
                     line_in_speaker_id=line_sid,
+                    speaker_volumes=sonos_volumes,
                 )
             except Exception as exc:  # noqa: BLE001
                 _log.exception("Sonos line-in orchestration failed")
@@ -63,7 +67,12 @@ class AudioOutputRouter:
             if not cfg.host:
                 return "Pioneer: receiver IP is not configured in Setup."
             try:
-                return pioneer_eiscp.prepare_playback(cfg.host, cfg.input_code, port=cfg.port)
+                note = pioneer_eiscp.prepare_playback(cfg.host, cfg.input_code, port=cfg.port)
+                if initial_volumes and initial_volumes.pioneer is not None:
+                    level = pioneer_eiscp.percent_to_volume_level(initial_volumes.pioneer)
+                    pioneer_eiscp.set_volume(cfg.host, level, port=cfg.port)
+                    note = f"{note} Pioneer: volume {initial_volumes.pioneer}%."
+                return note
             except OSError as exc:
                 _log.exception("Pioneer ISCP prepare failed")
                 return f"Pioneer error: {exc}"
@@ -71,6 +80,25 @@ class AudioOutputRouter:
                 _log.exception("Pioneer prepare failed")
                 return f"Pioneer error: {exc}"
         return f"Unknown audio output kind: {kind!r}"
+
+    def apply_initial_volumes(
+        self,
+        player: PlexampPlayer,
+        db: Session,
+        *,
+        target_speaker_ids: list[str],
+        initial_volumes: InitialVolumes | None,
+    ) -> str:
+        """Fallback volume apply when Sonos is already playing outside the Start flow."""
+        if initial_volumes is None:
+            return ""
+        notes: list[str] = []
+        if initial_volumes.sonos and target_speaker_ids:
+            runtime = resolve_sonos_runtime(db)
+            note = self._sonos.set_absolute_volumes_selected(runtime, target_speaker_ids, initial_volumes.sonos)
+            if note:
+                notes.append(note)
+        return " ".join(notes)
 
     def adjust_volume(self, player: PlexampPlayer, delta: int) -> str:
         output = self.output_for_player(player)

@@ -16,6 +16,7 @@ from app.db.runtime_setup_migrate import (
     ensure_speed_dial_artist_radio_column,
     ensure_speed_dial_cover_column,
     ensure_speed_dial_shuffle_column,
+    ensure_speed_dial_initial_volumes_column,
 )
 from app.models import PlexCredential, PlexampPlayer, SonosGroupPreset, SpeedDialFavorite
 from app.plexapi_identity import apply_stable_plexapi_headers, log_plex_account_linked
@@ -52,6 +53,7 @@ from app.schemas.domain import (
     ServerTidalTracksResponse,
     SpeedDialCreate,
     SpeedDialRead,
+    InitialVolumes,
     TidalTrackRead,
     TidalTracksDeleteResponse,
 )
@@ -134,6 +136,7 @@ def startup() -> None:
     ensure_speed_dial_cover_column(engine)
     ensure_speed_dial_artist_radio_column(engine)
     ensure_speed_dial_shuffle_column(engine)
+    ensure_speed_dial_initial_volumes_column(engine)
     ensure_plexamp_player_sonos_line_in_column(engine)
     ensure_plexamp_player_audio_output_columns(engine)
     seed = SessionLocal()
@@ -759,6 +762,7 @@ def speed_dial(db: Session = Depends(get_db)) -> list[SpeedDialRead]:
             preset_id=row.preset_id,
             artist_radio=getattr(row, "artist_radio", None),
             shuffle=getattr(row, "shuffle", None),
+            initial_volumes=getattr(row, "initial_volumes", None),
             has_cover_art=bool((getattr(row, "cover_thumb_path", None) or "").strip()),
         )
         for row in rows
@@ -802,6 +806,10 @@ def play_speed_dial_favorite(
     try:
         ar = getattr(row, "artist_radio", None)
         sh = getattr(row, "shuffle", None)
+        raw_volumes = getattr(row, "initial_volumes", None)
+        initial_volumes = (
+            InitialVolumes.model_validate(raw_volumes) if isinstance(raw_volumes, dict) else raw_volumes
+        )
         payload = PlayRequest(
             media_type=row.media_type,
             media_id=str(row.media_id),
@@ -810,6 +818,7 @@ def play_speed_dial_favorite(
             preset_id=row.preset_id,
             artist_radio=ar if ar is not None else True,
             shuffle=bool(sh),
+            initial_volumes=initial_volumes,
         )
     except ValidationError as exc:
         raise HTTPException(status_code=400, detail=f"Invalid favorite data: {exc}") from exc

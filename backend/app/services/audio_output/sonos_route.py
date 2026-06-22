@@ -13,6 +13,7 @@ def play_line_in(
     *,
     target_speaker_ids: list[str],
     line_in_speaker_id: str,
+    speaker_volumes: dict[str, int] | None = None,
 ) -> str:
     runtime = resolve_sonos_runtime(db)
     return sonos.group_selected_and_play_line_in(
@@ -20,6 +21,7 @@ def play_line_in(
         target_speaker_ids,
         line_in_speaker_id=line_in_speaker_id,
         line_in_name_legacy="",
+        speaker_volumes=speaker_volumes,
     )
 
 

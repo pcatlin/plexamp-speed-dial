@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 MediaType = Literal["playlist", "album", "artist", "track", "random_album"]
@@ -129,6 +129,24 @@ class ReceiverStateResponse(BaseModel):
     error: str | None = None
 
 
+class InitialVolumes(BaseModel):
+    sonos: dict[str, int] = Field(
+        default_factory=dict,
+        description="Sonos speaker id → volume percent (0–100).",
+    )
+    pioneer: int | None = Field(
+        default=None,
+        ge=0,
+        le=100,
+        description="Pioneer receiver volume percent (0–100) when player output is Pioneer.",
+    )
+
+    @field_validator("sonos")
+    @classmethod
+    def _clamp_sonos_volumes(cls, value: dict[str, int]) -> dict[str, int]:
+        return {key: max(0, min(100, int(vol))) for key, vol in value.items()}
+
+
 class PlayRequest(BaseModel):
     media_type: MediaType
     media_id: str
@@ -142,6 +160,10 @@ class PlayRequest(BaseModel):
     shuffle: bool = Field(
         default=False,
         description="When media_type is playlist or artist: request shuffled queue from Plexamp.",
+    )
+    initial_volumes: InitialVolumes | None = Field(
+        default=None,
+        description="Optional Sonos per-speaker and Pioneer initial volume levels (0–100%).",
     )
 
 
@@ -196,6 +218,10 @@ class SpeedDialCreate(BaseModel):
     shuffle: bool | None = Field(
         default=None,
         description="For playlist/artist favorites: shuffle on play; null treated as false.",
+    )
+    initial_volumes: InitialVolumes | None = Field(
+        default=None,
+        description="Sonos per-speaker and Pioneer initial volume levels (0–100%) saved with this favorite.",
     )
 
 

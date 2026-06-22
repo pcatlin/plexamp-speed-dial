@@ -4,12 +4,18 @@ import { api, API_BASE, MediaItem, Player, Speaker, SpeedDial, playbackStateWebS
 import CreditsPage from "./CreditsPage";
 import { PickMusicSection, PickTab, playMediaTypeForTab } from "./PickMusicSection";
 import { SetupModal } from "./SetupModal";
+import { VolumeEditorPopover } from "./VolumeEditorPopover";
 import {
   loadSelectedSpeakerIds,
   reconcileSelectedSpeakerIds,
   saveSelectedSpeakerIds,
 } from "./playToStorage";
-import { outputKindForPlayer, presetLabelForCode } from "./audioOutput";
+import { outputKindForPlayer, pioneerHostFromOutput, presetLabelForCode } from "./audioOutput";
+import {
+  buildInitialVolumes,
+  DEFAULT_INITIAL_VOLUME,
+  mergeSonosVolumes,
+} from "./initialVolumes";
 import {
   isMobileAppClient,
   openPlexampApp,
@@ -93,6 +99,10 @@ function App() {
   const [selectedMedia, setSelectedMedia] = useState<MediaItem | null>(null);
   const [speakers, setSpeakers] = useState<Speaker[]>([]);
   const [selectedSpeakers, setSelectedSpeakers] = useState<string[]>(() => loadSelectedSpeakerIds());
+  const [sonosVolumes, setSonosVolumes] = useState<Record<string, number>>({});
+  const [pioneerVolume, setPioneerVolume] = useState(DEFAULT_INITIAL_VOLUME);
+  const [setVolumesOnPlay, setSetVolumesOnPlay] = useState(false);
+  const [volumeEditor, setVolumeEditor] = useState<string | null>(null);
   const [players, setPlayers] = useState<Player[]>([]);
   const [selectedPlayer, setSelectedPlayer] = useState<number | null>(null);
   const [speedDial, setSpeedDial] = useState<SpeedDial[]>([]);
@@ -116,6 +126,11 @@ function App() {
   const selectedPlayerName = selectedPlayerRow?.name ?? "No player selected";
 
   const outputKind = outputKindForPlayer(selectedPlayerRow);
+
+  const pioneerAvrLabel = useMemo(() => {
+    const host = pioneerHostFromOutput(selectedPlayerRow?.audio_output ?? { kind: "none", config: {} });
+    return host.trim() || "Pioneer AVR";
+  }, [selectedPlayerRow]);
 
   const applyReceiverSnapshot = useCallback((receiver: {
     ok?: boolean;
@@ -193,6 +208,7 @@ function App() {
   const applySpeakerList = useCallback((speakerRows: Speaker[]) => {
     setSpeakers(speakerRows);
     setSelectedSpeakers((current) => reconcileSelectedSpeakerIds(current, speakerRows.map((s) => s.id)));
+    setSonosVolumes((current) => mergeSonosVolumes(speakerRows.map((s) => s.id), current));
   }, []);
 
   const reloadPlayersSelection = async (nextPlayers: Player[]) => {
@@ -298,11 +314,42 @@ function App() {
     };
   }, [selectedSpeakers, authConnected, selectedPlayer, outputKind, applyReceiverSnapshot]);
 
+  useEffect(() => {
+    if (!volumeEditor) return;
+    const close = () => setVolumeEditor(null);
+    document.addEventListener("pointerdown", close);
+    return () => document.removeEventListener("pointerdown", close);
+  }, [volumeEditor]);
+
+  const toggleVolumeEditor = (key: string) => {
+    setVolumeEditor((current) => (current === key ? null : key));
+  };
+
   const toggleSpeaker = (speakerId: string) => {
     setSelectedSpeakers((current) =>
       current.includes(speakerId) ? current.filter((id) => id !== speakerId) : [...current, speakerId],
     );
+    setSonosVolumes((current) =>
+      current[speakerId] === undefined ? { ...current, [speakerId]: DEFAULT_INITIAL_VOLUME } : current,
+    );
   };
+
+  const setSonosSpeakerVolume = (speakerId: string, volume: number) => {
+    setSonosVolumes((current) => ({ ...current, [speakerId]: volume }));
+  };
+
+  const initialVolumesForPlay = useCallback(
+    (speakerIds: string[]) => {
+      if (!setVolumesOnPlay) return undefined;
+      return buildInitialVolumes({
+        selectedSpeakerIds: speakerIds,
+        sonosVolumes,
+        pioneerVolume,
+        includePioneer: outputKind === "pioneer",
+      });
+    },
+    [setVolumesOnPlay, sonosVolumes, pioneerVolume, outputKind],
+  );
 
   const togglePlayer = (playerId: number) => {
     setSelectedPlayer((current) => (current === playerId ? null : playerId));
@@ -328,6 +375,7 @@ function App() {
       preset_id: payload?.preset_id ?? null,
       ...(mediaType === "artist" ? { artist_radio: payload?.artist_radio ?? artistRadio } : {}),
       shuffle: shufflePlay,
+      initial_volumes: payload?.initial_volumes ?? initialVolumesForPlay(speakerIds),
     });
     showToast(result.details);
     if (outputKindForPlayer(players.find((p) => p.id === playerId)) === "pioneer") {
@@ -348,6 +396,7 @@ function App() {
       player_id: selectedPlayer,
       speaker_ids: selectedSpeakers,
       preset_id: null,
+      initial_volumes: initialVolumesForPlay(selectedSpeakers),
       ...(mt === "artist" ? { artist_radio: artistRadio } : {}),
       ...(mt === "playlist" || mt === "artist" ? { shuffle: mt === "playlist" ? shufflePlaylist : shuffleArtist } : {}),
     });
@@ -539,10 +588,51 @@ function App() {
               <IconChevronDown />
             </summary>
             <div className="playToBody">
+              <label className="playToVolumeToggle">
+                <input
+                  type="checkbox"
+                  checked={setVolumesOnPlay}
+                  onChange={(event) => setSetVolumesOnPlay(event.target.checked)}
+                />
+                <span>Set volume on play</span>
+              </label>
               {outputKind === "pioneer" ? (
-                <p className="hint playToSpeakersHint">
-                  This Plexamp player is routed to a Pioneer receiver in Setup. Sonos speakers are not used for Start.
-                </p>
+                <>
+                  <h3>Pioneer AVR</h3>
+                  <div className="pickGrid" role="group" aria-label="Pioneer AV receiver">
+                    <div className="pickGridCell">
+                      <button
+                        type="button"
+                        className="pickGridBtn pickGridBtn--selected pickGridBtn--pinned"
+                        aria-pressed={true}
+                        tabIndex={-1}
+                      >
+                        {pioneerAvrLabel}
+                      </button>
+                      {setVolumesOnPlay ? (
+                        <>
+                          <button
+                            type="button"
+                            className="pickGridVolumeBtn"
+                            aria-expanded={volumeEditor === "pioneer"}
+                            onPointerDown={(event) => event.stopPropagation()}
+                            onClick={() => toggleVolumeEditor("pioneer")}
+                          >
+                            {pioneerVolume}%
+                          </button>
+                          {volumeEditor === "pioneer" ? (
+                            <VolumeEditorPopover
+                              title={pioneerAvrLabel}
+                              value={pioneerVolume}
+                              onChange={setPioneerVolume}
+                              onClose={() => setVolumeEditor(null)}
+                            />
+                          ) : null}
+                        </>
+                      ) : null}
+                    </div>
+                  </div>
+                </>
               ) : (
                 <>
                   <h3>Sonos Speakers</h3>
@@ -555,16 +645,40 @@ function App() {
                     <div className="pickGrid" role="group" aria-label="Sonos speakers">
                       {speakers.map((speaker) => {
                         const selected = selectedSpeakers.includes(speaker.id);
+                        const volume = sonosVolumes[speaker.id] ?? DEFAULT_INITIAL_VOLUME;
+                        const editorOpen = volumeEditor === speaker.id;
                         return (
-                          <button
-                            key={speaker.id}
-                            type="button"
-                            className={`pickGridBtn${selected ? " pickGridBtn--selected" : ""}`}
-                            aria-pressed={selected}
-                            onClick={() => toggleSpeaker(speaker.id)}
-                          >
-                            {speaker.name}
-                          </button>
+                          <div key={speaker.id} className="pickGridCell">
+                            <button
+                              type="button"
+                              className={`pickGridBtn${selected ? " pickGridBtn--selected" : ""}`}
+                              aria-pressed={selected}
+                              onClick={() => toggleSpeaker(speaker.id)}
+                            >
+                              {speaker.name}
+                            </button>
+                            {setVolumesOnPlay ? (
+                              <>
+                                <button
+                                  type="button"
+                                  className="pickGridVolumeBtn"
+                                  aria-expanded={editorOpen}
+                                  onPointerDown={(event) => event.stopPropagation()}
+                                  onClick={() => toggleVolumeEditor(speaker.id)}
+                                >
+                                  {volume}%
+                                </button>
+                                {editorOpen ? (
+                                  <VolumeEditorPopover
+                                    title={speaker.name}
+                                    value={volume}
+                                    onChange={(next) => setSonosSpeakerVolume(speaker.id, next)}
+                                    onClose={() => setVolumeEditor(null)}
+                                  />
+                                ) : null}
+                              </>
+                            ) : null}
+                          </div>
                         );
                       })}
                     </div>

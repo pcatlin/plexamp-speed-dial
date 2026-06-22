@@ -133,6 +133,7 @@ class SonosService:
         *,
         line_in_speaker_id: str = "",
         line_in_name_legacy: str = "",
+        speaker_volumes: dict[str, int] | None = None,
     ) -> str:
         """
         Group selected Sonos outputs and play line-in from the given Sonos player (e.g. Plexamp analog in).
@@ -196,6 +197,10 @@ class SonosService:
                     _log.warning("Sonos join %s → %s failed: %s", d.player_name, master.player_name, exc)
                     raise
 
+        volume_note = ""
+        if speaker_volumes:
+            volume_note = self._apply_speaker_volumes(zones, output_speaker_ids, speaker_volumes)
+
         coord = self._group_coordinator(master)
         try:
             if coord.uid == line_src.uid:
@@ -208,7 +213,37 @@ class SonosService:
             raise RuntimeError(f"Sonos line-in failed: {exc}") from exc
 
         names = ", ".join(sorted((t.player_name or t.uid) for t in targets))
-        return f"Sonos: grouped [{names}] → line-in from {line_src.player_name or line_src.uid}."
+        base = f"Sonos: grouped [{names}] → line-in from {line_src.player_name or line_src.uid}."
+        return f"{base} {volume_note}".strip() if volume_note else base
+
+    def _apply_speaker_volumes(
+        self,
+        zones: set,
+        output_speaker_ids: list[str],
+        speaker_volumes: dict[str, int],
+    ) -> str:
+        lines: list[str] = []
+        seen_uid: set[str] = set()
+        for sid in output_speaker_ids:
+            if sid not in speaker_volumes:
+                continue
+            dev = self._device_for_api_speaker_id(zones, sid)
+            if dev is None or dev.uid in seen_uid:
+                continue
+            seen_uid.add(dev.uid)
+            vol = max(0, min(100, int(speaker_volumes[sid])))
+            try:
+                dev.volume = vol
+            except Exception as exc:  # noqa: BLE001
+                _log.warning("Sonos volume set failed for %s: %s", dev.player_name or dev.uid, exc)
+                label = dev.player_name or dev.uid
+                lines.append(f"{label} (failed: {exc})")
+                continue
+            label = dev.player_name or dev.uid
+            lines.append(f"{label} → {vol}%")
+        if not lines:
+            return ""
+        return f"Sonos: volume set on {'; '.join(sorted(lines))}."
 
     def stop_selected_speakers(self, runtime: SonosRuntime, output_speaker_ids: list[str]) -> str:
         """Stop playback on the coordinator for each selected speaker (deduplicated by group)."""
@@ -308,6 +343,43 @@ class SonosService:
         names = "; ".join(sorted(lines))
         sign = "+" if delta > 0 else ""
         return f"Sonos: volume {sign}{delta}% on {names}."
+
+    def set_absolute_volumes_selected(
+        self,
+        runtime: SonosRuntime,
+        output_speaker_ids: list[str],
+        volumes: dict[str, int],
+    ) -> str:
+        """Set absolute volume percent on each selected Sonos zone."""
+        if not volumes:
+            return ""
+        zones = self.discover_visible_zones(runtime)
+        if not zones:
+            return "Sonos: no zones discovered — nothing to set."
+
+        lines: list[str] = []
+        seen_uid: set[str] = set()
+        for sid in output_speaker_ids:
+            if sid not in volumes:
+                continue
+            dev = self._device_for_api_speaker_id(zones, sid)
+            if dev is None or dev.uid in seen_uid:
+                continue
+            seen_uid.add(dev.uid)
+            vol = max(0, min(100, int(volumes[sid])))
+            try:
+                dev.volume = vol
+            except Exception as exc:  # noqa: BLE001
+                _log.warning("Sonos volume set failed for %s: %s", dev.player_name or dev.uid, exc)
+                label = dev.player_name or dev.uid
+                lines.append(f"{label} (failed: {exc})")
+                continue
+            label = dev.player_name or dev.uid
+            lines.append(f"{label} → {vol}%")
+
+        if not lines:
+            return "Sonos: no selected speakers matched for initial volume."
+        return f"Sonos: initial volume on {'; '.join(sorted(lines))}."
 
     def selection_transport_playing(self, runtime: SonosRuntime, output_speaker_ids: list[str]) -> tuple[bool | None, str | None]:
         """Return (playing, error). True if any coordinator for the selection is PLAYING or TRANSITIONING."""

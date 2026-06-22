@@ -106,3 +106,20 @@ def test_volume_adjust_sends_multiple_steps(monkeypatch):
     assert steps == 2
     assert len(calls) == 2
     assert all(c in pioneer_eiscp._VOLUME_UP_COMMANDS for c in calls)
+
+
+def test_percent_to_volume_level_maps_ui_percent_to_mvl_index():
+    assert pioneer_eiscp.percent_to_volume_level(0) == 0
+    assert pioneer_eiscp.percent_to_volume_level(20) == 16
+    assert pioneer_eiscp.percent_to_volume_level(100) == 80
+
+
+def test_set_volume_sends_absolute_mvl_command(monkeypatch):
+    calls: list[str] = []
+
+    def fake_send(host: str, command: str, **kwargs):  # noqa: ANN003
+        calls.append(command)
+
+    monkeypatch.setattr(pioneer_eiscp, "_send_command", fake_send)
+    pioneer_eiscp.set_volume("10.0.0.5", 16)
+    assert calls == ["MVL10"]

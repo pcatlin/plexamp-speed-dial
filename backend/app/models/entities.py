@@ -70,4 +70,5 @@ class SpeedDialFavorite(Base):
     cover_thumb_path = Column(Text, nullable=True)
     artist_radio = Column(Boolean, nullable=True)
     shuffle = Column(Boolean, nullable=True)
+    initial_volumes = Column(JSON, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)

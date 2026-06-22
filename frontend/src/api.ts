@@ -56,6 +56,11 @@ export interface RuntimeSettings {
 /** Same fields as persisted to the API — omit computed effective URL when saving. */
 export type RuntimeSettingsPayload = Omit<RuntimeSettings, "plex_server_url_effective">;
 
+export interface InitialVolumes {
+  sonos?: Record<string, number>;
+  pioneer?: number;
+}
+
 export interface SpeedDial {
   id: number;
   label: string;
@@ -68,6 +73,7 @@ export interface SpeedDial {
   artist_radio?: boolean | null;
   /** Playlist / artist favorites: shuffle on play; omitted/null = false. */
   shuffle?: boolean | null;
+  initial_volumes?: InitialVolumes | null;
   has_cover_art?: boolean;
 }
 
@@ -264,6 +270,7 @@ export const api = {
     preset_id?: number | null;
     artist_radio?: boolean;
     shuffle?: boolean;
+    initial_volumes?: InitialVolumes | null;
   }) => request<{ status: string; details: string }>("/play", { method: "POST", body: JSON.stringify(payload) }),
   plexampSkipNext: (playerId: number) =>
     request<{ status: string; details: string }>("/plexamp/skip-next", {

@@ -112,6 +112,27 @@ def test_group_selected_unjoins_both_before_pairing(runtime: SonosRuntime, monke
     assert alpha.switch_calls and alpha.switch_calls[0] is fridge
 
 
+def test_group_selected_sets_speaker_volumes_before_play(
+    runtime: SonosRuntime, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    move = FakeSonosDevice("uid-move", "Sonos Move", volume=50)
+    fridge = FakeSonosDevice("uid-fridge", "Kitchen Fridge")
+
+    svc = SonosService()
+    monkeypatch.setattr(svc, "discover_visible_zones", lambda rt: {move, fridge})
+
+    msg = svc.group_selected_and_play_line_in(
+        runtime,
+        ["uid-move"],
+        line_in_speaker_id="uid-fridge",
+        speaker_volumes={"uid-move": 22},
+    )
+
+    assert move.volume == 22
+    assert move.play_calls == 1
+    assert "22%" in msg
+
+
 def test_adjust_volume_selected_applies_relative_step_to_each_selected_zone(
     runtime: SonosRuntime, monkeypatch: pytest.MonkeyPatch
 ) -> None:

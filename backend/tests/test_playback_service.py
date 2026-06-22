@@ -40,8 +40,10 @@ class FakePlexService:
 
 
 class FakeSonosService:
-    def group_selected_and_play_line_in(self, runtime, output_speaker_ids, *, line_in_speaker_id="", line_in_name_legacy=""):  # noqa: ANN001
-        return f"Sonos: ok (mock) ids={output_speaker_ids!r} line_in={line_in_speaker_id!r}"
+    def group_selected_and_play_line_in(
+        self, runtime, output_speaker_ids, *, line_in_speaker_id="", line_in_name_legacy="", speaker_volumes=None
+    ):  # noqa: ANN001
+        return f"Sonos: ok (mock) ids={output_speaker_ids!r} line_in={line_in_speaker_id!r} volumes={speaker_volumes!r}"
 
     def stop_selected_speakers(self, runtime, output_speaker_ids):  # noqa: ANN001
         return f"Sonos: stopped mock ids={output_speaker_ids!r}"

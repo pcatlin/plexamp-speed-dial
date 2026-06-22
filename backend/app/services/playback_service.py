@@ -212,6 +212,7 @@ class PlaybackService:
             player,
             db,
             target_speaker_ids=target_speakers,
+            initial_volumes=payload.initial_volumes,
         )
 
         title = getattr(item, "title", "") or getattr(item, "tag", "") or payload.media_id

@@ -365,9 +365,105 @@
   background: #f8fbff;
 }
 
+.pickGridBtn--pinned {
+  cursor: default;
+}
+
 .pickGridBtn:focus-visible {
   outline: 2px solid #2563eb;
   outline-offset: 2px;
+}
+
+.pickGridCell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.pickGridVolumeBtn {
+  width: 100%;
+  padding: 0.3rem 0.5rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #374151;
+  background: #fff;
+  border: 1px solid #c9ced6;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.pickGridVolumeBtn:hover {
+  border-color: #9ca3af;
+  background: #f9fafb;
+}
+
+.volumePopover {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 0.25rem);
+  left: 0;
+  right: 0;
+  min-width: 11rem;
+  padding: 0.65rem 0.75rem;
+  background: #fff;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.14);
+}
+
+.volumePopoverHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.45rem;
+}
+
+.volumePopoverTitle {
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: #111827;
+}
+
+.volumePopoverClose {
+  border: none;
+  background: transparent;
+  color: #6b7280;
+  font-size: 1.15rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+}
+
+.volumePopoverSlider {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.volumePopoverValue {
+  font-size: 0.82rem;
+  color: #4b5563;
+}
+
+.volumePopoverSlider input[type="range"] {
+  width: 100%;
+  margin: 0;
+}
+
+.playToVolumeToggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+  font-size: 0.92rem;
+  color: #374151;
+  cursor: pointer;
+}
+
+.playToVolumeToggle input {
+  margin: 0;
 }
 
 .pickPanel .artistRadioHint {

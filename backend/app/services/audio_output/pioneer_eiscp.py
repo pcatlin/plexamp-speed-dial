@@ -219,6 +219,17 @@ def volume_down(host: str, *, port: int = DEFAULT_PORT, timeout: float = DEFAULT
     _volume_step(host, _VOLUME_DOWN_COMMANDS, port=port, timeout=timeout)
 
 
+def percent_to_volume_level(percent: int) -> int:
+    """Map UI volume percent (0–100) to Pioneer ISCP MVL index (0–80)."""
+    p = max(0, min(100, int(percent)))
+    return round(p * 80 / 100)
+
+
+def set_volume(host: str, level: int, *, port: int = DEFAULT_PORT, timeout: float = DEFAULT_TIMEOUT) -> None:
+    level = max(0, min(80, int(level)))
+    _send_command(host, f"MVL{level:02X}", port=port, timeout=timeout)
+
+
 def volume_adjust(
     host: str,
     delta: int,
