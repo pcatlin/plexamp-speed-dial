@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, API_BASE, MediaItem } from "./api";
-import { IconShuffle } from "./icons";
+import { IconChevronDown, IconShuffle } from "./icons";
 
 export type PickTab = "playlist" | "album" | "artist" | "track" | "random_album";
 
@@ -233,9 +233,29 @@ export function PickMusicSection({
     selectedMedia &&
     (selectedMedia.type === "album" || selectedMedia.type === "artist" || selectedMedia.type === "track" || selectedMedia.type === "playlist");
 
+  const pickMusicSummary = useMemo(() => {
+    if (!selectedMedia) return "Nothing selected";
+    const tabLabel = TABS.find((tab) => tab.id === pickTab)?.label ?? pickTab;
+    return `${tabLabel} · ${selectedMedia.title}`;
+  }, [pickTab, selectedMedia]);
+
+  const [pickMusicDetailsOpen, setPickMusicDetailsOpen] = useState(() => selectedMedia == null);
+
   return (
-    <section className="card">
-      <h2 className="sectionTitle">Pick Music</h2>
+    <section className="card pickMusicCard">
+      <details
+        className="playToDetails"
+        open={pickMusicDetailsOpen}
+        onToggle={(event) => setPickMusicDetailsOpen(event.currentTarget.open)}
+      >
+        <summary className="playToSummary">
+          <span className="playToSummaryText">
+            <span className="sectionTitle">Pick Music</span>
+            <span className="playToSummarySelection">{pickMusicSummary}</span>
+          </span>
+          <IconChevronDown />
+        </summary>
+        <div className="playToBody">
       {!authConnected ? <p className="hint">Plex not connected. Sign in on Setup.</p> : null}
 
       <div className="tabRow pickMusicTabs" role="tablist" aria-label="Music source">
@@ -444,6 +464,8 @@ export function PickMusicSection({
           </div>
         </div>
       ) : null}
+        </div>
+      </details>
     </section>
   );
 }

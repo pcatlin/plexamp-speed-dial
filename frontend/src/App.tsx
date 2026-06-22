@@ -232,6 +232,28 @@ function App() {
     setSonosVolumes((current) => mergeSonosVolumes(speakerRows.map((s) => s.id), current));
   }, []);
 
+  const applyFavoriteToPlayTo = useCallback(
+    (favorite: SpeedDial) => {
+      const availableSpeakerIds = speakers.map((speaker) => speaker.id);
+      setSelectedSpeakers(reconcileSelectedSpeakerIds(favorite.speaker_ids, availableSpeakerIds));
+
+      if (players.some((player) => player.id === favorite.player_id)) {
+        setSelectedPlayer(favorite.player_id);
+      }
+
+      const volumes = favorite.initial_volumes;
+      if (volumes?.sonos) {
+        setSonosVolumes((current) =>
+          mergeSonosVolumes(availableSpeakerIds, { ...current, ...volumes.sonos }),
+        );
+      }
+      if (volumes?.pioneer != null) {
+        setPioneerVolume(volumes.pioneer);
+      }
+    },
+    [speakers, players],
+  );
+
   const reloadPlayersSelection = async (nextPlayers: Player[]) => {
     setPlayers(nextPlayers);
     setSelectedPlayer((current) => {
@@ -557,6 +579,7 @@ function App() {
   };
 
   const playSpeedDialFavorite = async (favorite: SpeedDial) => {
+    applyFavoriteToPlayTo(favorite);
     const result = await api.speedDialPlay(favorite.id);
     showToast(result.details);
   };
