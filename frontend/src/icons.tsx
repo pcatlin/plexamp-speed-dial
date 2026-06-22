@@ -52,5 +52,5 @@ export function IconLaunchApp() {
 }
 
 export function IconTrash() {
-  return <FaIcon icon="fa-trash" />;
+  return <FaIcon icon="fa-trash-can" />;
 }

@@ -127,6 +127,7 @@ function App() {
   const [selectedPlayer, setSelectedPlayer] = useState<number | null>(null);
   const [speedDial, setSpeedDial] = useState<SpeedDial[]>([]);
   const [speedDialDeleteTarget, setSpeedDialDeleteTarget] = useState<{ id: number; label: string } | null>(null);
+  const [speedDialDeleteMode, setSpeedDialDeleteMode] = useState(false);
   const { toast, showToast } = useToast();
   const [collections, setCollections] = useState<{ id: string; title: string }[]>([]);
   const [selectedCollectionId, setSelectedCollectionId] = useState("");
@@ -563,7 +564,11 @@ function App() {
 
   const deleteSpeedDial = async (id: number) => {
     await api.deleteSpeedDial(id);
-    setSpeedDial(await api.speedDial());
+    const rows = await api.speedDial();
+    setSpeedDial(rows);
+    if (rows.length === 0) {
+      setSpeedDialDeleteMode(false);
+    }
     showToast("Removed from speed dial.");
   };
 
@@ -796,13 +801,35 @@ function App() {
         </section>
 
         <section className="card speedDialCard">
-          <h2 className="sectionTitle">Speed Dial</h2>
+          <div className="speedDialHeader">
+            <h2 className="sectionTitle">Speed Dial</h2>
+            {speedDial.length > 0 ? (
+              <button
+                type="button"
+                className="smallBtn"
+                aria-pressed={speedDialDeleteMode}
+                onClick={() => setSpeedDialDeleteMode((current) => !current)}
+              >
+                {speedDialDeleteMode ? "Done" : "Edit"}
+              </button>
+            ) : null}
+          </div>
           {speedDial.length === 0 ? <p>No favorites yet.</p> : null}
-          <div className="grid">
+          <div className={`speedDialGrid${speedDialDeleteMode ? " speedDialGrid--deleteMode" : ""}`}>
             {speedDial.map((favorite) => {
               const displayLabel = speedDialDisplayLabel(favorite.label);
               return (
               <div className="favorite" key={favorite.id}>
+                {speedDialDeleteMode ? (
+                  <button
+                    type="button"
+                    className="favoriteDelete"
+                    aria-label={`Delete ${displayLabel}`}
+                    onClick={() => setSpeedDialDeleteTarget({ id: favorite.id, label: displayLabel })}
+                  >
+                    <IconTrash />
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   className="favoritePlay"
@@ -832,14 +859,6 @@ function App() {
                     <span className="favoriteMeta">{speedDialPlayerName(favorite, players)}</span>
                     <span className="favoriteMeta">{speedDialPlayTarget(favorite, players, speakers)}</span>
                   </span>
-                </button>
-                <button
-                  type="button"
-                  className="favoriteDelete"
-                  aria-label={`Delete ${displayLabel}`}
-                  onClick={() => setSpeedDialDeleteTarget({ id: favorite.id, label: displayLabel })}
-                >
-                  <IconTrash />
                 </button>
               </div>
             );
