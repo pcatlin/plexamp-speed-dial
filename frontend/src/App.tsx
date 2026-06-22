@@ -4,6 +4,7 @@ import { api, API_BASE, MediaItem, Player, Speaker, SpeedDial, playbackStateWebS
 import CreditsPage from "./CreditsPage";
 import { PickMusicSection, PickTab, playMediaTypeForTab } from "./PickMusicSection";
 import { SetupModal } from "./SetupModal";
+import { ConfirmDialog } from "./ConfirmDialog";
 import { VolumeEditorPopover } from "./VolumeEditorPopover";
 import {
   loadSelectedSpeakerIds,
@@ -16,6 +17,7 @@ import {
   DEFAULT_INITIAL_VOLUME,
   mergeSonosVolumes,
 } from "./initialVolumes";
+import { buildSpeedDialLabel, formatSpeedDialPlayTarget, speedDialDisplayLabel } from "./speedDialLabel";
 import {
   isMobileAppClient,
   openPlexampApp,
@@ -32,6 +34,7 @@ import {
   IconSkipNext,
   IconSkipPrevious,
   IconStop,
+  IconTrash,
   IconVolumeDown,
   IconVolumeUp,
 } from "./icons";
@@ -80,6 +83,23 @@ type ReceiverStatus = {
   volume_muted: boolean;
 };
 
+function speedDialPlayerName(favorite: SpeedDial, players: Player[]): string {
+  return players.find((player) => player.id === favorite.player_id)?.name ?? "Unknown player";
+}
+
+function speedDialPlayTarget(favorite: SpeedDial, players: Player[], speakers: Speaker[]): string {
+  const player = players.find((row) => row.id === favorite.player_id);
+  const isPioneer = outputKindForPlayer(player) === "pioneer";
+  const pioneerLabel = pioneerHostFromOutput(player?.audio_output ?? { kind: "none", config: {} }).trim() || "Pioneer AVR";
+  return formatSpeedDialPlayTarget({
+    speakerIds: favorite.speaker_ids,
+    initialVolumes: favorite.initial_volumes,
+    isPioneer,
+    pioneerLabel,
+    speakers,
+  });
+}
+
 function App() {
   const [route, setRoute] = useState<"app" | "credits">(() => routeFromHash(window.location.hash));
 
@@ -106,6 +126,7 @@ function App() {
   const [players, setPlayers] = useState<Player[]>([]);
   const [selectedPlayer, setSelectedPlayer] = useState<number | null>(null);
   const [speedDial, setSpeedDial] = useState<SpeedDial[]>([]);
+  const [speedDialDeleteTarget, setSpeedDialDeleteTarget] = useState<{ id: number; label: string } | null>(null);
   const { toast, showToast } = useToast();
   const [collections, setCollections] = useState<{ id: string; title: string }[]>([]);
   const [selectedCollectionId, setSelectedCollectionId] = useState("");
@@ -389,8 +410,12 @@ function App() {
       return;
     }
     const mt = playMediaTypeForTab(pickTab);
+    const shuffle = mt === "playlist" ? shufflePlaylist : mt === "artist" ? shuffleArtist : false;
     await api.createSpeedDial({
-      label: `${selectedMedia.title} -> ${selectedPlayerName}`,
+      label: buildSpeedDialLabel(selectedMedia.title, {
+        radio: mt === "artist" ? artistRadio : false,
+        shuffle: mt === "playlist" || mt === "artist" ? shuffle : false,
+      }),
       media_type: mt,
       media_id: selectedMedia.id,
       player_id: selectedPlayer,
@@ -520,6 +545,17 @@ function App() {
     showToast("Removed from speed dial.");
   };
 
+  const confirmDeleteSpeedDial = async () => {
+    if (!speedDialDeleteTarget) return;
+    const { id } = speedDialDeleteTarget;
+    try {
+      await deleteSpeedDial(id);
+      setSpeedDialDeleteTarget(null);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : String(error));
+    }
+  };
+
   const playSpeedDialFavorite = async (favorite: SpeedDial) => {
     const result = await api.speedDialPlay(favorite.id);
     showToast(result.details);
@@ -556,6 +592,20 @@ function App() {
           onToast={showToast}
         />
 
+        <ConfirmDialog
+          open={speedDialDeleteTarget !== null}
+          title="Delete favorite?"
+          message={
+            speedDialDeleteTarget
+              ? `Remove “${speedDialDeleteTarget.label}” from speed dial?`
+              : ""
+          }
+          confirmLabel="Delete"
+          destructive
+          onCancel={() => setSpeedDialDeleteTarget(null)}
+          onConfirm={() => confirmDeleteSpeedDial()}
+        />
+
         <PickMusicSection
           authConnected={authConnected}
           pickTab={pickTab}
@@ -582,7 +632,7 @@ function App() {
           >
             <summary className="playToSummary">
               <span className="playToSummaryText">
-                <span className="playToSummaryTitle">Play to</span>
+                <span className="sectionTitle">Play to</span>
                 <span className="playToSummarySelection">{playToSummary}</span>
               </span>
               <IconChevronDown />
@@ -637,7 +687,7 @@ function App() {
                 <>
                   <h3>Sonos Speakers</h3>
                   <p className="hint playToSpeakersHint">
-                    Which speakers to play to. Leave all unchecked if you only want Plexamp without Sonos.
+                    Leave unchecked if you want Plexamp without Sonos.
                   </p>
                   {speakers.length === 0 ? (
                     <p className="hint">No speakers yet — enter seed IPs under Setup when using Docker/VLAN.</p>
@@ -723,35 +773,54 @@ function App() {
         </section>
 
         <section className="card speedDialCard">
-          <h2>Speed Dial</h2>
+          <h2 className="sectionTitle">Speed Dial</h2>
           {speedDial.length === 0 ? <p>No favorites yet.</p> : null}
           <div className="grid">
-            {speedDial.map((favorite) => (
+            {speedDial.map((favorite) => {
+              const displayLabel = speedDialDisplayLabel(favorite.label);
+              return (
               <div className="favorite" key={favorite.id}>
                 <button
                   type="button"
                   className="favoritePlay"
                   onClick={() => playSpeedDialFavorite(favorite).catch((error) => showToast(error.message))}
                 >
-                  {favorite.has_cover_art ? (
-                    <img
-                      className="favoriteCover"
-                      src={`${API_BASE}/speed-dial/${favorite.id}/cover`}
-                      alt=""
-                      loading="lazy"
-                      decoding="async"
-                      onError={(event) => {
-                        (event.target as HTMLImageElement).style.visibility = "hidden";
-                      }}
-                    />
-                  ) : null}
-                  <span className="favoriteLabel">{favorite.label}</span>
+                  <span className="favoriteArt">
+                    {favorite.has_cover_art ? (
+                      <img
+                        className="favoriteCover"
+                        src={`${API_BASE}/speed-dial/${favorite.id}/cover`}
+                        alt=""
+                        loading="lazy"
+                        decoding="async"
+                        onError={(event) => {
+                          (event.target as HTMLImageElement).style.visibility = "hidden";
+                        }}
+                      />
+                    ) : (
+                      <span className="favoriteCover favoriteCover--placeholder" aria-hidden />
+                    )}
+                    <span className="favoritePlayOverlay" aria-hidden>
+                      <IconPlay className="favoritePlayIcon" />
+                    </span>
+                  </span>
+                  <span className="favoriteText">
+                    <span className="favoriteLabel">{displayLabel}</span>
+                    <span className="favoriteMeta">{speedDialPlayerName(favorite, players)}</span>
+                    <span className="favoriteMeta">{speedDialPlayTarget(favorite, players, speakers)}</span>
+                  </span>
                 </button>
-                <button className="danger" onClick={() => deleteSpeedDial(favorite.id).catch((error) => showToast(error.message))}>
-                  Delete
+                <button
+                  type="button"
+                  className="favoriteDelete"
+                  aria-label={`Delete ${displayLabel}`}
+                  onClick={() => setSpeedDialDeleteTarget({ id: favorite.id, label: displayLabel })}
+                >
+                  <IconTrash />
                 </button>
               </div>
-            ))}
+            );
+            })}
           </div>
         </section>
 

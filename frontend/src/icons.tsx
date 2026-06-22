@@ -4,11 +4,11 @@ type FaIconProps = {
 };
 
 function FaIcon({ icon, className = "mediaCtrlIcon" }: FaIconProps) {
-  return <i className={`fa-solid ${icon} ${className}`.trim()} aria-hidden />;
+  return <i className={`fa-solid ${icon}${className ? ` ${className}` : ""}`.trim()} aria-hidden />;
 }
 
-export function IconPlay() {
-  return <FaIcon icon="fa-play" />;
+export function IconPlay({ className }: { className?: string } = {}) {
+  return <FaIcon icon="fa-play" className={className} />;
 }
 
 export function IconStop() {
@@ -49,4 +49,8 @@ export function IconPowerOff() {
 
 export function IconLaunchApp() {
   return <FaIcon icon="fa-arrow-up-right-from-square" />;
+}
+
+export function IconTrash() {
+  return <FaIcon icon="fa-trash" />;
 }

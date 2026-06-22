@@ -235,7 +235,7 @@ export function PickMusicSection({
 
   return (
     <section className="card">
-      <h2>Pick Music</h2>
+      <h2 className="sectionTitle">Pick Music</h2>
       {!authConnected ? <p className="hint">Plex not connected. Sign in on Setup.</p> : null}
 
       <div className="tabRow pickMusicTabs" role="tablist" aria-label="Music source">

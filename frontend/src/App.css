@@ -114,11 +114,19 @@
   margin-bottom: 3rem;
 }
 
+.speedDialCard .grid {
+  gap: 0;
+}
+
 .tabRow {
   display: flex;
   gap: 0.5rem;
   flex-wrap: wrap;
   margin-bottom: 0.75rem;
+}
+
+.tabRow button {
+  cursor: pointer;
 }
 
 .pickMusicTabs {
@@ -293,10 +301,14 @@
   display: none;
 }
 
-.playToSummaryTitle {
+.sectionTitle {
   font-size: 1.25rem;
   font-weight: 700;
   color: #1f2937;
+}
+
+.card > h2.sectionTitle {
+  margin: 0 0 0.75rem;
 }
 
 .playToSummarySelection {
@@ -352,6 +364,8 @@
   cursor: pointer;
   transition:
     border-color 0.15s ease,
+    background-color 0.15s ease,
+    color 0.15s ease,
     box-shadow 0.15s ease;
 }
 
@@ -361,8 +375,15 @@
 
 .pickGridBtn--selected {
   border-color: #2563eb;
-  box-shadow: 0 0 0 1px #2563eb;
-  background: #f8fbff;
+  background: #2563eb;
+  color: #fff;
+  box-shadow: none;
+}
+
+.pickGridBtn--selected:hover {
+  border-color: #1d4ed8;
+  background: #1d4ed8;
+  color: #fff;
 }
 
 .pickGridBtn--pinned {
@@ -581,16 +602,61 @@ select {
 }
 
 .favorite {
-  border: 1px solid #ddd;
-  border-radius: 10px;
-  padding: 0.6rem;
+  padding: 0.65rem 0;
   display: flex;
   justify-content: space-between;
-  align-items: stretch;
+  align-items: center;
   gap: 0.5rem;
+  border-bottom: 1px solid #e5e7eb;
 }
 
-.favoritePlay {
+.favorite:last-child {
+  border-bottom: none;
+}
+
+button.favoritePlay:hover {
+  background: transparent;
+}
+
+.favoriteArt {
+  position: relative;
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+}
+
+.favoriteCover {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 8px;
+  object-fit: cover;
+  background: #e8e8e8;
+}
+
+.favoriteCover--placeholder {
+  background: #d1d5db;
+}
+
+.favoritePlayOverlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: rgba(17, 24, 39, 0.42);
+  color: #fff;
+  pointer-events: none;
+}
+
+.favoritePlayIcon {
+  width: 1rem;
+  font-size: 0.85rem;
+  margin-left: 0.1rem;
+}
+
+button.favoritePlay {
   flex: 1;
   min-width: 0;
   display: flex;
@@ -598,21 +664,55 @@ select {
   align-items: center;
   gap: 0.65rem;
   text-align: left;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  cursor: pointer;
 }
 
-.favoriteCover {
-  width: 48px;
-  height: 48px;
-  border-radius: 8px;
-  object-fit: cover;
-  flex-shrink: 0;
-  background: #e8e8e8;
+.favoriteText {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
 }
 
 .favoriteLabel {
-  flex: 1;
-  min-width: 0;
   line-height: 1.25;
+  font-weight: 600;
+  color: #111827;
+}
+
+.favoriteMeta {
+  font-size: 0.8rem;
+  line-height: 1.3;
+  color: #6b7280;
+}
+
+button.favoriteDelete {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 2.25rem;
+  height: 2.25rem;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: #b00020;
+  cursor: pointer;
+}
+
+button.favoriteDelete:hover {
+  background: #fef2f2;
+}
+
+button.favoriteDelete:focus-visible {
+  outline: 2px solid #b00020;
+  outline-offset: 2px;
 }
 
 .stickyActions {
@@ -620,6 +720,21 @@ select {
   flex-wrap: wrap;
   gap: 0.5rem;
   align-items: center;
+}
+
+.stickyActions button {
+  cursor: pointer;
+}
+
+.stickyActions button.primary {
+  background: #16a34a;
+  border-color: #15803d;
+  color: #fff;
+}
+
+.stickyActions button.primary:hover {
+  background: #15803d;
+  border-color: #166534;
 }
 
 .sticky {
@@ -849,6 +964,20 @@ button.smallBtn {
   gap: 0.5rem;
   flex-wrap: wrap;
   justify-content: flex-end;
+}
+
+.confirmDialog {
+  max-width: 24rem;
+}
+
+.confirmDialogMessage {
+  margin: 0;
+  color: #374151;
+  line-height: 1.45;
+}
+
+button.confirmDialogBtn {
+  cursor: pointer;
 }
 
 .modalButtonRow {
@@ -1133,7 +1262,7 @@ button.nowrap {
   }
 
   .pickGrid {
-    grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(8rem, 1fr));
     gap: 0.65rem;
   }
 
@@ -1150,7 +1279,7 @@ button.nowrap {
     font-size: 1.05rem;
   }
 
-  .playToSummaryTitle {
+  .sectionTitle {
     font-size: 1.4rem;
   }
 
@@ -1207,16 +1336,29 @@ button.nowrap {
   }
 
   .favorite {
-    padding: 0.85rem;
+    padding: 0.75rem 0;
   }
 
-  .favoriteCover {
+  .favoriteArt {
     width: 56px;
     height: 56px;
   }
 
+  .favoriteCover {
+    width: 100%;
+    height: 100%;
+  }
+
+  .favoritePlayIcon {
+    font-size: 1rem;
+  }
+
   .favoriteLabel {
     font-size: 1.05rem;
+  }
+
+  .favoriteMeta {
+    font-size: 0.9rem;
   }
 
   .hint {
