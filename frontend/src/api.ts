@@ -274,6 +274,7 @@ export const api = {
     preset_id?: number | null;
     artist_radio?: boolean;
     shuffle?: boolean;
+    radio_degrees_of_separation?: number;
     initial_volumes?: InitialVolumes | null;
   }) => request<{ status: string; details: string }>("/play", { method: "POST", body: JSON.stringify(payload) }),
   plexampSkipNext: (playerId: number) =>

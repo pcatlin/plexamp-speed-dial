@@ -14,6 +14,7 @@ from app.models import PlexampPlayer, SonosGroupPreset
 from app.schemas.domain import PlaybackStateResponse, PlayRequest, PlayResponse
 from app.services.plex_service import PlexService
 from app.services.plexamp_client import (
+    append_max_degrees_of_separation,
     append_type_if_missing,
     build_server_playback_uri,
     create_play_queue,
@@ -27,6 +28,8 @@ from app.services.runtime_setup import resolve_plex_conn, resolve_sonos_runtime
 from app.services.sonos_service import SonosService
 
 _log = logging.getLogger(__name__)
+
+RADIO_DEFAULT_DEGREES_OF_SEPARATION = 1
 
 # Plex artist station keys look like: /library/metadata/{id}/station/{uuid}?type=10
 _STATION_UUID_RE = re.compile(
@@ -173,11 +176,26 @@ class PlaybackService:
 
         shuffle_flag = 1 if (payload.shuffle and effective_type in ("playlist", "artist")) else 0
 
+        is_radio = effective_type == "track" or (effective_type == "artist" and payload.artist_radio)
+        radio_degrees = payload.radio_degrees_of_separation
+        if is_radio:
+            if radio_degrees is None:
+                radio_degrees = RADIO_DEFAULT_DEGREES_OF_SEPARATION
+            library_key = append_max_degrees_of_separation(library_key, radio_degrees)
+
         uri = build_server_playback_uri(
             machine_identifier=pms.machineIdentifier,
             library_identifier=pms.library.identifier,
             library_key=library_key,
         )
+
+        if effective_type == "track":
+            play_kind = "track radio"
+        elif effective_type == "artist":
+            play_kind = "artist radio" if payload.artist_radio else "artist library"
+        else:
+            play_kind = effective_type
+        _log.info("Playback %s media_id=%s library_key=%s", play_kind, payload.media_id, library_key)
 
         pms_host, pms_port, pms_protocol = parse_pms_host_port_protocol(plex_conn.base_url.strip().rstrip("/"))
 
@@ -217,14 +235,8 @@ class PlaybackService:
 
         title = getattr(item, "title", "") or getattr(item, "tag", "") or payload.media_id
         tail = output_note
-        play_kind = effective_type
-        if effective_type == "track":
-            play_kind = "track radio"
-        elif effective_type == "artist":
-            play_kind = "artist radio" if payload.artist_radio else "artist library"
-        if shuffle_flag:
-            play_kind = f"{play_kind} (shuffled)"
-        details = f"Plexamp playing {play_kind}: {title!r} via {player.name}. {tail}"
+        details_kind = f"{play_kind} (shuffled)" if shuffle_flag else play_kind
+        details = f"Plexamp playing {details_kind}: {title!r} via {player.name}. {tail}"
         return PlayResponse(status="ok", details=details)
 
     def _plexamp_playback_simple(

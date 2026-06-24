@@ -71,6 +71,19 @@ def append_type_if_missing(library_key: str, libtype: str) -> str:
     return f"{library_key}{sep}type={code}"
 
 
+def append_max_degrees_of_separation(library_key: str, degrees: int) -> str:
+    """Append Plex radio `maxDegreesOfSeparation` (1–3, or -1 for unlimited) to a station library path."""
+    key = (library_key or "").strip()
+    if not key:
+        return key
+    sep = "&" if "?" in key else "?"
+    return f"{key}{sep}maxDegreesOfSeparation={degrees}"
+
+
+def _redact_token_query(query: str) -> str:
+    return re.sub(r"token=[^&]*", "token=<redacted>", query)
+
+
 def create_play_queue(
     *,
     plexamp_base: str,
@@ -96,14 +109,13 @@ def create_play_queue(
         query_params["shuffle"] = "1"
     query = urlencode(query_params)
     url = f"{base}/player/playback/createPlayQueue?{query}"
-    safe = re.sub(r"token=[^&]*", "token=<redacted>", url)
-    _log.info("Plexamp createPlayQueue server_uri=%s", server_uri)
-    _log.info("Plexamp createPlayQueue GET %s", safe)
-    # Uvicorn often hides app.* INFO on stdout; duplicate so Docker logs always show playback debugging.
-    print(f"[plexamp] server_uri={server_uri}", flush=True)
-    print(f"[plexamp] createPlayQueue GET {safe}", flush=True)
     resp = requests.get(url, timeout=timeout)
-    print(f"[plexamp] createPlayQueue HTTP {resp.status_code} body_len={len(resp.text or '')}", flush=True)
+    if resp.status_code != 200:
+        _log.warning(
+            "Plexamp createPlayQueue HTTP %s server_uri=%s",
+            resp.status_code,
+            server_uri,
+        )
     return resp
 
 
@@ -118,7 +130,7 @@ def plexamp_playback_command(
     base = sanitize_plexamp_base(plexamp_base)
     query = urlencode({"type": "audio", "commandID": 1, "token": token})
     url = f"{base}/player/playback/{action}?{query}"
-    safe = re.sub(r"token=[^&]*", "token=<redacted>", url)
+    safe = _redact_token_query(url)
     _log.info("Plexamp playback %s GET %s", action, safe)
     return requests.get(url, timeout=timeout)
 
@@ -209,7 +221,7 @@ def plexamp_timeline_state(
     )
     for params in param_variants:
         url = f"{base}/player/timeline/poll?{urlencode(params)}"
-        safe = re.sub(r"token=[^&]*", "token=<redacted>", url)
+        safe = _redact_token_query(url)
         try:
             resp = requests.get(url, timeout=timeout, headers=_plexamp_request_headers())
         except requests_exc.RequestException as exc:

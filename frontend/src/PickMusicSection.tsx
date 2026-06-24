@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, API_BASE, MediaItem } from "./api";
 import { IconChevronDown, IconShuffle } from "./icons";
+import {
+  radioRandomnessFromSliderIndex,
+  radioRandomnessLabel,
+  radioRandomnessSliderIndex,
+  RADIO_RANDOMNESS_STEPS,
+} from "./radioRandomness";
 
 export type PickTab = "playlist" | "album" | "artist" | "track" | "random_album";
 
@@ -22,6 +28,36 @@ const TABS: Array<{ id: PickTab; label: string }> = [
   { id: "random_album", label: "Random album" },
 ];
 
+type RadioRandomnessSliderProps = {
+  id: string;
+  value: number;
+  onChange: (value: number) => void;
+};
+
+function RadioRandomnessControl({ id, value, onChange }: RadioRandomnessSliderProps) {
+  return (
+    <div className="radioRandomnessBlock">
+      <label className="fieldLabel radioRandomnessLabel" htmlFor={id}>
+        Randomness
+      </label>
+      <input
+        id={id}
+        className="radioRandomnessSlider"
+        type="range"
+        min={0}
+        max={RADIO_RANDOMNESS_STEPS.length - 1}
+        step={1}
+        value={radioRandomnessSliderIndex(value)}
+        onChange={(e) => onChange(radioRandomnessFromSliderIndex(Number(e.target.value)))}
+      />
+      <span className="radioRandomnessValue">{radioRandomnessLabel(value)}</span>
+      <p className="hint subtle radioRandomnessHint">
+        Higher values include more distant related artists; unlimited has no cap.
+      </p>
+    </div>
+  );
+}
+
 type Props = {
   authConnected: boolean;
   pickTab: PickTab;
@@ -37,6 +73,8 @@ type Props = {
   onShufflePlaylistChange: (value: boolean) => void;
   shuffleArtist: boolean;
   onShuffleArtistChange: (value: boolean) => void;
+  radioDegreesOfSeparation: number;
+  onRadioDegreesOfSeparationChange: (value: number) => void;
   onToast: (msg: string) => void;
 };
 
@@ -55,6 +93,8 @@ export function PickMusicSection({
   onShufflePlaylistChange,
   shuffleArtist,
   onShuffleArtistChange,
+  radioDegreesOfSeparation,
+  onRadioDegreesOfSeparationChange,
   onToast,
 }: Props) {
   const [playlists, setPlaylists] = useState<MediaItem[]>([]);
@@ -71,6 +111,8 @@ export function PickMusicSection({
     if (pickTab === "album" || pickTab === "artist" || pickTab === "track") return pickTab;
     return null;
   }, [pickTab]);
+
+  const showRadioRandomness = pickTab === "track" || (pickTab === "artist" && artistRadio);
 
   useEffect(() => {
     const t = window.setTimeout(() => setDebouncedQuery(searchQuery.trim()), 320);
@@ -318,6 +360,13 @@ export function PickMusicSection({
             <p className="hint subtle artistRadioHint">
               When checked, Plex artist radio; when off, only this artist&apos;s library tracks.
             </p>
+          ) : null}
+          {showRadioRandomness ? (
+            <RadioRandomnessControl
+              id={pickTab === "track" ? "pick-track-radio-randomness" : "pick-radio-randomness"}
+              value={radioDegreesOfSeparation}
+              onChange={onRadioDegreesOfSeparationChange}
+            />
           ) : null}
           {pickTab === "artist" ? (
             <label className="checkboxRow shufflePickRow">

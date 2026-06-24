@@ -171,10 +171,21 @@ class PlayRequest(BaseModel):
         default=False,
         description="When media_type is playlist or artist: request shuffled queue from Plexamp.",
     )
+    radio_degrees_of_separation: int | None = Field(
+        default=None,
+        description="For artist radio and track radio: max degrees of separation (1–3, or -1 for unlimited).",
+    )
     initial_volumes: InitialVolumes | None = Field(
         default=None,
         description="Optional Sonos per-speaker and Pioneer initial volume levels (0–100%).",
     )
+
+    @field_validator("radio_degrees_of_separation")
+    @classmethod
+    def _validate_radio_degrees_of_separation(cls, value: int | None) -> int | None:
+        if value is None or value in (-1, 1, 2, 3):
+            return value
+        raise ValueError("radio_degrees_of_separation must be 1, 2, 3, or -1 (unlimited)")
 
 
 class PlayResponse(BaseModel):

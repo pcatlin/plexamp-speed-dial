@@ -296,6 +296,43 @@ def test_playback_artist_radio_uses_station_in_uri(db_session, monkeypatch):
     )
     assert result.status == "ok"
     assert "stations/888" in captured["server_uri"]
+    assert "maxDegreesOfSeparation=1" in captured["server_uri"]
+
+
+def test_playback_artist_radio_appends_degrees_of_separation(db_session, monkeypatch):
+    db_session.add(PlexCredential(auth_token="dummy-token", is_connected=True))
+    db_session.commit()
+    player = PlexampPlayer(name="Kitchen", host="plexamp.local", port=32500, is_active=True)
+    db_session.add(player)
+    db_session.commit()
+    db_session.refresh(player)
+
+    captured: dict = {}
+
+    def capture_queue(**kwargs):  # noqa: ANN001
+        captured["server_uri"] = kwargs["server_uri"]
+        fake = Mock()
+        fake.status_code = 200
+        fake.text = ""
+        return fake
+
+    monkeypatch.setattr("app.services.playback_service.create_play_queue", capture_queue)
+
+    service = PlaybackService(plex_service=FakeArtistPlexService(), sonos_service=FakeSonosService())
+    result = service.play(
+        PlayRequest(
+            media_type="artist",
+            media_id="555",
+            player_id=player.id,
+            speaker_ids=[],
+            artist_radio=True,
+            radio_degrees_of_separation=2,
+        ),
+        db_session,
+        auth_token="dummy-token",
+    )
+    assert result.status == "ok"
+    assert "maxDegreesOfSeparation=2" in captured["server_uri"]
 
 
 def test_playback_artist_library_uses_metadata_uri(db_session, monkeypatch):
@@ -384,8 +421,79 @@ def test_playback_track_radio_uses_station_in_uri(db_session, monkeypatch):
     )
     assert result.status == "ok"
     assert "/library/metadata/777/station/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee" in captured["server_uri"]
+    assert "maxDegreesOfSeparation=1" in captured["server_uri"]
     assert captured.get("shuffle") == 0
     assert "track radio" in result.details
+
+
+def test_playback_track_radio_appends_degrees_of_separation(db_session, monkeypatch):
+    db_session.add(PlexCredential(auth_token="dummy-token", is_connected=True))
+    db_session.commit()
+    player = PlexampPlayer(name="Kitchen", host="plexamp.local", port=32500, is_active=True)
+    db_session.add(player)
+    db_session.commit()
+    db_session.refresh(player)
+
+    captured: dict = {}
+
+    def capture_queue(**kwargs):  # noqa: ANN001
+        captured.update(kwargs)
+        fake = Mock()
+        fake.status_code = 200
+        fake.text = ""
+        return fake
+
+    monkeypatch.setattr("app.services.playback_service.create_play_queue", capture_queue)
+
+    service = PlaybackService(plex_service=FakeTrackPlexService(), sonos_service=FakeSonosService())
+    result = service.play(
+        PlayRequest(
+            media_type="track",
+            media_id="777",
+            player_id=player.id,
+            speaker_ids=[],
+            radio_degrees_of_separation=3,
+        ),
+        db_session,
+        auth_token="dummy-token",
+    )
+    assert result.status == "ok"
+    assert "maxDegreesOfSeparation=3" in captured["server_uri"]
+
+
+def test_playback_track_radio_unlimited_degrees_of_separation(db_session, monkeypatch):
+    db_session.add(PlexCredential(auth_token="dummy-token", is_connected=True))
+    db_session.commit()
+    player = PlexampPlayer(name="Kitchen", host="plexamp.local", port=32500, is_active=True)
+    db_session.add(player)
+    db_session.commit()
+    db_session.refresh(player)
+
+    captured: dict = {}
+
+    def capture_queue(**kwargs):  # noqa: ANN001
+        captured.update(kwargs)
+        fake = Mock()
+        fake.status_code = 200
+        fake.text = ""
+        return fake
+
+    monkeypatch.setattr("app.services.playback_service.create_play_queue", capture_queue)
+
+    service = PlaybackService(plex_service=FakeTrackPlexService(), sonos_service=FakeSonosService())
+    result = service.play(
+        PlayRequest(
+            media_type="track",
+            media_id="777",
+            player_id=player.id,
+            speaker_ids=[],
+            radio_degrees_of_separation=-1,
+        ),
+        db_session,
+        auth_token="dummy-token",
+    )
+    assert result.status == "ok"
+    assert "maxDegreesOfSeparation=-1" in captured["server_uri"]
 
 
 def test_playback_playlist_shuffle_passed_to_plexamp(db_session, monkeypatch):

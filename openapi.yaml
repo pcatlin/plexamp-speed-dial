@@ -1239,6 +1239,19 @@ components:
           description: 'When media_type is playlist or artist: request shuffled queue
             from Plexamp.'
           default: false
+        radio_degrees_of_separation:
+          anyOf:
+          - type: integer
+            enum:
+            - -1
+            - 1
+            - 2
+            - 3
+          - type: 'null'
+          title: Radio Degrees Of Separation
+          description: 'For artist radio and track radio: max degrees of separation
+            (1–3, or -1 for unlimited).'
+          default: null
       type: object
       required:
       - media_type

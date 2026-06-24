@@ -816,7 +816,7 @@ button.favoriteDelete:focus-visible {
 
 .pickPanel .artistRadioHint {
   margin-top: -0.15rem;
-  margin-bottom: 0.65rem;
+  margin-bottom: 0.35rem;
 }
 
 .shufflePickRow {
@@ -826,6 +826,36 @@ button.favoriteDelete:focus-visible {
 .shuffleArtistHint {
   margin-top: -0.35rem;
   margin-bottom: 0.65rem;
+}
+
+.radioRandomnessBlock {
+  display: grid;
+  grid-template-columns: auto 1fr minmax(4.5rem, auto);
+  align-items: center;
+  column-gap: 0.65rem;
+  row-gap: 0.35rem;
+  margin: 0.85rem 0 1.1rem;
+}
+
+.radioRandomnessBlock .radioRandomnessLabel {
+  margin: 0;
+}
+
+.radioRandomnessValue {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #374151;
+  text-align: right;
+}
+
+.radioRandomnessSlider {
+  width: 100%;
+  margin: 0;
+}
+
+.radioRandomnessBlock .radioRandomnessHint {
+  grid-column: 1 / -1;
+  margin: 0;
 }
 
 .trackPreviewShell {

@@ -138,6 +138,7 @@ function App() {
   const [selectedCollectionId, setSelectedCollectionId] = useState("");
   const [setupOpen, setSetupOpen] = useState(false);
   const [artistRadio, setArtistRadio] = useState(true);
+  const [radioDegreesOfSeparation, setRadioDegreesOfSeparation] = useState(1);
   const [shufflePlaylist, setShufflePlaylist] = useState(true);
   const [shuffleArtist, setShuffleArtist] = useState(false);
   const [sonosPlaying, setSonosPlaying] = useState<boolean | null>(null);
@@ -449,13 +450,21 @@ function App() {
     const shufflePlay =
       payload?.shuffle ??
       (mediaType === "playlist" ? shufflePlaylist : mediaType === "artist" ? shuffleArtist : false);
+    const artistRadioPlay = mediaType === "artist" ? (payload?.artist_radio ?? artistRadio) : false;
+    const isRadioPlay = mediaType === "track" || artistRadioPlay;
     const result = await api.play({
       media_type: mediaType,
       media_id: mediaId,
       player_id: playerId,
       speaker_ids: speakerIds,
       preset_id: payload?.preset_id ?? null,
-      ...(mediaType === "artist" ? { artist_radio: payload?.artist_radio ?? artistRadio } : {}),
+      ...(mediaType === "artist" ? { artist_radio: artistRadioPlay } : {}),
+      ...(isRadioPlay
+        ? {
+            radio_degrees_of_separation:
+              payload?.radio_degrees_of_separation ?? radioDegreesOfSeparation,
+          }
+        : {}),
       shuffle: shufflePlay,
       initial_volumes: payload?.initial_volumes ?? initialVolumesForPlay(speakerIds),
     });
@@ -716,6 +725,8 @@ function App() {
           onShufflePlaylistChange={setShufflePlaylist}
           shuffleArtist={shuffleArtist}
           onShuffleArtistChange={setShuffleArtist}
+          radioDegreesOfSeparation={radioDegreesOfSeparation}
+          onRadioDegreesOfSeparationChange={setRadioDegreesOfSeparation}
           onToast={showToast}
         />
 
