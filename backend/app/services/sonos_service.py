@@ -1,4 +1,5 @@
 import logging
+import time
 
 from soco import SoCo
 from soco import discover
@@ -7,6 +8,7 @@ from app.schemas.domain import SonosSpeaker
 from app.services.runtime_setup import SonosRuntime
 
 _log = logging.getLogger(__name__)
+_DISCOVERY_CACHE_TTL_SECONDS = 60
 
 
 def _normalize_sonos_uid(raw: str) -> tuple[str, str | None]:
@@ -20,8 +22,24 @@ def _normalize_sonos_uid(raw: str) -> tuple[str, str | None]:
 
 
 class SonosService:
+    def __init__(self) -> None:
+        self._discovery_cache: dict[SonosRuntime, tuple[float, set[SoCo]]] = {}
+
     def discover_visible_zones(self, runtime: SonosRuntime) -> set[SoCo]:
         """Return visible Sonos players (SoCo instances). Same rules as list_speakers."""
+        now = time.monotonic()
+        cached = self._discovery_cache.get(runtime)
+        if cached is not None:
+            expires_at, zones = cached
+            if now < expires_at:
+                return zones
+
+        zones = self._discover_visible_zones_uncached(runtime)
+        self._discovery_cache[runtime] = (now + _DISCOVERY_CACHE_TTL_SECONDS, zones)
+        return zones
+
+    def _discover_visible_zones_uncached(self, runtime: SonosRuntime) -> set[SoCo]:
+        """Perform SSDP/seed-IP discovery without using the in-memory cache."""
         seeds = [ip.strip() for ip in runtime.seed_ips.split(",") if ip.strip()]
         zones: set | None = None
 
