@@ -459,12 +459,7 @@ function App() {
       speaker_ids: speakerIds,
       preset_id: payload?.preset_id ?? null,
       ...(mediaType === "artist" ? { artist_radio: artistRadioPlay } : {}),
-      ...(isRadioPlay
-        ? {
-            radio_degrees_of_separation:
-              payload?.radio_degrees_of_separation ?? radioDegreesOfSeparation,
-          }
-        : {}),
+      ...(isRadioPlay ? { radio_degrees_of_separation: radioDegreesOfSeparation } : {}),
       shuffle: shufflePlay,
       initial_volumes: payload?.initial_volumes ?? initialVolumesForPlay(speakerIds),
     });
