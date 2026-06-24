@@ -113,7 +113,7 @@ describe("App", () => {
     });
     const startButton = screen.getByRole("button", { name: "Start" });
     fireEvent.click(startButton);
-    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Playing now"));
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Playing Top Mix"));
   });
 
   it("opens credits from setup modal link and returns via hash", async () => {

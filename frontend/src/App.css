@@ -591,6 +591,11 @@ button.favoriteDelete:focus-visible {
   gap: 0.55rem;
 }
 
+.pickGrid--volumeOnPlay {
+  row-gap: 1.35rem;
+  column-gap: 0.55rem;
+}
+
 .pickGridBtn {
   display: block;
   width: 100%;
@@ -1465,7 +1470,7 @@ button.nowrap {
 
   .pickGrid {
     grid-template-columns: repeat(auto-fill, minmax(8rem, 1fr));
-    gap: 0.65rem;
+    gap: 1em 0.65em;
   }
 
   .pickGridBtn {

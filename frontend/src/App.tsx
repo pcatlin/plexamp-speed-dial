@@ -459,7 +459,12 @@ function App() {
       shuffle: shufflePlay,
       initial_volumes: payload?.initial_volumes ?? initialVolumesForPlay(speakerIds),
     });
-    showToast(result.details);
+    if (result.status === "error") {
+      showToast(result.details);
+      return;
+    }
+    const title = selectedMedia?.title.trim();
+    showToast(title ? `Playing ${title}` : "Playing");
     if (outputKindForPlayer(players.find((p) => p.id === playerId)) === "pioneer") {
       setReceiverPowerOn(true);
     }
@@ -739,7 +744,11 @@ function App() {
               {outputKind === "pioneer" ? (
                 <>
                   <h3>Pioneer AVR</h3>
-                  <div className="pickGrid" role="group" aria-label="Pioneer AV receiver">
+                  <div
+                    className={`pickGrid${setVolumesOnPlay ? " pickGrid--volumeOnPlay" : ""}`}
+                    role="group"
+                    aria-label="Pioneer AV receiver"
+                  >
                     <div className="pickGridCell">
                       <button
                         type="button"
@@ -782,7 +791,11 @@ function App() {
                   {speakers.length === 0 ? (
                     <p className="hint">No speakers yet — enter seed IPs under Setup when using Docker/VLAN.</p>
                   ) : (
-                    <div className="pickGrid" role="group" aria-label="Sonos speakers">
+                    <div
+                      className={`pickGrid${setVolumesOnPlay ? " pickGrid--volumeOnPlay" : ""}`}
+                      role="group"
+                      aria-label="Sonos speakers"
+                    >
                       {speakers.map((speaker) => {
                         const selected = selectedSpeakers.includes(speaker.id);
                         const volume = sonosVolumes[speaker.id] ?? DEFAULT_INITIAL_VOLUME;
