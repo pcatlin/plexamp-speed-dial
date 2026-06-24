@@ -687,6 +687,78 @@ button.favoriteDelete:focus-visible {
   margin: 0;
 }
 
+.sonosVolumeMixerModal {
+  max-width: 420px;
+}
+
+.sonosVolumeMixerStatus {
+  margin: 0 0 0.75rem;
+  font-size: 0.88rem;
+  color: #6b7280;
+}
+
+.sonosVolumeMixerToggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 0.75rem;
+  font-size: 0.92rem;
+  color: #374151;
+  cursor: pointer;
+}
+
+.sonosVolumeMixerToggle input {
+  margin: 0;
+}
+
+.sonosVolumeMixerList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  max-height: min(60vh, 28rem);
+  overflow-y: auto;
+}
+
+.sonosVolumeMixerRow {
+  padding: 0.65rem 0.75rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.sonosVolumeMixerName {
+  display: block;
+  margin-bottom: 0.35rem;
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: #111827;
+}
+
+.sonosVolumeMixerSlider {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.sonosVolumeMixerValue {
+  flex-shrink: 0;
+  min-width: 3rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: #111827;
+  text-align: right;
+}
+
+.sonosVolumeMixerSlider input[type="range"] {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+}
+
 .playToVolumeToggle {
   display: flex;
   align-items: center;

@@ -50,6 +50,7 @@ from app.schemas.domain import (
     SonosSpeaker,
     SonosStopRequest,
     SonosVolumeAdjustRequest,
+    SonosVolumeSetRequest,
     ServerTidalTracksResponse,
     SpeedDialCreate,
     SpeedDialRead,
@@ -743,6 +744,14 @@ def audio_output_test(payload: AudioOutputTestRequest, db: Session = Depends(get
 @router.post("/sonos/volume", response_model=PlayResponse)
 def sonos_volume(payload: SonosVolumeAdjustRequest, db: Session = Depends(get_db)) -> PlayResponse:
     response = playback_service.sonos_volume_adjust_selected(payload.speaker_ids, payload.delta, db)
+    if response.status == "error":
+        raise HTTPException(status_code=400, detail=response.details)
+    return response
+
+
+@router.post("/sonos/volume/set", response_model=PlayResponse)
+def sonos_volume_set(payload: SonosVolumeSetRequest, db: Session = Depends(get_db)) -> PlayResponse:
+    response = playback_service.sonos_volume_set(payload.volumes, db)
     if response.status == "error":
         raise HTTPException(status_code=400, detail=response.details)
     return response

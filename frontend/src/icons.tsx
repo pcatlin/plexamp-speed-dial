@@ -35,6 +35,10 @@ export function IconVolumeUp() {
   return <FaIcon icon="fa-volume-high" />;
 }
 
+export function IconList() {
+  return <FaIcon icon="fa-list" />;
+}
+
 export function IconChevronDown() {
   return <FaIcon icon="fa-chevron-down" className="playToChevron" />;
 }

@@ -59,6 +59,12 @@ class SonosSpeaker(BaseModel):
     id: str
     name: str
     ip: str
+    volume: int | None = Field(
+        default=None,
+        ge=0,
+        le=100,
+        description="Current volume percent when discovered.",
+    )
 
 
 class SonosGroupPresetCreate(BaseModel):
@@ -202,6 +208,18 @@ class SonosVolumeAdjustRequest(BaseModel):
         le=100,
         description="Volume change in percent points (e.g. -5 or +5).",
     )
+
+
+class SonosVolumeSetRequest(BaseModel):
+    volumes: dict[str, int] = Field(
+        default_factory=dict,
+        description="Sonos speaker id → absolute volume percent (0–100).",
+    )
+
+    @field_validator("volumes")
+    @classmethod
+    def _clamp_volumes(cls, value: dict[str, int]) -> dict[str, int]:
+        return {key: max(0, min(100, int(vol))) for key, vol in value.items()}
 
 
 class SpeedDialCreate(BaseModel):

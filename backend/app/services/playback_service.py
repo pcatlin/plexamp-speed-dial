@@ -338,6 +338,19 @@ class PlaybackService:
             return PlayResponse(status="error", details=f"Sonos volume failed: {exc}")
         return PlayResponse(status="ok", details=msg)
 
+    def sonos_volume_set(self, volumes: dict[str, int], db: Session) -> PlayResponse:
+        if not volumes:
+            return PlayResponse(status="error", details="Provide at least one speaker volume to set.")
+        try:
+            runtime = resolve_sonos_runtime(db)
+            msg = self._sonos.set_absolute_volumes(runtime, volumes)
+        except Exception as exc:  # noqa: BLE001
+            _log.exception("Sonos volume set failed")
+            return PlayResponse(status="error", details=f"Sonos volume failed: {exc}")
+        if msg.startswith("Sonos: no "):
+            return PlayResponse(status="error", details=msg)
+        return PlayResponse(status="ok", details=msg)
+
     def sonos_playback_state(self, speaker_ids: list[str], db: Session) -> PlaybackStateResponse:
         if not speaker_ids:
             return PlaybackStateResponse(ok=True, playing=False, state=None)

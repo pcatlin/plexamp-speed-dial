@@ -90,10 +90,22 @@ class SonosService:
             _log.info("No Sonos zones found (Docker/multicast: set seed IPs under Setup).")
             return []
 
-        return [
-            SonosSpeaker(id=speaker.uid, name=speaker.player_name, ip=speaker.ip_address)
-            for speaker in sorted(zones, key=lambda z: (z.player_name or "").lower())
-        ]
+        speakers: list[SonosSpeaker] = []
+        for device in sorted(zones, key=lambda z: (z.player_name or "").lower()):
+            volume: int | None = None
+            try:
+                volume = int(device.volume)
+            except Exception:  # noqa: BLE001
+                pass
+            speakers.append(
+                SonosSpeaker(
+                    id=device.uid,
+                    name=device.player_name,
+                    ip=device.ip_address,
+                    volume=volume,
+                )
+            )
+        return speakers
 
     @staticmethod
     def _device_for_api_speaker_id(zones: set[SoCo], speaker_id: str) -> SoCo | None:
@@ -362,29 +374,22 @@ class SonosService:
         sign = "+" if delta > 0 else ""
         return f"Sonos: volume {sign}{delta}% on {names}."
 
-    def set_absolute_volumes_selected(
-        self,
-        runtime: SonosRuntime,
-        output_speaker_ids: list[str],
-        volumes: dict[str, int],
-    ) -> str:
-        """Set absolute volume percent on each selected Sonos zone."""
+    def set_absolute_volumes(self, runtime: SonosRuntime, volumes: dict[str, int]) -> str:
+        """Set absolute volume percent on each matched Sonos zone."""
         if not volumes:
-            return ""
+            return "Sonos: no volume levels requested."
         zones = self.discover_visible_zones(runtime)
         if not zones:
             return "Sonos: no zones discovered — nothing to set."
 
         lines: list[str] = []
         seen_uid: set[str] = set()
-        for sid in output_speaker_ids:
-            if sid not in volumes:
-                continue
+        for sid, raw_vol in volumes.items():
             dev = self._device_for_api_speaker_id(zones, sid)
             if dev is None or dev.uid in seen_uid:
                 continue
             seen_uid.add(dev.uid)
-            vol = max(0, min(100, int(volumes[sid])))
+            vol = max(0, min(100, int(raw_vol)))
             try:
                 dev.volume = vol
             except Exception as exc:  # noqa: BLE001
@@ -396,8 +401,25 @@ class SonosService:
             lines.append(f"{label} → {vol}%")
 
         if not lines:
+            return "Sonos: no speakers matched for volume set."
+        return f"Sonos: volume set on {'; '.join(sorted(lines))}."
+
+    def set_absolute_volumes_selected(
+        self,
+        runtime: SonosRuntime,
+        output_speaker_ids: list[str],
+        volumes: dict[str, int],
+    ) -> str:
+        """Set absolute volume percent on each selected Sonos zone."""
+        if not volumes:
+            return ""
+        filtered = {sid: volumes[sid] for sid in output_speaker_ids if sid in volumes}
+        if not filtered:
             return "Sonos: no selected speakers matched for initial volume."
-        return f"Sonos: initial volume on {'; '.join(sorted(lines))}."
+        msg = self.set_absolute_volumes(runtime, filtered)
+        if msg.startswith("Sonos: volume set on "):
+            return f"Sonos: initial volume on {msg.removeprefix('Sonos: volume set on ')}"
+        return msg
 
     def selection_transport_playing(self, runtime: SonosRuntime, output_speaker_ids: list[str]) -> tuple[bool | None, str | None]:
         """Return (playing, error). True if any coordinator for the selection is PLAYING or TRANSITIONING."""

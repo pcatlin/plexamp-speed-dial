@@ -19,6 +19,7 @@ export interface Speaker {
   id: string;
   name: string;
   ip: string;
+  volume?: number | null;
 }
 
 export interface GroupPreset {
@@ -306,5 +307,10 @@ export const api = {
     request<{ status: string; details: string }>("/sonos/volume", {
       method: "POST",
       body: JSON.stringify({ speaker_ids: speakerIds, delta }),
+    }),
+  sonosVolumeSet: (volumes: Record<string, number>) =>
+    request<{ status: string; details: string }>("/sonos/volume/set", {
+      method: "POST",
+      body: JSON.stringify({ volumes }),
     }),
 };

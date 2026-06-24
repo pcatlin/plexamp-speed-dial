@@ -5,6 +5,7 @@ import CreditsPage from "./CreditsPage";
 import { PickMusicSection, PickTab, playMediaTypeForTab } from "./PickMusicSection";
 import { SetupModal } from "./SetupModal";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { SonosVolumeMixerModal } from "./SonosVolumeMixerModal";
 import { VolumeEditorPopover } from "./VolumeEditorPopover";
 import {
   loadSelectedSpeakerIds,
@@ -27,9 +28,10 @@ import {
 } from "./appLinks";
 import {
   IconChevronDown,
+  IconLaunchApp,
+  IconList,
   IconPause,
   IconPlay,
-  IconLaunchApp,
   IconPowerOff,
   IconSkipNext,
   IconSkipPrevious,
@@ -139,6 +141,7 @@ function App() {
   const [shufflePlaylist, setShufflePlaylist] = useState(true);
   const [shuffleArtist, setShuffleArtist] = useState(false);
   const [sonosPlaying, setSonosPlaying] = useState<boolean | null>(null);
+  const [sonosVolumeMixerOpen, setSonosVolumeMixerOpen] = useState(false);
   const [plexampPlaying, setPlexampPlaying] = useState<boolean | null>(null);
   const [receiverPowerOn, setReceiverPowerOn] = useState(false);
   const [receiverStatus, setReceiverStatus] = useState<ReceiverStatus | null>(null);
@@ -677,6 +680,17 @@ function App() {
           onConfirm={() => confirmDeleteSpeedDial()}
         />
 
+        <SonosVolumeMixerModal
+          open={sonosVolumeMixerOpen}
+          speakers={speakers}
+          selectedSpeakerIds={selectedSpeakers}
+          fallbackVolumes={sonosVolumes}
+          onClose={() => setSonosVolumeMixerOpen(false)}
+          onSpeakerVolumeChange={setSonosSpeakerVolume}
+          onSpeakersRefreshed={applySpeakerList}
+          onToast={showToast}
+        />
+
         <PickMusicSection
           authConnected={authConnected}
           pickTab={pickTab}
@@ -1051,6 +1065,15 @@ function App() {
                 onClick={() => adjustSonosVolume(5).catch((e) => showToast(e.message))}
               >
                 <IconVolumeUp />
+              </button>
+              <button
+                type="button"
+                className="iconBtn"
+                aria-label="Adjust all Sonos speaker volumes"
+                title="All speaker volumes"
+                onClick={() => setSonosVolumeMixerOpen(true)}
+              >
+                <IconList />
               </button>
             </div>
           </fieldset>
