@@ -128,6 +128,9 @@ function App() {
   const [speedDial, setSpeedDial] = useState<SpeedDial[]>([]);
   const [speedDialDeleteTarget, setSpeedDialDeleteTarget] = useState<{ id: number; label: string } | null>(null);
   const [speedDialDeleteMode, setSpeedDialDeleteMode] = useState(false);
+  const [speedDialPlayerFilter, setSpeedDialPlayerFilter] = useState<number | null>(null);
+  const [speedDialSpeakerFilter, setSpeedDialSpeakerFilter] = useState<string | null>(null);
+  const [speedDialFiltersOpen, setSpeedDialFiltersOpen] = useState(false);
   const { toast, showToast } = useToast();
   const [collections, setCollections] = useState<{ id: string; title: string }[]>([]);
   const [selectedCollectionId, setSelectedCollectionId] = useState("");
@@ -153,6 +156,26 @@ function App() {
     const host = pioneerHostFromOutput(selectedPlayerRow?.audio_output ?? { kind: "none", config: {} });
     return host.trim() || "Pioneer AVR";
   }, [selectedPlayerRow]);
+
+  const filteredSpeedDial = useMemo(() => {
+    return speedDial.filter((favorite) => {
+      if (speedDialPlayerFilter !== null && favorite.player_id !== speedDialPlayerFilter) return false;
+      if (speedDialSpeakerFilter !== null && !favorite.speaker_ids.includes(speedDialSpeakerFilter)) return false;
+      return true;
+    });
+  }, [speedDial, speedDialPlayerFilter, speedDialSpeakerFilter]);
+
+  const speedDialFilterSummary = useMemo(() => {
+    if (speedDialPlayerFilter === null && speedDialSpeakerFilter === null) return "All favorites";
+    const parts: string[] = [];
+    if (speedDialPlayerFilter !== null) {
+      parts.push(players.find((player) => player.id === speedDialPlayerFilter)?.name ?? "Player");
+    }
+    if (speedDialSpeakerFilter !== null) {
+      parts.push(speakers.find((speaker) => speaker.id === speedDialSpeakerFilter)?.name ?? "Speaker");
+    }
+    return parts.join(" · ");
+  }, [speedDialPlayerFilter, speedDialSpeakerFilter, players, speakers]);
 
   const applyReceiverSnapshot = useCallback((receiver: {
     ok?: boolean;
@@ -281,6 +304,18 @@ function App() {
   useEffect(() => {
     saveSelectedSpeakerIds(selectedSpeakers);
   }, [selectedSpeakers]);
+
+  useEffect(() => {
+    if (speedDialPlayerFilter !== null && !players.some((player) => player.id === speedDialPlayerFilter)) {
+      setSpeedDialPlayerFilter(null);
+    }
+  }, [players, speedDialPlayerFilter]);
+
+  useEffect(() => {
+    if (speedDialSpeakerFilter !== null && !speakers.some((speaker) => speaker.id === speedDialSpeakerFilter)) {
+      setSpeedDialSpeakerFilter(null);
+    }
+  }, [speakers, speedDialSpeakerFilter]);
 
   useEffect(() => {
     reloadCollections(authConnected).catch(() => undefined);
@@ -589,6 +624,14 @@ function App() {
     showToast(result.details);
   };
 
+  const toggleSpeedDialPlayerFilter = (playerId: number) => {
+    setSpeedDialPlayerFilter((current) => (current === playerId ? null : playerId));
+  };
+
+  const toggleSpeedDialSpeakerFilter = (speakerId: string) => {
+    setSpeedDialSpeakerFilter((current) => (current === speakerId ? null : speakerId));
+  };
+
   if (route === "credits") {
     return <CreditsPage />;
   }
@@ -815,8 +858,70 @@ function App() {
             ) : null}
           </div>
           {speedDial.length === 0 ? <p>No favorites yet.</p> : null}
+          {speedDial.length > 0 && (players.length > 0 || speakers.length > 0) ? (
+            <details
+              className="playToDetails speedDialFiltersDetails"
+              open={speedDialFiltersOpen}
+              onToggle={(event) => setSpeedDialFiltersOpen(event.currentTarget.open)}
+            >
+              <summary className="playToSummary speedDialFiltersSummary">
+                <span className="playToSummaryText">
+                  <span className="sectionTitle">Filters</span>
+                  <span className="playToSummarySelection">{speedDialFilterSummary}</span>
+                </span>
+                <IconChevronDown />
+              </summary>
+              <div className="playToBody speedDialFiltersBody">
+                {players.length > 0 ? (
+                  <div className="speedDialFilterGroup">
+                    <div className="speedDialFilterLabel">Players</div>
+                    <div className="speedDialFilters" role="group" aria-label="Filter favorites by Plexamp player">
+                      {players.map((player) => {
+                        const selected = speedDialPlayerFilter === player.id;
+                        return (
+                          <button
+                            key={player.id}
+                            type="button"
+                            className={`speedDialFilterPill${selected ? " speedDialFilterPill--selected" : ""}`}
+                            aria-pressed={selected}
+                            onClick={() => toggleSpeedDialPlayerFilter(player.id)}
+                          >
+                            {player.name}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : null}
+                {speakers.length > 0 ? (
+                  <div className="speedDialFilterGroup speedDialFilterGroupSpeakers">
+                    <div className="speedDialFilterLabel">Speakers</div>
+                    <div className="speedDialFilters" role="group" aria-label="Filter favorites by Sonos speaker">
+                      {speakers.map((speaker) => {
+                        const selected = speedDialSpeakerFilter === speaker.id;
+                        return (
+                          <button
+                            key={speaker.id}
+                            type="button"
+                            className={`speedDialFilterPill${selected ? " speedDialFilterPill--selected" : ""}`}
+                            aria-pressed={selected}
+                            onClick={() => toggleSpeedDialSpeakerFilter(speaker.id)}
+                          >
+                            {speaker.name}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            </details>
+          ) : null}
+          {speedDial.length > 0 && filteredSpeedDial.length === 0 ? (
+            <p className="hint">No favorites match the current filters.</p>
+          ) : null}
           <div className={`speedDialGrid${speedDialDeleteMode ? " speedDialGrid--deleteMode" : ""}`}>
-            {speedDial.map((favorite) => {
+            {filteredSpeedDial.map((favorite) => {
               const displayLabel = speedDialDisplayLabel(favorite.label);
               return (
               <div className="favorite" key={favorite.id}>

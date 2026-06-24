@@ -126,6 +126,70 @@
   margin: 0;
 }
 
+.speedDialFiltersDetails {
+  margin-bottom: 0.75rem;
+}
+
+.speedDialFiltersDetails .sectionTitle {
+  font-size: 1rem;
+}
+
+.speedDialFiltersBody {
+  padding-top: 0.65rem;
+  margin-bottom: 0.75rem;
+}
+
+.speedDialFilters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.speedDialFilterGroup {
+  margin-bottom: 0.65rem;
+}
+
+.speedDialFilterGroup:last-child {
+  margin-bottom: 0;
+}
+
+.speedDialFilterGroupSpeakers {
+  margin-bottom: 0.75rem;
+}
+
+.speedDialFilterLabel {
+  margin-bottom: 0.35rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: #6b7280;
+}
+
+button.speedDialFilterPill {
+  padding: 0.35rem 0.7rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+  line-height: 1.2;
+  border-radius: 999px;
+  border: 1px solid #c9ced6;
+  background: #fff;
+  color: #374151;
+  cursor: pointer;
+}
+
+button.speedDialFilterPill--selected {
+  border-color: #2563eb;
+  background: #2563eb;
+  color: #fff;
+}
+
+button.speedDialFilterPill--selected:hover {
+  border-color: #1d4ed8;
+  background: #1d4ed8;
+  color: #fff;
+}
+
 .speedDialGrid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(7.5rem, 1fr));
