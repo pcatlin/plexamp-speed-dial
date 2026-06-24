@@ -261,6 +261,8 @@ export const api = {
   speedDial: () => request<SpeedDial[]>("/speed-dial"),
   createSpeedDial: (payload: Omit<SpeedDial, "id" | "has_cover_art">) =>
     request<{ id: number }>("/speed-dial", { method: "POST", body: JSON.stringify(payload) }),
+  patchSpeedDialLabel: (id: number, label: string) =>
+    request<SpeedDial>(`/speed-dial/${id}`, { method: "PATCH", body: JSON.stringify({ label }) }),
   deleteSpeedDial: (id: number) => request<{ message: string }>(`/speed-dial/${id}`, { method: "DELETE" }),
   speedDialPlay: (id: number) =>
     request<{ status: string; details: string }>(`/speed-dial/${id}/play`, { method: "POST" }),

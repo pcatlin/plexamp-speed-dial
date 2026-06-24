@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import "./App.css";
-import { api, API_BASE, MediaItem, Player, Speaker, SpeedDial, playbackStateWebSocketUrl } from "./api";
+import { api, MediaItem, Player, Speaker, SpeedDial, playbackStateWebSocketUrl } from "./api";
 import CreditsPage from "./CreditsPage";
 import { PickMusicSection, PickTab, playMediaTypeForTab } from "./PickMusicSection";
 import { SetupModal } from "./SetupModal";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { SonosVolumeMixerModal } from "./SonosVolumeMixerModal";
+import { SpeedDialFavoriteCard } from "./SpeedDialFavoriteCard";
 import { VolumeEditorPopover } from "./VolumeEditorPopover";
 import {
   loadSelectedSpeakerIds,
@@ -36,7 +37,6 @@ import {
   IconSkipNext,
   IconSkipPrevious,
   IconStop,
-  IconTrash,
   IconVolumeDown,
   IconVolumeUp,
 } from "./icons";
@@ -600,6 +600,11 @@ function App() {
     showToast(result.details);
   };
 
+  const renameSpeedDial = async (id: number, label: string) => {
+    const updated = await api.patchSpeedDialLabel(id, label);
+    setSpeedDial((current) => current.map((row) => (row.id === id ? updated : row)));
+  };
+
   const deleteSpeedDial = async (id: number) => {
     await api.deleteSpeedDial(id);
     const rows = await api.speedDial();
@@ -935,53 +940,24 @@ function App() {
             <p className="hint">No favorites match the current filters.</p>
           ) : null}
           <div className={`speedDialGrid${speedDialDeleteMode ? " speedDialGrid--deleteMode" : ""}`}>
-            {filteredSpeedDial.map((favorite) => {
-              const displayLabel = speedDialDisplayLabel(favorite.label);
-              return (
-              <div className="favorite" key={favorite.id}>
-                {speedDialDeleteMode ? (
-                  <button
-                    type="button"
-                    className="favoriteDelete"
-                    aria-label={`Delete ${displayLabel}`}
-                    onClick={() => setSpeedDialDeleteTarget({ id: favorite.id, label: displayLabel })}
-                  >
-                    <IconTrash />
-                  </button>
-                ) : null}
-                <button
-                  type="button"
-                  className="favoritePlay"
-                  onClick={() => playSpeedDialFavorite(favorite).catch((error) => showToast(error.message))}
-                >
-                  <span className="favoriteArt">
-                    {favorite.has_cover_art ? (
-                      <img
-                        className="favoriteCover"
-                        src={`${API_BASE}/speed-dial/${favorite.id}/cover`}
-                        alt=""
-                        loading="lazy"
-                        decoding="async"
-                        onError={(event) => {
-                          (event.target as HTMLImageElement).style.visibility = "hidden";
-                        }}
-                      />
-                    ) : (
-                      <span className="favoriteCover favoriteCover--placeholder" aria-hidden />
-                    )}
-                    <span className="favoritePlayOverlay" aria-hidden>
-                      <IconPlay className="favoritePlayIcon" />
-                    </span>
-                  </span>
-                  <span className="favoriteText">
-                    <span className="favoriteLabel">{displayLabel}</span>
-                    <span className="favoriteMeta">{speedDialPlayerName(favorite, players)}</span>
-                    <span className="favoriteMeta">{speedDialPlayTarget(favorite, players, speakers)}</span>
-                  </span>
-                </button>
-              </div>
-            );
-            })}
+            {filteredSpeedDial.map((favorite) => (
+              <SpeedDialFavoriteCard
+                key={favorite.id}
+                favorite={favorite}
+                editMode={speedDialDeleteMode}
+                playerName={speedDialPlayerName(favorite, players)}
+                playTarget={speedDialPlayTarget(favorite, players, speakers)}
+                onPlay={() => playSpeedDialFavorite(favorite).catch((error) => showToast(error.message))}
+                onDelete={() =>
+                  setSpeedDialDeleteTarget({
+                    id: favorite.id,
+                    label: speedDialDisplayLabel(favorite.label),
+                  })
+                }
+                onRename={renameSpeedDial}
+                onToast={showToast}
+              />
+            ))}
           </div>
         </section>
 

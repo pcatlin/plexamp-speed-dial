@@ -134,6 +134,32 @@ def test_speed_dial_create_list_delete(client):
     assert listed_after.json() == []
 
 
+def test_speed_dial_patch_label(client):
+    player_id = client.post(
+        "/api/v1/players",
+        json={"name": "Kitchen", "host": "plexamp.local", "port": 32500, "is_active": True},
+    ).json()["id"]
+
+    favorite_id = client.post(
+        "/api/v1/speed-dial",
+        json={
+            "label": "Morning Mix",
+            "media_type": "playlist",
+            "media_id": "playlist-1",
+            "player_id": player_id,
+            "speaker_ids": [],
+            "preset_id": None,
+        },
+    ).json()["id"]
+
+    patched = client.patch(f"/api/v1/speed-dial/{favorite_id}", json={"label": "Evening Mix"})
+    assert patched.status_code == 200
+    assert patched.json()["label"] == "Evening Mix"
+
+    listed = client.get("/api/v1/speed-dial").json()
+    assert listed[0]["label"] == "Evening Mix"
+
+
 def test_speed_dial_create_stores_initial_volumes(client):
     player_id = client.post(
         "/api/v1/players",

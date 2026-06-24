@@ -252,6 +252,10 @@ class SpeedDialRead(SpeedDialCreate):
     has_cover_art: bool = False
 
 
+class SpeedDialLabelPatch(BaseModel):
+    label: str = Field(..., min_length=1, max_length=255)
+
+
 class RuntimeSetupUpdate(BaseModel):
     """Editable fields from the Setup modal (stored in DB)."""
 

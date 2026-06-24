@@ -1,9 +1,7 @@
 import type { InitialVolumes } from "./initialVolumes";
 
 export function speedDialDisplayLabel(label: string): string {
-  const marker = " -> ";
-  const idx = label.indexOf(marker);
-  return idx >= 0 ? label.slice(0, idx) : label;
+  return label;
 }
 
 export function buildSpeedDialLabel(

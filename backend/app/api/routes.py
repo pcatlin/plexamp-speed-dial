@@ -53,6 +53,7 @@ from app.schemas.domain import (
     SonosVolumeSetRequest,
     ServerTidalTracksResponse,
     SpeedDialCreate,
+    SpeedDialLabelPatch,
     SpeedDialRead,
     InitialVolumes,
     TidalTrackRead,
@@ -852,6 +853,33 @@ def speed_dial_cover(favorite_id: int, db: Session = Depends(get_db)) -> Respons
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=502, detail=f"Plex image fetch failed: {exc}") from exc
     return Response(content=body, media_type=media_type)
+
+
+@router.patch("/speed-dial/{favorite_id}", response_model=SpeedDialRead)
+def patch_speed_dial_label(
+    favorite_id: int,
+    payload: SpeedDialLabelPatch,
+    db: Session = Depends(get_db),
+) -> SpeedDialRead:
+    row = db.get(SpeedDialFavorite, favorite_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Favorite not found")
+    row.label = payload.label.strip()
+    db.commit()
+    db.refresh(row)
+    return SpeedDialRead(
+        id=row.id,
+        label=row.label,
+        media_type=row.media_type,
+        media_id=row.media_id,
+        player_id=row.player_id,
+        speaker_ids=row.speaker_ids,
+        preset_id=row.preset_id,
+        artist_radio=getattr(row, "artist_radio", None),
+        shuffle=getattr(row, "shuffle", None),
+        initial_volumes=getattr(row, "initial_volumes", None),
+        has_cover_art=bool((getattr(row, "cover_thumb_path", None) or "").strip()),
+    )
 
 
 @router.delete("/speed-dial/{favorite_id}")

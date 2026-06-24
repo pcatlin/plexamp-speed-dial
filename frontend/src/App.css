@@ -288,6 +288,34 @@ button.favoritePlay {
   overflow: hidden;
 }
 
+.favoriteEdit {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.favoriteLabelInput {
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0.2rem 0.35rem;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: #fff;
+  line-height: 1.2;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #111827;
+}
+
+.favoriteLabelInput:focus {
+  outline: 2px solid #2563eb;
+  outline-offset: 1px;
+  border-color: #93c5fd;
+}
+
 .favoriteMeta {
   font-size: 0.68rem;
   line-height: 1.25;

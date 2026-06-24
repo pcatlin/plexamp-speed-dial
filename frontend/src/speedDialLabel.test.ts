@@ -2,11 +2,8 @@ import { describe, expect, it } from "vitest";
 import { buildSpeedDialLabel, formatSpeedDialPlayTarget, speedDialDisplayLabel } from "./speedDialLabel";
 
 describe("speedDialDisplayLabel", () => {
-  it("strips legacy player suffix", () => {
-    expect(speedDialDisplayLabel("Morning Mix -> Kitchen")).toBe("Morning Mix");
-  });
-
-  it("keeps radio and shuffle suffixes", () => {
+  it("returns the stored label unchanged", () => {
+    expect(speedDialDisplayLabel("Morning Mix -> Kitchen")).toBe("Morning Mix -> Kitchen");
     expect(speedDialDisplayLabel("Artist Name (radio) (shuffle)")).toBe("Artist Name (radio) (shuffle)");
   });
 });
