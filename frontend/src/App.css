@@ -1384,7 +1384,7 @@ button.nowrap {
 /* Mobile: larger type, stacked playback controls */
 @media (max-width: 768px) {
   .appShell {
-    padding: 1.15rem 1.15rem 9rem;
+    padding: 1.15rem 1.15rem 6.5rem;
     font-size: 1.0625rem;
   }
 
@@ -1453,39 +1453,6 @@ button.nowrap {
     font-size: 1rem;
   }
 
-  .controlRailDock {
-    padding: 0 0 env(safe-area-inset-bottom, 0px);
-  }
-
-  .controlRail {
-    flex-direction: column;
-    gap: 0.4rem;
-    padding: 0.45rem 0.55rem;
-    border-radius: 0;
-  }
-
-  .controlFrameset {
-    flex: none;
-    width: 100%;
-    padding: 0.3rem 0.45rem 0.35rem;
-  }
-
-  .controlFrameset legend {
-    font-size: 1rem;
-    padding: 0 0.4rem;
-  }
-
-  .receiverStatusRow {
-    font-size: 1rem;
-    margin-bottom: 0.25rem;
-  }
-
-  .mediaToolbarStack {
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 0.35rem;
-  }
-
   button.iconBtn {
     width: 2.65rem;
     height: 2.65rem;
@@ -1525,5 +1492,44 @@ button.nowrap {
   .appToast {
     font-size: 1.05rem;
     padding: 0.9rem 1.15rem;
+  }
+}
+
+@media (max-width: 500px) {
+  .appShell {
+    padding-bottom: 9rem;
+  }
+
+  .controlRailDock {
+    padding: 0 0 env(safe-area-inset-bottom, 0px);
+  }
+
+  .controlRail {
+    flex-direction: column;
+    gap: 0.4rem;
+    padding: 0.45rem 0.55rem;
+    border-radius: 0;
+  }
+
+  .controlFrameset {
+    flex: none;
+    width: 100%;
+    padding: 0.3rem 0.45rem 0.35rem;
+  }
+
+  .controlFrameset legend {
+    font-size: 1rem;
+    padding: 0 0.4rem;
+  }
+
+  .receiverStatusRow {
+    font-size: 1rem;
+    margin-bottom: 0.25rem;
+  }
+
+  .mediaToolbarStack {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.35rem;
   }
 }
