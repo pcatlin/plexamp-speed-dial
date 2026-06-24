@@ -129,8 +129,7 @@ def _serialize_runtime_setup_read(db: Session) -> RuntimeSetupRead:
     )
 
 
-@router.on_event("startup")
-def startup() -> None:
+def run_startup_tasks() -> None:
     Base.metadata.create_all(bind=engine)
     ensure_runtime_setup_columns(engine)
     ensure_runtime_setup_plex_client_identifier_column(engine)

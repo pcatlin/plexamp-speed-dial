@@ -1,5 +1,8 @@
+from __future__ import annotations
+
 import logging
 import time
+from collections.abc import Callable
 
 from soco import SoCo
 from soco import discover
@@ -19,6 +22,68 @@ def _normalize_sonos_uid(raw: str) -> tuple[str, str | None]:
     if ":" in s:
         return s, s.split(":", 1)[0]
     return s, None
+
+
+def _name_for_sonos_uid(zones: set[SoCo], raw_uid: str) -> str | None:
+    uid = (raw_uid or "").split("#", 1)[0].strip()
+    want, base = _normalize_sonos_uid(uid)
+    if not want:
+        return None
+    for device in zones:
+        du = device.uid
+        if du == want or (base is not None and du == base):
+            return device.player_name or du
+    return None
+
+
+def format_playback_source_label(
+    *,
+    uri: str,
+    title: str,
+    artist: str,
+    transport_state: str,
+    resolve_speaker_name: Callable[[str], str | None],
+) -> str | None:
+    """Human-readable Sonos input/source for API responses."""
+    uri = (uri or "").strip()
+    title = (title or "").strip()
+    artist = (artist or "").strip()
+    state = (transport_state or "").upper()
+
+    source_type = SoCo.music_source_from_uri(uri)
+    if source_type == "NONE" or state == "STOPPED":
+        return "Idle"
+
+    if source_type == "LINE_IN":
+        src_uid = uri.split(":", 1)[-1] if ":" in uri else ""
+        src_name = resolve_speaker_name(src_uid)
+        return f"Line-in · {src_name}" if src_name else "Line-in"
+
+    if source_type == "TV":
+        return "TV"
+    if source_type == "AIRPLAY":
+        return "AirPlay"
+    if source_type == "SPOTIFY_CONNECT":
+        return f"Spotify · {title}" if title else "Spotify"
+    if source_type == "RADIO":
+        return f"Radio · {title}" if title else "Radio"
+    if source_type == "WEB_FILE":
+        return title or "Streaming"
+
+    if uri.startswith("x-rincon:") and not uri.startswith(("x-rincon-stream:", "x-rincon-queue:", "x-rincon-mp3radio:")):
+        grouped_uid = uri.removeprefix("x-rincon:").split("#", 1)[0]
+        grouped_name = resolve_speaker_name(grouped_uid)
+        return f"Grouped · {grouped_name}" if grouped_name else "Grouped"
+
+    if title and artist:
+        return f"{title} — {artist}"
+    if title:
+        return title
+    if source_type == "LIBRARY":
+        return "Queue"
+    if state in ("PLAYING", "TRANSITIONING", "PAUSED_PLAYBACK"):
+        return "Playing"
+    return None
 
 
 class SonosService:
@@ -97,15 +162,33 @@ class SonosService:
                 volume = int(device.volume)
             except Exception:  # noqa: BLE001
                 pass
+            source = self._playback_source_label(device, zones)
             speakers.append(
                 SonosSpeaker(
                     id=device.uid,
                     name=device.player_name,
                     ip=device.ip_address,
                     volume=volume,
+                    source=source,
                 )
             )
         return speakers
+
+    def _playback_source_label(self, device: SoCo, zones: set[SoCo]) -> str | None:
+        try:
+            coord = self._group_coordinator(device)
+            transport = coord.get_current_transport_info()
+            track_info = coord.get_current_track_info()
+            return format_playback_source_label(
+                uri=str(track_info.get("uri") or ""),
+                title=str(track_info.get("title") or ""),
+                artist=str(track_info.get("artist") or ""),
+                transport_state=str(transport.get("current_transport_state") or ""),
+                resolve_speaker_name=lambda uid: _name_for_sonos_uid(zones, uid),
+            )
+        except Exception as exc:  # noqa: BLE001
+            _log.debug("Sonos source label failed for %s: %s", device.player_name or device.uid, exc)
+            return None
 
     @staticmethod
     def _device_for_api_speaker_id(zones: set[SoCo], speaker_id: str) -> SoCo | None:

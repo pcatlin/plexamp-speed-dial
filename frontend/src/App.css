@@ -731,10 +731,18 @@ button.favoriteDelete:focus-visible {
 
 .sonosVolumeMixerName {
   display: block;
-  margin-bottom: 0.35rem;
+  margin-bottom: 0.15rem;
   font-size: 0.92rem;
   font-weight: 600;
   color: #111827;
+}
+
+.sonosVolumeMixerSource {
+  display: block;
+  margin-bottom: 0.35rem;
+  font-size: 0.82rem;
+  color: #6b7280;
+  line-height: 1.35;
 }
 
 .sonosVolumeMixerSlider {

@@ -65,6 +65,10 @@ class SonosSpeaker(BaseModel):
         le=100,
         description="Current volume percent when discovered.",
     )
+    source: str | None = Field(
+        default=None,
+        description="Human-readable current input or playback source.",
+    )
 
 
 class SonosGroupPresetCreate(BaseModel):

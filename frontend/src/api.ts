@@ -20,6 +20,7 @@ export interface Speaker {
   name: string;
   ip: string;
   volume?: number | null;
+  source?: string | null;
 }
 
 export interface GroupPreset {

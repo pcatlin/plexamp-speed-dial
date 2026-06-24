@@ -182,6 +182,9 @@ export function SonosVolumeMixerModal({
             return (
               <li key={speaker.id} className="sonosVolumeMixerRow">
                 <span className="sonosVolumeMixerName">{speaker.name}</span>
+                {speaker.source ? (
+                  <span className="sonosVolumeMixerSource">{speaker.source}</span>
+                ) : null}
                 <label className="sonosVolumeMixerSlider">
                   <input
                     type="range"
