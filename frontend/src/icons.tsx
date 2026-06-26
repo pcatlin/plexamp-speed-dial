@@ -62,3 +62,7 @@ export function IconTrash() {
 export function IconLink() {
   return <FaIcon icon="fa-link" className="favoriteWebhookIcon" />;
 }
+
+export function IconGrip({ className }: { className?: string } = {}) {
+  return <FaIcon icon="fa-grip-vertical" className={className ?? "favoriteDragIcon"} />;
+}

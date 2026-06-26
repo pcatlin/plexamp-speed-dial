@@ -37,6 +37,16 @@ export function outputKindForPlayer(player: Player | undefined): AudioOutputKind
   return player?.audio_output?.kind ?? "none";
 }
 
+export function favoriteMatchesSpeakerFilter(
+  favorite: { player_id: number; speaker_ids: string[] },
+  speakerId: string,
+  players: Player[],
+): boolean {
+  const player = players.find((row) => row.id === favorite.player_id);
+  if (outputKindForPlayer(player) === "pioneer") return false;
+  return favorite.speaker_ids.includes(speakerId);
+}
+
 export function sonosSpeakerIdFromOutput(output: AudioOutput): string {
   if (output.kind !== "sonos") return "";
   return String(output.config.speaker_id ?? "").trim();

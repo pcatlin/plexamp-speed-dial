@@ -5,6 +5,7 @@ from typing import Any, Literal
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, WebSocket, WebSocketDisconnect
 from fastapi.responses import PlainTextResponse
 from pydantic import ValidationError
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_plex_creds
@@ -20,6 +21,7 @@ from app.db.runtime_setup_migrate import (
     ensure_speed_dial_cover_column,
     ensure_speed_dial_shuffle_column,
     ensure_speed_dial_initial_volumes_column,
+    ensure_speed_dial_sort_order_column,
 )
 from app.models import PlexCredential, PlexampPlayer, SonosGroupPreset, SpeedDialFavorite
 from app.plexapi_identity import apply_stable_plexapi_headers, log_plex_account_linked
@@ -56,7 +58,8 @@ from app.schemas.domain import (
     SonosVolumeSetRequest,
     ServerTidalTracksResponse,
     SpeedDialCreate,
-    SpeedDialLabelPatch,
+    SpeedDialOrderUpdate,
+    SpeedDialPatch,
     SpeedDialRead,
     InitialVolumes,
     TidalTrackRead,
@@ -146,6 +149,7 @@ def run_startup_tasks() -> None:
     ensure_speed_dial_artist_radio_column(engine)
     ensure_speed_dial_shuffle_column(engine)
     ensure_speed_dial_initial_volumes_column(engine)
+    ensure_speed_dial_sort_order_column(engine)
     ensure_plexamp_player_sonos_line_in_column(engine)
     ensure_plexamp_player_audio_output_columns(engine)
     seed = SessionLocal()
@@ -770,23 +774,49 @@ def sonos_volume_set(payload: SonosVolumeSetRequest, db: Session = Depends(get_d
 
 @router.get("/speed-dial", response_model=list[SpeedDialRead])
 def speed_dial(db: Session = Depends(get_db)) -> list[SpeedDialRead]:
+    return _speed_dial_list(db)
+
+
+def _speed_dial_row_to_read(row: SpeedDialFavorite) -> SpeedDialRead:
+    return SpeedDialRead(
+        id=row.id,
+        label=row.label,
+        media_type=row.media_type,
+        media_id=row.media_id,
+        player_id=row.player_id,
+        speaker_ids=row.speaker_ids,
+        preset_id=row.preset_id,
+        artist_radio=getattr(row, "artist_radio", None),
+        shuffle=getattr(row, "shuffle", None),
+        initial_volumes=getattr(row, "initial_volumes", None),
+        has_cover_art=bool((getattr(row, "cover_thumb_path", None) or "").strip()),
+    )
+
+
+def _speed_dial_list(db: Session) -> list[SpeedDialRead]:
+    rows = (
+        db.query(SpeedDialFavorite)
+        .order_by(SpeedDialFavorite.sort_order.asc(), SpeedDialFavorite.id.asc())
+        .all()
+    )
+    return [_speed_dial_row_to_read(row) for row in rows]
+
+
+@router.put("/speed-dial/order", response_model=list[SpeedDialRead])
+def reorder_speed_dial(payload: SpeedDialOrderUpdate, db: Session = Depends(get_db)) -> list[SpeedDialRead]:
     rows = db.query(SpeedDialFavorite).all()
-    return [
-        SpeedDialRead(
-            id=row.id,
-            label=row.label,
-            media_type=row.media_type,
-            media_id=row.media_id,
-            player_id=row.player_id,
-            speaker_ids=row.speaker_ids,
-            preset_id=row.preset_id,
-            artist_radio=getattr(row, "artist_radio", None),
-            shuffle=getattr(row, "shuffle", None),
-            initial_volumes=getattr(row, "initial_volumes", None),
-            has_cover_art=bool((getattr(row, "cover_thumb_path", None) or "").strip()),
+    if len(payload.favorite_ids) != len(rows):
+        raise HTTPException(
+            status_code=400,
+            detail="favorite_ids must include every speed-dial favorite exactly once",
         )
-        for row in rows
-    ]
+    row_by_id = {row.id: row for row in rows}
+    if set(payload.favorite_ids) != set(row_by_id):
+        raise HTTPException(status_code=400, detail="Unknown speed-dial favorite id in favorite_ids")
+    for index, favorite_id in enumerate(payload.favorite_ids):
+        row_by_id[favorite_id].sort_order = index
+    db.commit()
+    return _speed_dial_list(db)
 
 
 def _speed_dial_cover_thumb_path(payload: SpeedDialCreate, db: Session) -> str | None:
@@ -807,7 +837,9 @@ def _speed_dial_cover_thumb_path(payload: SpeedDialCreate, db: Session) -> str |
 @router.post("/speed-dial", response_model=IdResponse)
 def create_speed_dial(payload: SpeedDialCreate, db: Session = Depends(get_db)) -> IdResponse:
     cover_path = _speed_dial_cover_thumb_path(payload, db)
-    row = SpeedDialFavorite(**payload.model_dump(), cover_thumb_path=cover_path)
+    max_order = db.query(func.max(SpeedDialFavorite.sort_order)).scalar()
+    next_order = 0 if max_order is None else int(max_order) + 1
+    row = SpeedDialFavorite(**payload.model_dump(), cover_thumb_path=cover_path, sort_order=next_order)
     db.add(row)
     db.commit()
     db.refresh(row)
@@ -896,30 +928,41 @@ def speed_dial_cover(favorite_id: int, db: Session = Depends(get_db)) -> Respons
 
 
 @router.patch("/speed-dial/{favorite_id}", response_model=SpeedDialRead)
-def patch_speed_dial_label(
+def patch_speed_dial(
     favorite_id: int,
-    payload: SpeedDialLabelPatch,
+    payload: SpeedDialPatch,
     db: Session = Depends(get_db),
 ) -> SpeedDialRead:
     row = db.get(SpeedDialFavorite, favorite_id)
     if not row:
         raise HTTPException(status_code=404, detail="Favorite not found")
-    row.label = payload.label.strip()
+    if payload.label is not None:
+        row.label = payload.label.strip()
+    if payload.player_id is not None:
+        player = db.get(PlexampPlayer, payload.player_id)
+        if not player:
+            raise HTTPException(status_code=404, detail="Player not found")
+        row.player_id = payload.player_id
+        switched_to_pioneer = audio_output_from_player_row(player).kind == "pioneer"
+    else:
+        switched_to_pioneer = False
+    if payload.speaker_ids is not None:
+        row.speaker_ids = payload.speaker_ids
+    elif switched_to_pioneer:
+        row.speaker_ids = []
+    if "initial_volumes" in payload.model_fields_set:
+        if payload.initial_volumes is None:
+            row.initial_volumes = None
+        else:
+            row.initial_volumes = payload.initial_volumes.model_dump()
+    elif switched_to_pioneer:
+        raw_volumes = getattr(row, "initial_volumes", None)
+        if isinstance(raw_volumes, dict) and raw_volumes.get("sonos"):
+            pioneer = raw_volumes.get("pioneer")
+            row.initial_volumes = {"pioneer": pioneer} if pioneer is not None else None
     db.commit()
     db.refresh(row)
-    return SpeedDialRead(
-        id=row.id,
-        label=row.label,
-        media_type=row.media_type,
-        media_id=row.media_id,
-        player_id=row.player_id,
-        speaker_ids=row.speaker_ids,
-        preset_id=row.preset_id,
-        artist_radio=getattr(row, "artist_radio", None),
-        shuffle=getattr(row, "shuffle", None),
-        initial_volumes=getattr(row, "initial_volumes", None),
-        has_cover_art=bool((getattr(row, "cover_thumb_path", None) or "").strip()),
-    )
+    return _speed_dial_row_to_read(row)
 
 
 @router.delete("/speed-dial/{favorite_id}")

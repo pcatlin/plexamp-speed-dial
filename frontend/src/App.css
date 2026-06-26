@@ -196,9 +196,63 @@ button.speedDialFilterPill--selected:hover {
   gap: 0.55rem;
 }
 
+.speedDialResults {
+  display: flex;
+  flex-direction: column;
+  min-height: 10.5rem;
+}
+
+.speedDialResults--emptyFiltered {
+  justify-content: center;
+}
+
+.speedDialEmptyFilters {
+  margin: 0;
+}
+
 .speedDialGrid--deleteMode .favorite {
   outline: 1px solid #fecaca;
   background: #fffafa;
+}
+
+.speedDialReorderHint {
+  margin: 0 0 0.55rem;
+}
+
+.favorite--dragging {
+  opacity: 0.55;
+}
+
+.favorite--dropTarget {
+  outline: 2px solid #2563eb;
+  outline-offset: 1px;
+}
+
+button.favoriteDragHandle {
+  position: absolute;
+  top: 0.3rem;
+  left: 0.3rem;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.55rem;
+  height: 1.55rem;
+  padding: 0;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: #fff;
+  color: #6b7280;
+  cursor: grab;
+}
+
+button.favoriteDragHandle:active {
+  cursor: grabbing;
+}
+
+button.favoriteDragHandle .favoriteDragIcon {
+  width: 0.8rem;
+  font-size: 0.75rem;
 }
 
 .favorite {
@@ -307,7 +361,52 @@ button.favoritePlay {
   line-height: 1.2;
   font-size: 0.78rem;
   font-weight: 600;
-  color: #111827;
+}
+
+button.favoriteEditPlayTargetBtn {
+  width: 100%;
+  margin: 0;
+  padding: 0.2rem 0.35rem;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: #fff;
+  text-align: left;
+  line-height: 1.25;
+  font-size: 0.68rem;
+  font-weight: 500;
+  color: #4b5563;
+  cursor: pointer;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+button.favoriteEditPlayTargetBtn:hover {
+  border-color: #93c5fd;
+  color: #1d4ed8;
+  background: #f8fafc;
+}
+
+button.favoriteEditPlayTargetBtn:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 1px;
+}
+
+.speedDialPlayTargetDialogSubtitle {
+  margin: 0 0 0.35rem;
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: #374151;
+}
+
+.speedDialPlayTargetDialogHint {
+  margin-top: 0;
+  margin-bottom: 0.5rem;
+}
+
+.speedDialPlayTargetDialogVolumeToggle {
+  margin-bottom: 0.75rem;
 }
 
 .favoriteLabelInput:focus {
@@ -1124,6 +1223,7 @@ button.ghost,
 button.smallBtn {
   background: transparent;
   border-style: dashed;
+  cursor: pointer;
 }
 
 button.smallBtn {
@@ -1576,6 +1676,10 @@ button.nowrap {
   .speedDialGrid {
     grid-template-columns: repeat(auto-fill, minmax(8.25rem, 1fr));
     gap: 0.65rem;
+  }
+
+  .speedDialResults {
+    min-height: 11.5rem;
   }
 
   .favorite {

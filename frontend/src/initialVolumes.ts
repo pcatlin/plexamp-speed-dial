@@ -36,3 +36,35 @@ export function buildInitialVolumes(options: {
   if (!volumes.sonos && volumes.pioneer === undefined) return undefined;
   return volumes;
 }
+
+export function hasSonosInitialVolumes(volumes?: InitialVolumes | null): boolean {
+  const sonos = volumes?.sonos;
+  return sonos != null && Object.keys(sonos).length > 0;
+}
+
+export function buildSpeedDialInitialVolumes(options: {
+  speakerIds: string[];
+  sonosVolumes: Record<string, number>;
+  setVolumesOnPlay: boolean;
+  existing?: InitialVolumes | null;
+}): InitialVolumes | null {
+  if (options.speakerIds.length === 0) {
+    return options.existing?.pioneer != null ? { pioneer: options.existing.pioneer } : null;
+  }
+  const result: InitialVolumes = {};
+  if (options.setVolumesOnPlay) {
+    const sonos: Record<string, number> = {};
+    for (const id of options.speakerIds) {
+      sonos[id] = options.sonosVolumes[id] ?? DEFAULT_INITIAL_VOLUME;
+    }
+    result.sonos = sonos;
+  }
+  if (options.existing?.pioneer != null) result.pioneer = options.existing.pioneer;
+  if (!result.sonos && result.pioneer == null) return null;
+  return result;
+}
+
+export function initialVolumesWithoutSonos(existing?: InitialVolumes | null): InitialVolumes | null {
+  if (existing?.pioneer != null) return { pioneer: existing.pioneer };
+  return null;
+}

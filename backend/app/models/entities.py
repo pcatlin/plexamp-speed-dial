@@ -74,4 +74,5 @@ class SpeedDialFavorite(Base):
     artist_radio = Column(Boolean, nullable=True)
     shuffle = Column(Boolean, nullable=True)
     initial_volumes = Column(JSON, nullable=True)
+    sort_order = Column(Integer, nullable=False, default=0, server_default="0")
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)

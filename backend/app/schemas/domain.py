@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 MediaType = Literal["playlist", "album", "artist", "track", "random_album"]
@@ -263,8 +263,25 @@ class SpeedDialRead(SpeedDialCreate):
     has_cover_art: bool = False
 
 
-class SpeedDialLabelPatch(BaseModel):
-    label: str = Field(..., min_length=1, max_length=255)
+class SpeedDialPatch(BaseModel):
+    label: str | None = Field(default=None, min_length=1, max_length=255)
+    player_id: int | None = None
+    speaker_ids: list[str] | None = None
+    initial_volumes: InitialVolumes | None = None
+
+    @model_validator(mode="after")
+    def at_least_one_field(self) -> "SpeedDialPatch":
+        if not self.model_fields_set:
+            raise ValueError("At least one field must be provided")
+        return self
+
+
+class SpeedDialOrderUpdate(BaseModel):
+    favorite_ids: list[int] = Field(
+        ...,
+        min_length=1,
+        description="Speed-dial favorite ids in display order (must include every favorite exactly once).",
+    )
 
 
 class RuntimeSetupUpdate(BaseModel):

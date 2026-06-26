@@ -63,6 +63,22 @@ def test_create_read_pairs_keep_read_only_fields_separate(
     assert read_only_fields.issubset(read_fields)
 
 
+def test_speed_dial_patch_requires_at_least_one_field():
+    from pydantic import ValidationError
+
+    from app.schemas.domain import SpeedDialPatch
+
+    with pytest.raises(ValidationError):
+        SpeedDialPatch()
+
+    patch = SpeedDialPatch(speaker_ids=["s1"])
+    assert patch.speaker_ids == ["s1"]
+
+    cleared = SpeedDialPatch.model_validate({"initial_volumes": None})
+    assert cleared.initial_volumes is None
+    assert "initial_volumes" in cleared.model_fields_set
+
+
 def test_api_routes_imports_speed_dial_read():
     """Regression guard: routes must import SpeedDialRead or the API fails at startup."""
     import app.api.routes as routes_module

@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type DragEvent, type ReactNode } from "react";
 import "./App.css";
-import { api, MediaItem, Player, Speaker, SpeedDial, playbackStateWebSocketUrl } from "./api";
+import { api, InitialVolumes, MediaItem, Player, Speaker, SpeedDial, playbackStateWebSocketUrl } from "./api";
 import CreditsPage from "./CreditsPage";
 import { PickMusicSection, PickTab, playMediaTypeForTab } from "./PickMusicSection";
 import { SetupModal } from "./SetupModal";
@@ -13,7 +13,7 @@ import {
   reconcileSelectedSpeakerIds,
   saveSelectedSpeakerIds,
 } from "./playToStorage";
-import { outputKindForPlayer, pioneerHostFromOutput, presetLabelForCode } from "./audioOutput";
+import { favoriteMatchesSpeakerFilter, outputKindForPlayer, pioneerHostFromOutput, presetLabelForCode } from "./audioOutput";
 import {
   buildInitialVolumes,
   DEFAULT_INITIAL_VOLUME,
@@ -85,10 +85,6 @@ type ReceiverStatus = {
   volume_muted: boolean;
 };
 
-function speedDialPlayerName(favorite: SpeedDial, players: Player[]): string {
-  return players.find((player) => player.id === favorite.player_id)?.name ?? "Unknown player";
-}
-
 function speedDialPlayTarget(favorite: SpeedDial, players: Player[], speakers: Speaker[]): string {
   const player = players.find((row) => row.id === favorite.player_id);
   const isPioneer = outputKindForPlayer(player) === "pioneer";
@@ -130,6 +126,8 @@ function App() {
   const [speedDial, setSpeedDial] = useState<SpeedDial[]>([]);
   const [speedDialDeleteTarget, setSpeedDialDeleteTarget] = useState<{ id: number; label: string } | null>(null);
   const [speedDialDeleteMode, setSpeedDialDeleteMode] = useState(false);
+  const [dragFavoriteId, setDragFavoriteId] = useState<number | null>(null);
+  const [dropFavoriteId, setDropFavoriteId] = useState<number | null>(null);
   const [speedDialPlayerFilter, setSpeedDialPlayerFilter] = useState<number | null>(null);
   const [speedDialSpeakerFilter, setSpeedDialSpeakerFilter] = useState<string | null>(null);
   const [speedDialFiltersOpen, setSpeedDialFiltersOpen] = useState(false);
@@ -167,10 +165,17 @@ function App() {
   const filteredSpeedDial = useMemo(() => {
     return speedDial.filter((favorite) => {
       if (speedDialPlayerFilter !== null && favorite.player_id !== speedDialPlayerFilter) return false;
-      if (speedDialSpeakerFilter !== null && !favorite.speaker_ids.includes(speedDialSpeakerFilter)) return false;
+      if (
+        speedDialSpeakerFilter !== null &&
+        !favoriteMatchesSpeakerFilter(favorite, speedDialSpeakerFilter, players)
+      ) {
+        return false;
+      }
       return true;
     });
-  }, [speedDial, speedDialPlayerFilter, speedDialSpeakerFilter]);
+  }, [speedDial, speedDialPlayerFilter, speedDialSpeakerFilter, players]);
+
+  const canReorderSpeedDial = speedDialPlayerFilter === null && speedDialSpeakerFilter === null;
 
   const speedDialFilterSummary = useMemo(() => {
     if (speedDialPlayerFilter === null && speedDialSpeakerFilter === null) return "All favorites";
@@ -626,9 +631,72 @@ function App() {
     showToast(result.details);
   };
 
-  const renameSpeedDial = async (id: number, label: string) => {
-    const updated = await api.patchSpeedDialLabel(id, label);
+  const patchSpeedDialFavorite = async (
+    id: number,
+    patch: {
+      label?: string;
+      player_id?: number;
+      speaker_ids?: string[];
+      initial_volumes?: InitialVolumes | null;
+    },
+  ) => {
+    const updated = await api.patchSpeedDial(id, patch);
     setSpeedDial((current) => current.map((row) => (row.id === id ? updated : row)));
+  };
+
+  const reorderSpeedDial = async (orderedIds: number[]) => {
+    const byId = new Map(speedDial.map((row) => [row.id, row]));
+    const reordered = orderedIds
+      .map((id) => byId.get(id))
+      .filter((row): row is SpeedDial => row != null);
+    setSpeedDial(reordered);
+    try {
+      const rows = await api.reorderSpeedDial(orderedIds);
+      setSpeedDial(rows);
+    } catch (error) {
+      const rows = await api.speedDial();
+      setSpeedDial(rows);
+      throw error;
+    }
+  };
+
+  const handleFavoriteDragStart = (favoriteId: number, event: DragEvent) => {
+    setDragFavoriteId(favoriteId);
+    setDropFavoriteId(null);
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", String(favoriteId));
+  };
+
+  const handleFavoriteDragEnd = () => {
+    setDragFavoriteId(null);
+    setDropFavoriteId(null);
+  };
+
+  const handleFavoriteDragOver = (favoriteId: number, event: DragEvent) => {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    if (dragFavoriteId !== null && dragFavoriteId !== favoriteId) {
+      setDropFavoriteId(favoriteId);
+    }
+  };
+
+  const handleFavoriteDrop = (favoriteId: number, event: DragEvent) => {
+    event.preventDefault();
+    if (dragFavoriteId === null || dragFavoriteId === favoriteId) {
+      handleFavoriteDragEnd();
+      return;
+    }
+    const ids = speedDial.map((row) => row.id);
+    const fromIndex = ids.indexOf(dragFavoriteId);
+    const toIndex = ids.indexOf(favoriteId);
+    handleFavoriteDragEnd();
+    if (fromIndex < 0 || toIndex < 0) return;
+    const nextIds = [...ids];
+    nextIds.splice(fromIndex, 1);
+    nextIds.splice(toIndex, 0, dragFavoriteId);
+    void reorderSpeedDial(nextIds).catch((error) =>
+      showToast(error instanceof Error ? error.message : String(error)),
+    );
   };
 
   const deleteSpeedDial = async (id: number) => {
@@ -975,31 +1043,60 @@ function App() {
               </div>
             </details>
           ) : null}
-          {speedDial.length > 0 && filteredSpeedDial.length === 0 ? (
-            <p className="hint">No favorites match the current filters.</p>
+          {speedDial.length > 0 ? (
+            <div
+              className={`speedDialResults${
+                filteredSpeedDial.length === 0 ? " speedDialResults--emptyFiltered" : ""
+              }`}
+            >
+              {filteredSpeedDial.length === 0 ? (
+                <p className="hint speedDialEmptyFilters">No favorites match the current filters.</p>
+              ) : null}
+              {speedDialDeleteMode && speedDial.length > 1 ? (
+                <p className="hint speedDialReorderHint">
+                  {canReorderSpeedDial
+                    ? "Drag favorites to change their order."
+                    : "Clear filters to reorder favorites."}
+                </p>
+              ) : null}
+              <div className={`speedDialGrid${speedDialDeleteMode ? " speedDialGrid--deleteMode" : ""}`}>
+                {filteredSpeedDial.map((favorite) => (
+                  <SpeedDialFavoriteCard
+                    key={favorite.id}
+                    favorite={favorite}
+                    editMode={speedDialDeleteMode}
+                    playTarget={speedDialPlayTarget(favorite, players, speakers)}
+                    players={players}
+                    speakers={speakers}
+                    webhookBaseUrl={webhookBaseUrl}
+                    showWebhookLink={webhooksEnabled && !webhookLinksHidden}
+                    reorder={
+                      speedDialDeleteMode && canReorderSpeedDial
+                        ? {
+                            enabled: true,
+                            dragging: dragFavoriteId === favorite.id,
+                            dropTarget: dropFavoriteId === favorite.id,
+                            onDragStart: (event) => handleFavoriteDragStart(favorite.id, event),
+                            onDragEnd: handleFavoriteDragEnd,
+                            onDragOver: (event) => handleFavoriteDragOver(favorite.id, event),
+                            onDrop: (event) => handleFavoriteDrop(favorite.id, event),
+                          }
+                        : undefined
+                    }
+                    onPlay={() => playSpeedDialFavorite(favorite).catch((error) => showToast(error.message))}
+                    onDelete={() =>
+                      setSpeedDialDeleteTarget({
+                        id: favorite.id,
+                        label: speedDialDisplayLabel(favorite.label),
+                      })
+                    }
+                    onPatch={patchSpeedDialFavorite}
+                    onToast={showToast}
+                  />
+                ))}
+              </div>
+            </div>
           ) : null}
-          <div className={`speedDialGrid${speedDialDeleteMode ? " speedDialGrid--deleteMode" : ""}`}>
-            {filteredSpeedDial.map((favorite) => (
-              <SpeedDialFavoriteCard
-                key={favorite.id}
-                favorite={favorite}
-                editMode={speedDialDeleteMode}
-                playerName={speedDialPlayerName(favorite, players)}
-                playTarget={speedDialPlayTarget(favorite, players, speakers)}
-                webhookBaseUrl={webhookBaseUrl}
-                showWebhookLink={webhooksEnabled && !webhookLinksHidden}
-                onPlay={() => playSpeedDialFavorite(favorite).catch((error) => showToast(error.message))}
-                onDelete={() =>
-                  setSpeedDialDeleteTarget({
-                    id: favorite.id,
-                    label: speedDialDisplayLabel(favorite.label),
-                  })
-                }
-                onRename={renameSpeedDial}
-                onToast={showToast}
-              />
-            ))}
-          </div>
         </section>
 
         </div>

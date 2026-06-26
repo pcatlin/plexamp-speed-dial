@@ -160,6 +160,189 @@ def test_speed_dial_patch_label(client):
     assert listed[0]["label"] == "Evening Mix"
 
 
+def test_speed_dial_patch_speakers_and_volumes(client):
+    player_id = client.post(
+        "/api/v1/players",
+        json={"name": "Kitchen", "host": "plexamp.local", "port": 32500, "is_active": True},
+    ).json()["id"]
+
+    favorite_id = client.post(
+        "/api/v1/speed-dial",
+        json={
+            "label": "Morning Mix",
+            "media_type": "playlist",
+            "media_id": "playlist-1",
+            "player_id": player_id,
+            "speaker_ids": ["s1"],
+            "initial_volumes": {"sonos": {"s1": 15}},
+            "preset_id": None,
+        },
+    ).json()["id"]
+
+    patched = client.patch(
+        f"/api/v1/speed-dial/{favorite_id}",
+        json={
+            "speaker_ids": ["s1", "s2"],
+            "initial_volumes": {"sonos": {"s1": 20, "s2": 35}},
+        },
+    )
+    assert patched.status_code == 200
+    body = patched.json()
+    assert body["speaker_ids"] == ["s1", "s2"]
+    assert body["initial_volumes"] == {"sonos": {"s1": 20, "s2": 35}, "pioneer": None}
+
+
+def test_speed_dial_patch_clears_initial_volumes(client):
+    player_id = client.post(
+        "/api/v1/players",
+        json={"name": "Kitchen", "host": "plexamp.local", "port": 32500, "is_active": True},
+    ).json()["id"]
+
+    favorite_id = client.post(
+        "/api/v1/speed-dial",
+        json={
+            "label": "Morning Mix",
+            "media_type": "playlist",
+            "media_id": "playlist-1",
+            "player_id": player_id,
+            "speaker_ids": ["s1"],
+            "initial_volumes": {"sonos": {"s1": 15}},
+            "preset_id": None,
+        },
+    ).json()["id"]
+
+    patched = client.patch(
+        f"/api/v1/speed-dial/{favorite_id}",
+        json={"speaker_ids": ["s1"], "initial_volumes": None},
+    )
+    assert patched.status_code == 200
+    assert patched.json()["initial_volumes"] is None
+
+
+def test_speed_dial_reorder(client):
+    player_id = client.post(
+        "/api/v1/players",
+        json={"name": "Kitchen", "host": "plexamp.local", "port": 32500, "is_active": True},
+    ).json()["id"]
+
+    first_id = client.post(
+        "/api/v1/speed-dial",
+        json={
+            "label": "First",
+            "media_type": "playlist",
+            "media_id": "playlist-1",
+            "player_id": player_id,
+            "speaker_ids": [],
+            "preset_id": None,
+        },
+    ).json()["id"]
+    second_id = client.post(
+        "/api/v1/speed-dial",
+        json={
+            "label": "Second",
+            "media_type": "playlist",
+            "media_id": "playlist-2",
+            "player_id": player_id,
+            "speaker_ids": [],
+            "preset_id": None,
+        },
+    ).json()["id"]
+
+    reordered = client.put("/api/v1/speed-dial/order", json={"favorite_ids": [second_id, first_id]})
+    assert reordered.status_code == 200
+    labels = [row["label"] for row in reordered.json()]
+    assert labels == ["Second", "First"]
+
+    listed = client.get("/api/v1/speed-dial").json()
+    assert [row["label"] for row in listed] == ["Second", "First"]
+
+
+def test_speed_dial_patch_player(client):
+    player_a = client.post(
+        "/api/v1/players",
+        json={"name": "Kitchen", "host": "plexamp.local", "port": 32500, "is_active": True},
+    ).json()["id"]
+    player_b = client.post(
+        "/api/v1/players",
+        json={"name": "Office", "host": "plexamp2.local", "port": 32500, "is_active": True},
+    ).json()["id"]
+
+    favorite_id = client.post(
+        "/api/v1/speed-dial",
+        json={
+            "label": "Morning Mix",
+            "media_type": "playlist",
+            "media_id": "playlist-1",
+            "player_id": player_a,
+            "speaker_ids": [],
+            "preset_id": None,
+        },
+    ).json()["id"]
+
+    patched = client.patch(f"/api/v1/speed-dial/{favorite_id}", json={"player_id": player_b})
+    assert patched.status_code == 200
+    assert patched.json()["player_id"] == player_b
+
+
+def test_speed_dial_patch_player_to_pioneer_clears_sonos_speakers(client):
+    sonos_player_id = client.post(
+        "/api/v1/players",
+        json={"name": "Kitchen", "host": "plexamp.local", "port": 32500, "is_active": True},
+    ).json()["id"]
+    pioneer_player_id = client.post(
+        "/api/v1/players",
+        json={
+            "name": "Den",
+            "host": "den.local",
+            "port": 32500,
+            "is_active": True,
+            "audio_output": {"kind": "pioneer", "config": {"host": "10.0.0.9"}},
+        },
+    ).json()["id"]
+
+    favorite_id = client.post(
+        "/api/v1/speed-dial",
+        json={
+            "label": "Morning Mix",
+            "media_type": "playlist",
+            "media_id": "playlist-1",
+            "player_id": sonos_player_id,
+            "speaker_ids": ["bathroom"],
+            "initial_volumes": {"sonos": {"bathroom": 20}},
+            "preset_id": None,
+        },
+    ).json()["id"]
+
+    patched = client.patch(f"/api/v1/speed-dial/{favorite_id}", json={"player_id": pioneer_player_id})
+    assert patched.status_code == 200
+    body = patched.json()
+    assert body["player_id"] == pioneer_player_id
+    assert body["speaker_ids"] == []
+    assert body["initial_volumes"] is None
+
+
+def test_speed_dial_patch_requires_at_least_one_field(client):
+    player_id = client.post(
+        "/api/v1/players",
+        json={"name": "Kitchen", "host": "plexamp.local", "port": 32500, "is_active": True},
+    ).json()["id"]
+
+    favorite_id = client.post(
+        "/api/v1/speed-dial",
+        json={
+            "label": "Morning Mix",
+            "media_type": "playlist",
+            "media_id": "playlist-1",
+            "player_id": player_id,
+            "speaker_ids": [],
+            "preset_id": None,
+        },
+    ).json()["id"]
+
+    patched = client.patch(f"/api/v1/speed-dial/{favorite_id}", json={})
+    assert patched.status_code == 422
+
+
 def test_speed_dial_create_stores_initial_volumes(client):
     player_id = client.post(
         "/api/v1/players",

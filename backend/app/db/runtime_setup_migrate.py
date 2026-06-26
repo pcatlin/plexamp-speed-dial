@@ -230,3 +230,27 @@ def ensure_runtime_setup_webhook_flags_columns(engine: Engine) -> None:
                 _log.info("Applied runtime_setup migration: %s", stmt.split("ADD COLUMN")[1].strip().split()[0])
             except Exception as exc:  # noqa: BLE001
                 _log.warning("runtime_setup migrate skipped/failed (%s): %s", stmt[:80], exc)
+
+
+def ensure_speed_dial_sort_order_column(engine: Engine) -> None:
+    """Add speed_dial_favorites.sort_order and backfill from existing id order."""
+    insp = inspect(engine)
+    if "speed_dial_favorites" not in insp.get_table_names():
+        return
+    existing = {c["name"] for c in insp.get_columns("speed_dial_favorites")}
+    if "sort_order" in existing:
+        return
+    stmt = "ALTER TABLE speed_dial_favorites ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0"
+    with engine.begin() as conn:
+        try:
+            conn.execute(text(stmt))
+            _log.info("Applied speed_dial_favorites migration: sort_order")
+        except Exception as exc:  # noqa: BLE001
+            _log.warning("speed_dial_favorites migrate skipped/failed: %s", exc)
+            return
+        rows = conn.execute(text("SELECT id FROM speed_dial_favorites ORDER BY id ASC")).fetchall()
+        for index, (row_id,) in enumerate(rows):
+            conn.execute(
+                text("UPDATE speed_dial_favorites SET sort_order = :sort_order WHERE id = :id"),
+                {"sort_order": index, "id": row_id},
+            )
