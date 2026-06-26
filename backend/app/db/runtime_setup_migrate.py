@@ -191,3 +191,42 @@ def ensure_speed_dial_initial_volumes_column(engine: Engine) -> None:
             _log.info("Applied speed_dial_favorites migration: initial_volumes")
         except Exception as exc:  # noqa: BLE001
             _log.warning("speed_dial_favorites migrate skipped/failed: %s", exc)
+
+
+def ensure_runtime_setup_webhook_base_url_column(engine: Engine) -> None:
+    """Add runtime_setup.webhook_base_url when upgrading an existing DB."""
+    insp = inspect(engine)
+    if "runtime_setup" not in insp.get_table_names():
+        return
+    existing = {c["name"] for c in insp.get_columns("runtime_setup")}
+    if "webhook_base_url" in existing:
+        return
+    stmt = "ALTER TABLE runtime_setup ADD COLUMN webhook_base_url TEXT NOT NULL DEFAULT ''"
+    with engine.begin() as conn:
+        try:
+            conn.execute(text(stmt))
+            _log.info("Applied runtime_setup migration: webhook_base_url")
+        except Exception as exc:  # noqa: BLE001
+            _log.warning("runtime_setup migrate skipped/failed: %s", exc)
+
+
+def ensure_runtime_setup_webhook_flags_columns(engine: Engine) -> None:
+    """Add runtime_setup webhook enable/hide columns when upgrading an existing DB."""
+    insp = inspect(engine)
+    if "runtime_setup" not in insp.get_table_names():
+        return
+    existing = {c["name"] for c in insp.get_columns("runtime_setup")}
+    alters: list[str] = []
+    if "webhooks_enabled" not in existing:
+        alters.append("ALTER TABLE runtime_setup ADD COLUMN webhooks_enabled BOOLEAN NOT NULL DEFAULT false")
+    if "webhook_links_hidden" not in existing:
+        alters.append("ALTER TABLE runtime_setup ADD COLUMN webhook_links_hidden BOOLEAN NOT NULL DEFAULT false")
+    if not alters:
+        return
+    with engine.begin() as conn:
+        for stmt in alters:
+            try:
+                conn.execute(text(stmt))
+                _log.info("Applied runtime_setup migration: %s", stmt.split("ADD COLUMN")[1].strip().split()[0])
+            except Exception as exc:  # noqa: BLE001
+                _log.warning("runtime_setup migrate skipped/failed (%s): %s", stmt[:80], exc)

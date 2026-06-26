@@ -1,6 +1,12 @@
 /** Same-origin `/api/v1` — Vite dev server proxies `/api` to uvicorn; Docker nginx proxies to the API service. */
 export const API_BASE = "/api/v1";
 
+export function speedDialWebhookUrl(favoriteId: number, webhookBaseUrl = ""): string {
+  const configured = webhookBaseUrl.trim().replace(/\/+$/, "");
+  const origin = configured || (typeof window !== "undefined" ? window.location.origin : "");
+  return `${origin}${API_BASE}/speed-dial/${favoriteId}/webhook`;
+}
+
 export type MediaType = "playlist" | "album" | "artist" | "track" | "random_album";
 
 export interface MediaItem {
@@ -52,6 +58,9 @@ export interface RuntimeSettings {
   sonos_discover_timeout: number;
   sonos_allow_network_scan: boolean;
   sonos_interface_addr: string;
+  webhook_base_url: string;
+  webhooks_enabled: boolean;
+  webhook_links_hidden: boolean;
   plex_server_url_effective: string;
 }
 

@@ -137,6 +137,9 @@ function App() {
   const [collections, setCollections] = useState<{ id: string; title: string }[]>([]);
   const [selectedCollectionId, setSelectedCollectionId] = useState("");
   const [setupOpen, setSetupOpen] = useState(false);
+  const [webhookBaseUrl, setWebhookBaseUrl] = useState("");
+  const [webhooksEnabled, setWebhooksEnabled] = useState(false);
+  const [webhookLinksHidden, setWebhookLinksHidden] = useState(false);
   const [artistRadio, setArtistRadio] = useState(true);
   const [radioDegreesOfSeparation, setRadioDegreesOfSeparation] = useState(1);
   const [shufflePlaylist, setShufflePlaylist] = useState(true);
@@ -254,6 +257,19 @@ function App() {
     }
   }, []);
 
+  const loadWebhookBaseUrl = useCallback(async () => {
+    try {
+      const settings = await api.runtimeSettings();
+      setWebhookBaseUrl(settings.webhook_base_url ?? "");
+      setWebhooksEnabled(Boolean(settings.webhooks_enabled));
+      setWebhookLinksHidden(Boolean(settings.webhook_links_hidden));
+    } catch {
+      setWebhookBaseUrl("");
+      setWebhooksEnabled(false);
+      setWebhookLinksHidden(false);
+    }
+  }, []);
+
   const applySpeakerList = useCallback((speakerRows: Speaker[]) => {
     setSpeakers(speakerRows);
     setSelectedSpeakers((current) => reconcileSelectedSpeakerIds(current, speakerRows.map((s) => s.id)));
@@ -299,6 +315,7 @@ function App() {
     await reloadPlayersSelection(playerRows);
     setSpeedDial(speedDialRows);
     await reloadCollections(authStatus.connected);
+    await loadWebhookBaseUrl();
   };
 
   useEffect(() => {
@@ -675,7 +692,10 @@ function App() {
             const plist = await api.players();
             await reloadPlayersSelection(plist);
           }}
-          afterRuntimeSaved={reloadSpeakersOnly}
+          afterRuntimeSaved={async () => {
+            await reloadSpeakersOnly();
+            await loadWebhookBaseUrl();
+          }}
           onPlexAuthRefresh={refreshPlexAuthFromApi}
           onToast={showToast}
         />
@@ -966,6 +986,8 @@ function App() {
                 editMode={speedDialDeleteMode}
                 playerName={speedDialPlayerName(favorite, players)}
                 playTarget={speedDialPlayTarget(favorite, players, speakers)}
+                webhookBaseUrl={webhookBaseUrl}
+                showWebhookLink={webhooksEnabled && !webhookLinksHidden}
                 onPlay={() => playSpeedDialFavorite(favorite).catch((error) => showToast(error.message))}
                 onDelete={() =>
                   setSpeedDialDeleteTarget({

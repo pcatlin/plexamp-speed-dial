@@ -61,6 +61,9 @@ export function SetupModal({
   const [sonosTimeout, setSonosTimeout] = useState(10);
   const [sonosScan, setSonosScan] = useState(true);
   const [sonosIface, setSonosIface] = useState("");
+  const [webhookBaseUrl, setWebhookBaseUrl] = useState("");
+  const [webhooksEnabled, setWebhooksEnabled] = useState(false);
+  const [webhookLinksHidden, setWebhookLinksHidden] = useState(false);
   const [newPlayerAudioOutput, setNewPlayerAudioOutput] = useState<AudioOutput>(defaultAudioOutput);
   const [sonosSpeakers, setSonosSpeakers] = useState<Speaker[]>([]);
   const [players, setPlayers] = useState<Player[]>([]);
@@ -113,6 +116,9 @@ export function SetupModal({
     setSonosTimeout(s.sonos_discover_timeout);
     setSonosScan(s.sonos_allow_network_scan);
     setSonosIface(s.sonos_interface_addr);
+    setWebhookBaseUrl(s.webhook_base_url ?? "");
+    setWebhooksEnabled(Boolean(s.webhooks_enabled));
+    setWebhookLinksHidden(Boolean(s.webhook_links_hidden));
   }
 
   const saveSetup = async () => {
@@ -125,6 +131,9 @@ export function SetupModal({
         sonos_discover_timeout: sonosTimeout,
         sonos_allow_network_scan: sonosScan,
         sonos_interface_addr: sonosIface.trim(),
+        webhook_base_url: webhookBaseUrl.trim(),
+        webhooks_enabled: webhooksEnabled,
+        webhook_links_hidden: webhookLinksHidden,
       });
       applySettings(saved);
       try {
@@ -316,6 +325,46 @@ export function SetupModal({
             </button>
           </div>
           {!authConnected ? <p className="hint">Connect Plex first — the server test requires a linked account.</p> : null}
+        </section>
+
+        <section className="modalSection">
+          <h3>Speed-dial webhooks</h3>
+          <p className="hint">
+            LAN URL of this app for Home Assistant and other automations. Copied webhook links use this instead of the
+            public Cloudflare hostname.
+          </p>
+          <label className="checkboxRow slim">
+            <input
+              type="checkbox"
+              checked={webhooksEnabled}
+              onChange={(e) => setWebhooksEnabled(e.target.checked)}
+            />
+            Enable webhooks
+          </label>
+          <label className="checkboxRow slim">
+            <input
+              type="checkbox"
+              checked={webhookLinksHidden}
+              disabled={!webhooksEnabled}
+              onChange={(e) => setWebhookLinksHidden(e.target.checked)}
+            />
+            Hide webhook link icons on favorites
+          </label>
+          <label className="fieldLabel">
+            Webhook base URL (LAN)
+            <input
+              type="url"
+              className="textInput"
+              placeholder="http://192.168.1.50"
+              autoComplete="off"
+              disabled={!webhooksEnabled}
+              value={webhookBaseUrl}
+              onChange={(e) => setWebhookBaseUrl(e.target.value)}
+            />
+          </label>
+          {!webhooksEnabled ? (
+            <p className="hint">Webhook URLs return forbidden until enabled. Link icons stay hidden.</p>
+          ) : null}
         </section>
 
         <section className="modalSection">

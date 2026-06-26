@@ -360,6 +360,40 @@ button.favoriteDelete:focus-visible {
   outline-offset: 2px;
 }
 
+button.favoriteWebhookLink {
+  position: absolute;
+  bottom: 0.35rem;
+  right: 0.35rem;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.45rem;
+  height: 1.45rem;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  color: #6b7280;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.1);
+  cursor: pointer;
+}
+
+button.favoriteWebhookLink:hover {
+  color: #2563eb;
+  background: #eff6ff;
+}
+
+button.favoriteWebhookLink:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+button.favoriteWebhookLink .favoriteWebhookIcon {
+  width: 0.72rem;
+  font-size: 0.68rem;
+}
+
 .tabRow {
   display: flex;
   gap: 0.5rem;

@@ -285,6 +285,18 @@ class RuntimeSetupUpdate(BaseModel):
         default="",
         description="Optional interface address for SSDP (advanced).",
     )
+    webhook_base_url: str = Field(
+        default="",
+        description="LAN base URL for speed-dial webhook links, e.g. http://192.168.1.50.",
+    )
+    webhooks_enabled: bool = Field(
+        default=False,
+        description="When true, GET /speed-dial/{id}/webhook can trigger playback.",
+    )
+    webhook_links_hidden: bool = Field(
+        default=False,
+        description="When true, hide copy-link icons on speed-dial favorites (only when webhooks are enabled).",
+    )
 
 
 class RuntimeSetupRead(RuntimeSetupUpdate):

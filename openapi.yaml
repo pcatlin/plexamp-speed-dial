@@ -972,6 +972,31 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/speed-dial/{favorite_id}/webhook:
+    get:
+      summary: Speed Dial Webhook Play
+      description: GET-friendly play URL for Home Assistant, shortcuts, and other webhooks.
+      operationId: speed_dial_webhook_play_api_v1_speed_dial__favorite_id__webhook_get
+      parameters:
+      - name: favorite_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Favorite Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            text/plain:
+              schema:
+                type: string
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/speed-dial/{favorite_id}/cover:
     get:
       summary: Speed Dial Cover
@@ -1501,6 +1526,22 @@ components:
           title: Sonos Interface Addr
           description: Optional interface address for SSDP (advanced).
           default: ''
+        webhook_base_url:
+          type: string
+          title: Webhook Base Url
+          description: LAN base URL for speed-dial webhook links, e.g. http://192.168.1.50.
+          default: ''
+        webhooks_enabled:
+          type: boolean
+          title: Webhooks Enabled
+          description: When true, GET /speed-dial/{id}/webhook can trigger playback.
+          default: false
+        webhook_links_hidden:
+          type: boolean
+          title: Webhook Links Hidden
+          description: When true, hide copy-link icons on speed-dial favorites (only when
+            webhooks are enabled).
+          default: false
         plex_server_url_effective:
           type: string
           title: Plex Server Url Effective
@@ -1541,6 +1582,22 @@ components:
           title: Sonos Interface Addr
           description: Optional interface address for SSDP (advanced).
           default: ''
+        webhook_base_url:
+          type: string
+          title: Webhook Base Url
+          description: LAN base URL for speed-dial webhook links, e.g. http://192.168.1.50.
+          default: ''
+        webhooks_enabled:
+          type: boolean
+          title: Webhooks Enabled
+          description: When true, GET /speed-dial/{id}/webhook can trigger playback.
+          default: false
+        webhook_links_hidden:
+          type: boolean
+          title: Webhook Links Hidden
+          description: When true, hide copy-link icons on speed-dial favorites (only when
+            webhooks are enabled).
+          default: false
       type: object
       title: RuntimeSetupUpdate
       description: Editable fields from the Setup modal (stored in DB).

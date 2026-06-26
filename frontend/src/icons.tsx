@@ -58,3 +58,7 @@ export function IconLaunchApp() {
 export function IconTrash() {
   return <FaIcon icon="fa-trash-can" />;
 }
+
+export function IconLink() {
+  return <FaIcon icon="fa-link" className="favoriteWebhookIcon" />;
+}

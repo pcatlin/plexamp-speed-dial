@@ -31,6 +31,11 @@ def effective_plex_url(stored_raw: str) -> str:
     return (stored_raw or "").strip().rstrip("/")
 
 
+def effective_webhook_base_url(stored_raw: str) -> str:
+    """LAN app base URL for webhook links copied from the UI."""
+    return (stored_raw or "").strip().rstrip("/")
+
+
 def _ensure_plex_client_identifier(db: Session, row: RuntimeSetup) -> None:
     existing = (getattr(row, "plex_client_identifier", None) or "").strip()
     if existing:

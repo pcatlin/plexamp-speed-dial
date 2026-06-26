@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 
 import type { SpeedDial } from "./api";
-import { API_BASE } from "./api";
-import { IconPlay, IconTrash } from "./icons";
+import { API_BASE, speedDialWebhookUrl } from "./api";
+import { copyTextToClipboard } from "./clipboard";
+import { IconLink, IconPlay, IconTrash } from "./icons";
 import { speedDialDisplayLabel } from "./speedDialLabel";
 
 type SpeedDialFavoriteCardProps = {
@@ -10,6 +11,8 @@ type SpeedDialFavoriteCardProps = {
   editMode: boolean;
   playerName: string;
   playTarget: string;
+  webhookBaseUrl: string;
+  showWebhookLink: boolean;
   onPlay: () => void;
   onDelete: () => void;
   onRename: (id: number, label: string) => Promise<void>;
@@ -21,6 +24,8 @@ export function SpeedDialFavoriteCard({
   editMode,
   playerName,
   playTarget,
+  webhookBaseUrl,
+  showWebhookLink,
   onPlay,
   onDelete,
   onRename,
@@ -91,6 +96,16 @@ export function SpeedDialFavoriteCard({
     </>
   );
 
+  const webhookUrl = speedDialWebhookUrl(favorite.id, webhookBaseUrl);
+
+  const copyWebhookUrl = (event: { preventDefault: () => void; stopPropagation: () => void }) => {
+    event.preventDefault();
+    event.stopPropagation();
+    void copyTextToClipboard(webhookUrl).then((ok) => {
+      onToast(ok ? "Webhook URL copied" : "Could not copy webhook URL");
+    });
+  };
+
   return (
     <div className="favorite">
       {editMode ? (
@@ -101,6 +116,17 @@ export function SpeedDialFavoriteCard({
           onClick={onDelete}
         >
           <IconTrash />
+        </button>
+      ) : null}
+      {showWebhookLink ? (
+        <button
+          type="button"
+          className="favoriteWebhookLink"
+          title="Copy webhook URL to play this favorite"
+          aria-label={`Copy webhook URL to play ${displayLabel}`}
+          onClick={(event) => void copyWebhookUrl(event)}
+        >
+          <IconLink />
         </button>
       ) : null}
       {editMode ? (

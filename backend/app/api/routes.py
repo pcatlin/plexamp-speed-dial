@@ -3,6 +3,7 @@ import json
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, WebSocket, WebSocketDisconnect
+from fastapi.responses import PlainTextResponse
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
@@ -13,6 +14,8 @@ from app.db.runtime_setup_migrate import (
     ensure_plexamp_player_sonos_line_in_column,
     ensure_runtime_setup_columns,
     ensure_runtime_setup_plex_client_identifier_column,
+    ensure_runtime_setup_webhook_base_url_column,
+    ensure_runtime_setup_webhook_flags_columns,
     ensure_speed_dial_artist_radio_column,
     ensure_speed_dial_cover_column,
     ensure_speed_dial_shuffle_column,
@@ -63,7 +66,7 @@ from app.services.audio_output.router import AudioOutputRouter
 from app.services.audio_output.types import apply_audio_output_to_row, audio_output_from_player_row
 from app.services.playback_service import PlaybackService
 from app.services.plex_service import PlexService, PlexTvHttpError
-from app.services.runtime_setup import effective_plex_url, get_or_create_runtime_setup, resolve_plex_conn, resolve_sonos_runtime
+from app.services.runtime_setup import effective_plex_url, effective_webhook_base_url, get_or_create_runtime_setup, resolve_plex_conn, resolve_sonos_runtime
 from app.services.sonos_service import SonosService
 
 router = APIRouter()
@@ -126,6 +129,9 @@ def _serialize_runtime_setup_read(db: Session) -> RuntimeSetupRead:
         sonos_discover_timeout=row.sonos_discover_timeout,
         sonos_allow_network_scan=row.sonos_allow_network_scan,
         sonos_interface_addr=row.sonos_interface_addr or "",
+        webhook_base_url=effective_webhook_base_url(getattr(row, "webhook_base_url", "") or ""),
+        webhooks_enabled=bool(getattr(row, "webhooks_enabled", False)),
+        webhook_links_hidden=bool(getattr(row, "webhook_links_hidden", False)),
         plex_server_url_effective=effective_plex_url(row.plex_server_url),
     )
 
@@ -134,6 +140,8 @@ def run_startup_tasks() -> None:
     Base.metadata.create_all(bind=engine)
     ensure_runtime_setup_columns(engine)
     ensure_runtime_setup_plex_client_identifier_column(engine)
+    ensure_runtime_setup_webhook_base_url_column(engine)
+    ensure_runtime_setup_webhook_flags_columns(engine)
     ensure_speed_dial_cover_column(engine)
     ensure_speed_dial_artist_radio_column(engine)
     ensure_speed_dial_shuffle_column(engine)
@@ -163,6 +171,9 @@ def update_runtime_settings(payload: RuntimeSetupUpdate, db: Session = Depends(g
     row.sonos_discover_timeout = data["sonos_discover_timeout"]
     row.sonos_allow_network_scan = data["sonos_allow_network_scan"]
     row.sonos_interface_addr = data["sonos_interface_addr"].strip()
+    row.webhook_base_url = data["webhook_base_url"].strip()
+    row.webhooks_enabled = data["webhooks_enabled"]
+    row.webhook_links_hidden = data["webhook_links_hidden"]
     row.sonos_demo_fallback = False
     db.commit()
     db.refresh(row)
@@ -803,6 +814,28 @@ def create_speed_dial(payload: SpeedDialCreate, db: Session = Depends(get_db)) -
     return IdResponse(id=row.id)
 
 
+def _speed_dial_play_request(row: SpeedDialFavorite) -> PlayRequest:
+    ar = getattr(row, "artist_radio", None)
+    sh = getattr(row, "shuffle", None)
+    raw_volumes = getattr(row, "initial_volumes", None)
+    initial_volumes = InitialVolumes.model_validate(raw_volumes) if isinstance(raw_volumes, dict) else raw_volumes
+    return PlayRequest(
+        media_type=row.media_type,
+        media_id=str(row.media_id),
+        player_id=row.player_id,
+        speaker_ids=list(row.speaker_ids or []),
+        preset_id=row.preset_id,
+        artist_radio=ar if ar is not None else True,
+        shuffle=bool(sh),
+        initial_volumes=initial_volumes,
+    )
+
+
+def _play_speed_dial_favorite_row(row: SpeedDialFavorite, db: Session, *, auth_token: str) -> PlayResponse:
+    payload = _speed_dial_play_request(row)
+    return playback_service.play(payload, db, auth_token=auth_token)
+
+
 @router.post("/speed-dial/{favorite_id}/play", response_model=PlayResponse)
 def play_speed_dial_favorite(
     favorite_id: int,
@@ -813,29 +846,36 @@ def play_speed_dial_favorite(
     if not row:
         raise HTTPException(status_code=404, detail="Favorite not found")
     try:
-        ar = getattr(row, "artist_radio", None)
-        sh = getattr(row, "shuffle", None)
-        raw_volumes = getattr(row, "initial_volumes", None)
-        initial_volumes = (
-            InitialVolumes.model_validate(raw_volumes) if isinstance(raw_volumes, dict) else raw_volumes
-        )
-        payload = PlayRequest(
-            media_type=row.media_type,
-            media_id=str(row.media_id),
-            player_id=row.player_id,
-            speaker_ids=list(row.speaker_ids or []),
-            preset_id=row.preset_id,
-            artist_radio=ar if ar is not None else True,
-            shuffle=bool(sh),
-            initial_volumes=initial_volumes,
-        )
+        assert creds.auth_token
+        response = _play_speed_dial_favorite_row(row, db, auth_token=creds.auth_token)
     except ValidationError as exc:
         raise HTTPException(status_code=400, detail=f"Invalid favorite data: {exc}") from exc
-    assert creds.auth_token
-    response = playback_service.play(payload, db, auth_token=creds.auth_token)
     if response.status == "error":
         raise HTTPException(status_code=400, detail=response.details)
     return response
+
+
+@router.get("/speed-dial/{favorite_id}/webhook")
+def speed_dial_webhook_play(
+    favorite_id: int,
+    db: Session = Depends(get_db),
+    creds: PlexCredential = Depends(require_plex_creds),
+) -> PlainTextResponse:
+    """GET-friendly play URL for Home Assistant, shortcuts, and other webhooks."""
+    setup = get_or_create_runtime_setup(db)
+    if not bool(getattr(setup, "webhooks_enabled", False)):
+        raise HTTPException(status_code=403, detail="Speed-dial webhooks are disabled in Setup.")
+    row = db.get(SpeedDialFavorite, favorite_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Favorite not found")
+    try:
+        assert creds.auth_token
+        response = _play_speed_dial_favorite_row(row, db, auth_token=creds.auth_token)
+    except ValidationError as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid favorite data: {exc}") from exc
+    if response.status == "error":
+        raise HTTPException(status_code=400, detail=response.details)
+    return PlainTextResponse("OK")
 
 
 @router.get("/speed-dial/{favorite_id}/cover")

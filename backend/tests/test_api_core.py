@@ -435,6 +435,79 @@ def test_speed_dial_play_missing_returns_404(client, db_session):
     assert r.status_code == 404
 
 
+def test_speed_dial_webhook_play(client, db_session, monkeypatch):
+    from app.models import PlexCredential, RuntimeSetup
+    from app.schemas.domain import PlayResponse
+
+    db_session.add(PlexCredential(auth_token="stub-token", is_connected=True))
+    setup = db_session.get(RuntimeSetup, 1)
+    assert setup is not None
+    setup.webhooks_enabled = True
+    db_session.commit()
+
+    import app.api.routes as routes_module
+
+    seen: dict = {}
+
+    def fake_play(payload, db, *, auth_token):  # noqa: ANN001
+        seen["payload"] = payload
+        return PlayResponse(status="ok", details="played")
+
+    monkeypatch.setattr(routes_module.playback_service, "play", fake_play)
+
+    player_id = client.post(
+        "/api/v1/players",
+        json={"name": "Kitchen", "host": "plexamp.local", "port": 32500, "is_active": True},
+    ).json()["id"]
+
+    favorite_id = client.post(
+        "/api/v1/speed-dial",
+        json={
+            "label": "Webhook",
+            "media_type": "album",
+            "media_id": "42",
+            "player_id": player_id,
+            "speaker_ids": [],
+            "preset_id": None,
+        },
+    ).json()["id"]
+
+    r = client.get(f"/api/v1/speed-dial/{favorite_id}/webhook")
+    assert r.status_code == 200
+    assert r.text == "OK"
+    assert seen["payload"].media_id == "42"
+
+
+def test_speed_dial_webhook_disabled_returns_403(client, db_session):
+    from app.models import PlexCredential, RuntimeSetup
+
+    db_session.add(PlexCredential(auth_token="stub-token", is_connected=True))
+    setup = db_session.get(RuntimeSetup, 1)
+    assert setup is not None
+    setup.webhooks_enabled = False
+    db_session.commit()
+
+    player_id = client.post(
+        "/api/v1/players",
+        json={"name": "Kitchen", "host": "plexamp.local", "port": 32500, "is_active": True},
+    ).json()["id"]
+
+    favorite_id = client.post(
+        "/api/v1/speed-dial",
+        json={
+            "label": "Webhook",
+            "media_type": "album",
+            "media_id": "42",
+            "player_id": player_id,
+            "speaker_ids": [],
+            "preset_id": None,
+        },
+    ).json()["id"]
+
+    r = client.get(f"/api/v1/speed-dial/{favorite_id}/webhook")
+    assert r.status_code == 403
+
+
 def test_speed_dial_cover_thumb_saved_and_served(client, db_session, monkeypatch):
     from app.models import PlexCredential
 
