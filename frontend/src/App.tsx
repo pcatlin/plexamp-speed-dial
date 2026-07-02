@@ -9,10 +9,23 @@ import { SonosVolumeMixerModal } from "./SonosVolumeMixerModal";
 import { SpeedDialFavoriteCard } from "./SpeedDialFavoriteCard";
 import { VolumeEditorPopover } from "./VolumeEditorPopover";
 import {
-  loadSelectedSpeakerIds,
+  loadSectionExpanded,
+  saveSectionExpanded,
+} from "./sectionExpandedStorage";
+import {
+  loadPickMusicState,
+  reconcileSelectedCollectionId,
+  savePickMusicState,
+} from "./pickMusicStorage";
+import {
+  loadPlayToState,
   reconcileSelectedSpeakerIds,
-  saveSelectedSpeakerIds,
+  savePlayToState,
 } from "./playToStorage";
+import {
+  loadSpeedDialFilters,
+  saveSpeedDialFilters,
+} from "./speedDialFilterStorage";
 import { favoriteMatchesSpeakerFilter, outputKindForPlayer, pioneerHostFromOutput, presetLabelForCode } from "./audioOutput";
 import {
   buildInitialVolumes,
@@ -113,35 +126,53 @@ function App() {
   }, []);
 
   const [authConnected, setAuthConnected] = useState(false);
-  const [pickTab, setPickTab] = useState<PickTab>("playlist");
-  const [selectedMedia, setSelectedMedia] = useState<MediaItem | null>(null);
+  const initialPickMusic = loadPickMusicState();
+  const initialPlayTo = loadPlayToState();
+  const initialSectionExpanded = loadSectionExpanded();
+  const [pickTab, setPickTab] = useState<PickTab>(() => initialPickMusic.pickTab);
+  const [selectedMedia, setSelectedMedia] = useState<MediaItem | null>(() => initialPickMusic.selectedMedia);
+  const [pickMusicDetailsOpen, setPickMusicDetailsOpen] = useState(
+    () => initialSectionExpanded.pickMusic ?? initialPickMusic.selectedMedia == null,
+  );
   const [speakers, setSpeakers] = useState<Speaker[]>([]);
-  const [selectedSpeakers, setSelectedSpeakers] = useState<string[]>(() => loadSelectedSpeakerIds());
-  const [sonosVolumes, setSonosVolumes] = useState<Record<string, number>>({});
-  const [pioneerVolume, setPioneerVolume] = useState(DEFAULT_INITIAL_VOLUME);
-  const [setVolumesOnPlay, setSetVolumesOnPlay] = useState(false);
+  const [selectedSpeakers, setSelectedSpeakers] = useState<string[]>(() => initialPlayTo.speakerIds);
+  const [sonosVolumes, setSonosVolumes] = useState<Record<string, number>>(() => initialPlayTo.sonosVolumes);
+  const [pioneerVolume, setPioneerVolume] = useState(() => initialPlayTo.pioneerVolume);
+  const [setVolumesOnPlay, setSetVolumesOnPlay] = useState(() => initialPlayTo.setVolumesOnPlay);
   const [volumeEditor, setVolumeEditor] = useState<string | null>(null);
   const [players, setPlayers] = useState<Player[]>([]);
-  const [selectedPlayer, setSelectedPlayer] = useState<number | null>(null);
+  const [selectedPlayer, setSelectedPlayer] = useState<number | null>(() => initialPlayTo.playerId);
   const [speedDial, setSpeedDial] = useState<SpeedDial[]>([]);
   const [speedDialDeleteTarget, setSpeedDialDeleteTarget] = useState<{ id: number; label: string } | null>(null);
   const [speedDialDeleteMode, setSpeedDialDeleteMode] = useState(false);
   const [dragFavoriteId, setDragFavoriteId] = useState<number | null>(null);
   const [dropFavoriteId, setDropFavoriteId] = useState<number | null>(null);
-  const [speedDialPlayerFilter, setSpeedDialPlayerFilter] = useState<number | null>(null);
-  const [speedDialSpeakerFilter, setSpeedDialSpeakerFilter] = useState<string | null>(null);
-  const [speedDialFiltersOpen, setSpeedDialFiltersOpen] = useState(false);
+  const [speedDialPlayerFilter, setSpeedDialPlayerFilter] = useState<number | null>(
+    () => loadSpeedDialFilters().playerId,
+  );
+  const [speedDialSpeakerFilter, setSpeedDialSpeakerFilter] = useState<string | null>(
+    () => loadSpeedDialFilters().speakerId,
+  );
+  const [speedDialFiltersOpen, setSpeedDialFiltersOpen] = useState(
+    () => initialSectionExpanded.speedDialFilters ?? false,
+  );
+  const [playToDetailsOpen, setPlayToDetailsOpen] = useState(() => {
+    if (initialSectionExpanded.playTo !== undefined) return initialSectionExpanded.playTo;
+    return !(initialPlayTo.speakerIds.length > 0 || initialPlayTo.playerId !== null);
+  });
   const { toast, showToast } = useToast();
   const [collections, setCollections] = useState<{ id: string; title: string }[]>([]);
-  const [selectedCollectionId, setSelectedCollectionId] = useState("");
+  const [selectedCollectionId, setSelectedCollectionId] = useState(() => initialPickMusic.selectedCollectionId);
   const [setupOpen, setSetupOpen] = useState(false);
   const [webhookBaseUrl, setWebhookBaseUrl] = useState("");
   const [webhooksEnabled, setWebhooksEnabled] = useState(false);
   const [webhookLinksHidden, setWebhookLinksHidden] = useState(false);
-  const [artistRadio, setArtistRadio] = useState(true);
-  const [radioDegreesOfSeparation, setRadioDegreesOfSeparation] = useState(1);
-  const [shufflePlaylist, setShufflePlaylist] = useState(true);
-  const [shuffleArtist, setShuffleArtist] = useState(false);
+  const [artistRadio, setArtistRadio] = useState(() => initialPickMusic.artistRadio);
+  const [radioDegreesOfSeparation, setRadioDegreesOfSeparation] = useState(
+    () => initialPickMusic.radioDegreesOfSeparation,
+  );
+  const [shufflePlaylist, setShufflePlaylist] = useState(() => initialPickMusic.shufflePlaylist);
+  const [shuffleArtist, setShuffleArtist] = useState(() => initialPickMusic.shuffleArtist);
   const [sonosPlaying, setSonosPlaying] = useState<boolean | null>(null);
   const [sonosVolumeMixerOpen, setSonosVolumeMixerOpen] = useState(false);
   const [plexampPlaying, setPlexampPlaying] = useState<boolean | null>(null);
@@ -242,8 +273,6 @@ function App() {
     return `${speakerPart} · ${playerPart}`;
   }, [hasPlayTargetSelection, speakers, selectedSpeakers, selectedPlayer, selectedPlayerName, outputKind]);
 
-  const [playToDetailsOpen, setPlayToDetailsOpen] = useState(() => !hasPlayTargetSelection);
-
   const reloadCollections = useCallback(async (connected: boolean) => {
     if (!connected) {
       setCollections([]);
@@ -253,7 +282,11 @@ function App() {
     try {
       const rows = await api.collections();
       setCollections(rows);
-      setSelectedCollectionId(rows[0]?.id ?? "");
+      setSelectedCollectionId((current) => {
+        const reconciled = reconcileSelectedCollectionId(current, rows.map((row) => row.id));
+        if (reconciled) return reconciled;
+        return rows[0]?.id ?? "";
+      });
     } catch (err) {
       const detail = err instanceof Error ? err.message : String(err);
       showToast(`Collections failed: ${detail}`);
@@ -328,20 +361,69 @@ function App() {
   }, []);
 
   useEffect(() => {
-    saveSelectedSpeakerIds(selectedSpeakers);
-  }, [selectedSpeakers]);
+    savePlayToState({
+      speakerIds: selectedSpeakers,
+      playerId: selectedPlayer,
+      setVolumesOnPlay,
+      sonosVolumes,
+      pioneerVolume,
+    });
+  }, [selectedSpeakers, selectedPlayer, setVolumesOnPlay, sonosVolumes, pioneerVolume]);
 
   useEffect(() => {
-    if (speedDialPlayerFilter !== null && !players.some((player) => player.id === speedDialPlayerFilter)) {
-      setSpeedDialPlayerFilter(null);
-    }
-  }, [players, speedDialPlayerFilter]);
+    savePickMusicState({
+      pickTab,
+      selectedMedia: selectedMedia
+        ? {
+            id: selectedMedia.id,
+            type: selectedMedia.type,
+            title: selectedMedia.title,
+            subtitle: selectedMedia.subtitle,
+          }
+        : null,
+      selectedCollectionId,
+      artistRadio,
+      shufflePlaylist,
+      shuffleArtist,
+      radioDegreesOfSeparation,
+    });
+  }, [
+    pickTab,
+    selectedMedia,
+    selectedCollectionId,
+    artistRadio,
+    shufflePlaylist,
+    shuffleArtist,
+    radioDegreesOfSeparation,
+  ]);
 
   useEffect(() => {
-    if (speedDialSpeakerFilter !== null && !speakers.some((speaker) => speaker.id === speedDialSpeakerFilter)) {
-      setSpeedDialSpeakerFilter(null);
-    }
-  }, [speakers, speedDialSpeakerFilter]);
+    saveSectionExpanded({
+      pickMusic: pickMusicDetailsOpen,
+      playTo: playToDetailsOpen,
+      speedDialFilters: speedDialFiltersOpen,
+    });
+  }, [pickMusicDetailsOpen, playToDetailsOpen, speedDialFiltersOpen]);
+
+  useEffect(() => {
+    saveSpeedDialFilters({ playerId: speedDialPlayerFilter, speakerId: speedDialSpeakerFilter });
+  }, [speedDialPlayerFilter, speedDialSpeakerFilter]);
+
+  useEffect(() => {
+    if (players.length === 0) return;
+    setSpeedDialPlayerFilter((current) => {
+      if (current === null) return null;
+      return players.some((player) => player.id === current) ? current : null;
+    });
+  }, [players]);
+
+  useEffect(() => {
+    if (speakers.length === 0) return;
+    setSpeedDialSpeakerFilter((current) => {
+      if (current === null) return null;
+      return speakers.some((speaker) => speaker.id === current) ? current : null;
+    });
+  }, [speakers]);
 
   useEffect(() => {
     reloadCollections(authConnected).catch(() => undefined);
@@ -802,6 +884,8 @@ function App() {
           onCollectionChange={setSelectedCollectionId}
           selectedMedia={selectedMedia}
           onSelectMedia={setSelectedMedia}
+          detailsOpen={pickMusicDetailsOpen}
+          onDetailsOpenChange={setPickMusicDetailsOpen}
           artistRadio={artistRadio}
           onArtistRadioChange={setArtistRadio}
           shufflePlaylist={shufflePlaylist}

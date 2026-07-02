@@ -67,6 +67,8 @@ type Props = {
   onCollectionChange: (id: string) => void;
   selectedMedia: MediaItem | null;
   onSelectMedia: (item: MediaItem | null) => void;
+  detailsOpen: boolean;
+  onDetailsOpenChange: (open: boolean) => void;
   artistRadio: boolean;
   onArtistRadioChange: (value: boolean) => void;
   shufflePlaylist: boolean;
@@ -87,6 +89,8 @@ export function PickMusicSection({
   onCollectionChange,
   selectedMedia,
   onSelectMedia,
+  detailsOpen,
+  onDetailsOpenChange,
   artistRadio,
   onArtistRadioChange,
   shufflePlaylist,
@@ -281,14 +285,12 @@ export function PickMusicSection({
     return `${tabLabel} · ${selectedMedia.title}`;
   }, [pickTab, selectedMedia]);
 
-  const [pickMusicDetailsOpen, setPickMusicDetailsOpen] = useState(() => selectedMedia == null);
-
   return (
     <section className="card pickMusicCard">
       <details
         className="playToDetails"
-        open={pickMusicDetailsOpen}
-        onToggle={(event) => setPickMusicDetailsOpen(event.currentTarget.open)}
+        open={detailsOpen}
+        onToggle={(event) => onDetailsOpenChange(event.currentTarget.open)}
       >
         <summary className="playToSummary">
           <span className="playToSummaryText">
