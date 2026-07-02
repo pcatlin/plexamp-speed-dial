@@ -6,11 +6,18 @@ export function speedDialDisplayLabel(label: string): string {
 
 export function buildSpeedDialLabel(
   title: string,
-  options: { radio?: boolean; shuffle?: boolean },
+  options: {
+    radio?: boolean;
+    shuffle?: boolean;
+    artistOrderMode?: "shuffle" | "album_order" | "popular_order" | "popular_tracks_order";
+  },
 ): string {
   let label = title.trim();
   if (options.radio) label += " (radio)";
-  if (options.shuffle) label += " (shuffle)";
+  if (options.artistOrderMode === "album_order") label += " (album order)";
+  else if (options.artistOrderMode === "popular_order") label += " (user ratings)";
+  else if (options.artistOrderMode === "popular_tracks_order") label += " (popular tracks)";
+  else if (options.shuffle) label += " (shuffle)";
   return label;
 }
 

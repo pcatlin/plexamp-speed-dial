@@ -1261,9 +1261,23 @@ components:
         shuffle:
           type: boolean
           title: Shuffle
-          description: 'When media_type is playlist or artist: request shuffled queue
-            from Plexamp.'
+          description: 'When media_type is playlist: request shuffled queue. For artist,
+            prefer artist_order_mode.'
           default: false
+        artist_order_mode:
+          anyOf:
+          - type: string
+            enum:
+            - shuffle
+            - album_order
+            - popular_order
+            - popular_tracks_order
+            - external_ratings_order
+          - type: 'null'
+          title: Artist Order Mode
+          description: 'When media_type is artist: shuffle, album order, user ratings, or Plex popular
+            tracks (external_ratings_order is deprecated).'
+          default: null
         radio_degrees_of_separation:
           anyOf:
           - type: integer

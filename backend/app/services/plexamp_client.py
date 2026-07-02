@@ -57,6 +57,18 @@ def build_server_playback_uri(machine_identifier: str, library_identifier: str, 
     return f"server://{machine_identifier}/{library_identifier}{path}"
 
 
+def build_track_list_server_uri(
+    machine_identifier: str,
+    library_identifier: str,
+    rating_keys: list[int],
+) -> str:
+    """Build a server URI for an explicit multi-track queue (avoids a PMS PlayQueue round-trip)."""
+    if not rating_keys:
+        raise ValueError("rating_keys must not be empty")
+    keys_csv = ",".join(str(rating_key) for rating_key in rating_keys)
+    return f"server://{machine_identifier}/{library_identifier}/library/metadata/{keys_csv}"
+
+
 def append_type_if_missing(library_key: str, libtype: str) -> str:
     """Append Plex `type=` filter when missing (mirrors common headless Plexamp URI patterns)."""
     if "type=" in library_key:

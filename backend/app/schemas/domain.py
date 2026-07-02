@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 MediaType = Literal["playlist", "album", "artist", "track", "random_album"]
+ArtistOrderMode = Literal["shuffle", "album_order", "popular_order", "popular_tracks_order", "external_ratings_order"]
 
 
 class MediaItem(BaseModel):
@@ -169,7 +170,11 @@ class PlayRequest(BaseModel):
     )
     shuffle: bool = Field(
         default=False,
-        description="When media_type is playlist or artist: request shuffled queue from Plexamp.",
+        description="When media_type is playlist: request shuffled queue. For artist, prefer artist_order_mode.",
+    )
+    artist_order_mode: ArtistOrderMode | None = Field(
+        default=None,
+        description="When media_type is artist: shuffle, album order, user ratings, or Plex popular tracks.",
     )
     radio_degrees_of_separation: int | None = Field(
         default=None,

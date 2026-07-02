@@ -12,7 +12,11 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.models import PlexampPlayer, SonosGroupPreset
 from app.schemas.domain import PlaybackStateResponse, PlayRequest, PlayResponse
-from app.services.plex_service import PlexService
+from app.services.artist_playback import (
+    ORDER_MODE_LABELS,
+    build_ordered_artist_server_uri,
+    resolve_artist_order_mode,
+)
 from app.services.plexamp_client import (
     append_max_degrees_of_separation,
     append_type_if_missing,
@@ -23,6 +27,7 @@ from app.services.plexamp_client import (
     plexamp_timeline_implies_playing,
     plexamp_timeline_state,
 )
+from app.services.plex_service import PlexService
 from app.services.audio_output.router import AudioOutputRouter
 from app.services.runtime_setup import resolve_plex_conn, resolve_sonos_runtime
 from app.services.sonos_service import SonosService
@@ -101,13 +106,15 @@ class PlaybackService:
             return PlayResponse(status="error", details=f"Invalid media id: {payload.media_id!r}")
 
         try:
-            pms = self._plex.connect_server(auth_token, plex_conn)
+            pms = self._plex.connect_server(auth_token, plex_conn, request_timeout=10)
         except ValueError as exc:
             return PlayResponse(status="error", details=str(exc))
 
         effective_type = payload.media_type
         if effective_type == "random_album":
             effective_type = "album"
+
+        artist_order_mode = None
 
         try:
             item = pms.fetchItem(rating_key)
@@ -148,6 +155,10 @@ class PlaybackService:
                 )
             library_key = f"{track_key}/station/{artist_uuid}"
         elif effective_type == "artist":
+            artist_order_mode = resolve_artist_order_mode(
+                artist_order_mode=payload.artist_order_mode,
+                shuffle=payload.shuffle,
+            )
             if payload.artist_radio:
                 station_builder = getattr(item, "station", None)
                 if not callable(station_builder):
@@ -159,6 +170,12 @@ class PlaybackService:
                         details="Artist has no Plex radio station (or station metadata could not be loaded).",
                     )
                 library_key = station.key
+            elif artist_order_mode in ("album_order", "popular_order", "popular_tracks_order"):
+                try:
+                    uri = build_ordered_artist_server_uri(pms, item, artist_order_mode)
+                except ValueError as exc:
+                    return PlayResponse(status="error", details=str(exc))
+                library_key = uri
             else:
                 libtype = (getattr(item, "type", None) or "artist").lower()
                 raw_key = item.key or ""
@@ -174,7 +191,10 @@ class PlaybackService:
             else:
                 library_key = append_type_if_missing(raw_key, libtype)
 
-        shuffle_flag = 1 if (payload.shuffle and effective_type in ("playlist", "artist")) else 0
+        if effective_type == "artist":
+            shuffle_flag = 1 if artist_order_mode == "shuffle" else 0
+        else:
+            shuffle_flag = 1 if (payload.shuffle and effective_type == "playlist") else 0
 
         is_radio = effective_type == "track" or (effective_type == "artist" and payload.artist_radio)
         radio_degrees = payload.radio_degrees_of_separation
@@ -183,16 +203,25 @@ class PlaybackService:
                 radio_degrees = RADIO_DEFAULT_DEGREES_OF_SEPARATION
             library_key = append_max_degrees_of_separation(library_key, radio_degrees)
 
-        uri = build_server_playback_uri(
-            machine_identifier=pms.machineIdentifier,
-            library_identifier=pms.library.identifier,
-            library_key=library_key,
-        )
+        if effective_type == "artist" and artist_order_mode in (
+            "album_order",
+            "popular_order",
+            "popular_tracks_order",
+        ):
+            uri = library_key
+        else:
+            uri = build_server_playback_uri(
+                machine_identifier=pms.machineIdentifier,
+                library_identifier=pms.library.identifier,
+                library_key=library_key,
+            )
 
         if effective_type == "track":
             play_kind = "track radio"
         elif effective_type == "artist":
             play_kind = "artist radio" if payload.artist_radio else "artist library"
+            if artist_order_mode and artist_order_mode != "shuffle":
+                play_kind = f"{play_kind} ({ORDER_MODE_LABELS[artist_order_mode]})"
         else:
             play_kind = effective_type
         _log.info("Playback %s media_id=%s library_key=%s", play_kind, payload.media_id, library_key)

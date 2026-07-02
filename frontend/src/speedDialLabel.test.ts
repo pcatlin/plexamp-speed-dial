@@ -17,8 +17,16 @@ describe("buildSpeedDialLabel", () => {
     expect(buildSpeedDialLabel("Artist Name", { radio: true, shuffle: true })).toBe("Artist Name (radio) (shuffle)");
   });
 
-  it("appends shuffle only for playlists", () => {
+  it("appends shuffle for playlists", () => {
     expect(buildSpeedDialLabel("Playlist A", { shuffle: true })).toBe("Playlist A (shuffle)");
+  });
+
+  it("appends artist order suffixes", () => {
+    expect(buildSpeedDialLabel("Artist Name", { artistOrderMode: "album_order" })).toBe("Artist Name (album order)");
+    expect(buildSpeedDialLabel("Artist Name", { artistOrderMode: "popular_order" })).toBe("Artist Name (user ratings)");
+    expect(buildSpeedDialLabel("Artist Name", { artistOrderMode: "popular_tracks_order" })).toBe(
+      "Artist Name (popular tracks)",
+    );
   });
 });
 

@@ -1,4 +1,5 @@
 import type { PickTab } from "./PickMusicSection";
+import { parseArtistOrderMode, type ArtistOrderMode } from "./artistOrder";
 import { RADIO_RANDOMNESS_STEPS } from "./radioRandomness";
 
 const PICK_MUSIC_KEY = "plexamp-speed-dial.pickMusic";
@@ -18,7 +19,7 @@ export type PickMusicState = {
   selectedCollectionId: string;
   artistRadio: boolean;
   shufflePlaylist: boolean;
-  shuffleArtist: boolean;
+  artistOrderMode: ArtistOrderMode;
   radioDegreesOfSeparation: number;
 };
 
@@ -28,7 +29,7 @@ const DEFAULT_PICK_MUSIC: PickMusicState = {
   selectedCollectionId: "",
   artistRadio: true,
   shufflePlaylist: true,
-  shuffleArtist: false,
+  artistOrderMode: "album_order",
   radioDegreesOfSeparation: 1,
 };
 
@@ -69,7 +70,7 @@ function parsePickMusicState(parsed: unknown): PickMusicState {
     selectedCollectionId,
     artistRadio: record.artistRadio !== false,
     shufflePlaylist: record.shufflePlaylist !== false,
-    shuffleArtist: record.shuffleArtist === true,
+    artistOrderMode: parseArtistOrderMode(record.artistOrderMode, record.shuffleArtist === true),
     radioDegreesOfSeparation: parseRadioDegrees(record.radioDegreesOfSeparation),
   };
 }

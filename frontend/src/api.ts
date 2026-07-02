@@ -295,6 +295,7 @@ export const api = {
     preset_id?: number | null;
     artist_radio?: boolean;
     shuffle?: boolean;
+    artist_order_mode?: "shuffle" | "album_order" | "popular_order" | "popular_tracks_order";
     radio_degrees_of_separation?: number;
     initial_volumes?: InitialVolumes | null;
   }) => request<{ status: string; details: string }>("/play", { method: "POST", body: JSON.stringify(payload) }),

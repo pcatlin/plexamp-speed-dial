@@ -3,6 +3,7 @@ import "./App.css";
 import { api, InitialVolumes, MediaItem, Player, Speaker, SpeedDial, playbackStateWebSocketUrl } from "./api";
 import CreditsPage from "./CreditsPage";
 import { PickMusicSection, PickTab, playMediaTypeForTab } from "./PickMusicSection";
+import { artistOrderModeUsesShuffle, type ArtistOrderMode } from "./artistOrder";
 import { SetupModal } from "./SetupModal";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { SonosVolumeMixerModal } from "./SonosVolumeMixerModal";
@@ -172,7 +173,7 @@ function App() {
     () => initialPickMusic.radioDegreesOfSeparation,
   );
   const [shufflePlaylist, setShufflePlaylist] = useState(() => initialPickMusic.shufflePlaylist);
-  const [shuffleArtist, setShuffleArtist] = useState(() => initialPickMusic.shuffleArtist);
+  const [artistOrderMode, setArtistOrderMode] = useState<ArtistOrderMode>(() => initialPickMusic.artistOrderMode);
   const [sonosPlaying, setSonosPlaying] = useState<boolean | null>(null);
   const [sonosVolumeMixerOpen, setSonosVolumeMixerOpen] = useState(false);
   const [plexampPlaying, setPlexampPlaying] = useState<boolean | null>(null);
@@ -384,7 +385,7 @@ function App() {
       selectedCollectionId,
       artistRadio,
       shufflePlaylist,
-      shuffleArtist,
+      artistOrderMode,
       radioDegreesOfSeparation,
     });
   }, [
@@ -393,7 +394,7 @@ function App() {
     selectedCollectionId,
     artistRadio,
     shufflePlaylist,
-    shuffleArtist,
+    artistOrderMode,
     radioDegreesOfSeparation,
   ]);
 
@@ -426,8 +427,11 @@ function App() {
   }, [speakers]);
 
   useEffect(() => {
-    reloadCollections(authConnected).catch(() => undefined);
-  }, [authConnected, reloadCollections]);
+    if (!artistRadio) return;
+    if (artistOrderMode !== "shuffle") {
+      setArtistOrderMode("shuffle");
+    }
+  }, [artistRadio, artistOrderMode]);
 
   useEffect(() => {
     const wantSonos = outputKind === "sonos" && selectedSpeakers.length > 0;
@@ -553,7 +557,7 @@ function App() {
     }
     const shufflePlay =
       payload?.shuffle ??
-      (mediaType === "playlist" ? shufflePlaylist : mediaType === "artist" ? shuffleArtist : false);
+      (mediaType === "playlist" ? shufflePlaylist : mediaType === "artist" ? artistOrderModeUsesShuffle(artistOrderMode) : false);
     const artistRadioPlay = mediaType === "artist" ? (payload?.artist_radio ?? artistRadio) : false;
     const isRadioPlay = mediaType === "track" || artistRadioPlay;
     const result = await api.play({
@@ -562,7 +566,7 @@ function App() {
       player_id: playerId,
       speaker_ids: speakerIds,
       preset_id: payload?.preset_id ?? null,
-      ...(mediaType === "artist" ? { artist_radio: artistRadioPlay } : {}),
+      ...(mediaType === "artist" ? { artist_radio: artistRadioPlay, artist_order_mode: artistOrderMode } : {}),
       ...(isRadioPlay ? { radio_degrees_of_separation: radioDegreesOfSeparation } : {}),
       shuffle: shufflePlay,
       initial_volumes: payload?.initial_volumes ?? initialVolumesForPlay(speakerIds),
@@ -584,11 +588,11 @@ function App() {
       return;
     }
     const mt = playMediaTypeForTab(pickTab);
-    const shuffle = mt === "playlist" ? shufflePlaylist : mt === "artist" ? shuffleArtist : false;
     await api.createSpeedDial({
       label: buildSpeedDialLabel(selectedMedia.title, {
         radio: mt === "artist" ? artistRadio : false,
-        shuffle: mt === "playlist" || mt === "artist" ? shuffle : false,
+        shuffle: mt === "playlist" ? shufflePlaylist : mt === "artist" ? artistOrderModeUsesShuffle(artistOrderMode) : false,
+        artistOrderMode: mt === "artist" ? artistOrderMode : undefined,
       }),
       media_type: mt,
       media_id: selectedMedia.id,
@@ -597,7 +601,8 @@ function App() {
       preset_id: null,
       initial_volumes: initialVolumesForPlay(selectedSpeakers),
       ...(mt === "artist" ? { artist_radio: artistRadio } : {}),
-      ...(mt === "playlist" || mt === "artist" ? { shuffle: mt === "playlist" ? shufflePlaylist : shuffleArtist } : {}),
+      ...(mt === "playlist" ? { shuffle: shufflePlaylist } : {}),
+      ...(mt === "artist" ? { shuffle: artistOrderModeUsesShuffle(artistOrderMode) } : {}),
     });
     setSpeedDial(await api.speedDial());
     showToast("Saved to speed dial.");
@@ -890,8 +895,8 @@ function App() {
           onArtistRadioChange={setArtistRadio}
           shufflePlaylist={shufflePlaylist}
           onShufflePlaylistChange={setShufflePlaylist}
-          shuffleArtist={shuffleArtist}
-          onShuffleArtistChange={setShuffleArtist}
+          artistOrderMode={artistOrderMode}
+          onArtistOrderModeChange={setArtistOrderMode}
           radioDegreesOfSeparation={radioDegreesOfSeparation}
           onRadioDegreesOfSeparationChange={setRadioDegreesOfSeparation}
           onToast={showToast}

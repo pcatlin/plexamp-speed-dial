@@ -20,7 +20,7 @@ describe("pickMusicStorage", () => {
       selectedCollectionId: "coll-1",
       artistRadio: false,
       shufflePlaylist: false,
-      shuffleArtist: true,
+      artistOrderMode: "popular_order",
       radioDegreesOfSeparation: 3,
     });
     expect(loadPickMusicState()).toEqual({
@@ -29,9 +29,25 @@ describe("pickMusicStorage", () => {
       selectedCollectionId: "coll-1",
       artistRadio: false,
       shufflePlaylist: false,
-      shuffleArtist: true,
+      artistOrderMode: "popular_order",
       radioDegreesOfSeparation: 3,
     });
+  });
+
+  it("migrates legacy shuffleArtist boolean", () => {
+    localStorage.setItem(
+      KEY,
+      JSON.stringify({
+        pickTab: "artist",
+        selectedMedia: null,
+        selectedCollectionId: "",
+        artistRadio: true,
+        shufflePlaylist: true,
+        shuffleArtist: true,
+        radioDegreesOfSeparation: 1,
+      }),
+    );
+    expect(loadPickMusicState().artistOrderMode).toBe("shuffle");
   });
 
   it("reconciles collection id against available collections", () => {

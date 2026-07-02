@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, API_BASE, MediaItem } from "./api";
 import { IconChevronDown, IconShuffle } from "./icons";
+import { ARTIST_ORDER_OPTIONS, artistOrderModeDisabledWithRadio, type ArtistOrderMode } from "./artistOrder";
 import {
   radioRandomnessFromSliderIndex,
   radioRandomnessLabel,
@@ -73,8 +74,8 @@ type Props = {
   onArtistRadioChange: (value: boolean) => void;
   shufflePlaylist: boolean;
   onShufflePlaylistChange: (value: boolean) => void;
-  shuffleArtist: boolean;
-  onShuffleArtistChange: (value: boolean) => void;
+  artistOrderMode: ArtistOrderMode;
+  onArtistOrderModeChange: (value: ArtistOrderMode) => void;
   radioDegreesOfSeparation: number;
   onRadioDegreesOfSeparationChange: (value: number) => void;
   onToast: (msg: string) => void;
@@ -95,8 +96,8 @@ export function PickMusicSection({
   onArtistRadioChange,
   shufflePlaylist,
   onShufflePlaylistChange,
-  shuffleArtist,
-  onShuffleArtistChange,
+  artistOrderMode,
+  onArtistOrderModeChange,
   radioDegreesOfSeparation,
   onRadioDegreesOfSeparationChange,
   onToast,
@@ -285,6 +286,9 @@ export function PickMusicSection({
     return `${tabLabel} · ${selectedMedia.title}`;
   }, [pickTab, selectedMedia]);
 
+  const selectedArtistOrder =
+    ARTIST_ORDER_OPTIONS.find((option) => option.id === artistOrderMode) ?? ARTIST_ORDER_OPTIONS[0];
+
   return (
     <section className="card pickMusicCard">
       <details
@@ -371,13 +375,32 @@ export function PickMusicSection({
             />
           ) : null}
           {pickTab === "artist" ? (
-            <label className="checkboxRow shufflePickRow">
-              <input type="checkbox" checked={shuffleArtist} onChange={(e) => onShuffleArtistChange(e.target.checked)} />
-              Shuffle
-            </label>
-          ) : null}
-          {pickTab === "artist" ? (
-            <p className="hint subtle shuffleArtistHint">When on, Plexamp shuffles the queue (radio or library).</p>
+            <fieldset className="artistOrderFieldset">
+              <legend className="fieldLabel artistOrderLegend">Play order</legend>
+              <div className="artistOrderOptions" role="radiogroup" aria-label="Artist play order">
+                {ARTIST_ORDER_OPTIONS.map((option) => {
+                  const disabled = artistRadio && artistOrderModeDisabledWithRadio(option.id);
+                  return (
+                    <label key={option.id} className={`artistOrderOption${disabled ? " isDisabled" : ""}`}>
+                      <input
+                        type="radio"
+                        name="artist-order"
+                        value={option.id}
+                        checked={artistOrderMode === option.id}
+                        disabled={disabled}
+                        onChange={() => onArtistOrderModeChange(option.id)}
+                      />
+                      {option.label}
+                    </label>
+                  );
+                })}
+              </div>
+              <p className="hint subtle artistOrderHint">
+                {artistRadio
+                  ? "User ratings, Plex popular tracks, and album order apply to library playback only. Radio uses shuffle when selected."
+                  : selectedArtistOrder.hint}
+              </p>
+            </fieldset>
           ) : null}
           <label className="fieldLabel" htmlFor={`pick-search-${suggestionFamily}`}>
             Search {suggestionFamily}s

@@ -25,3 +25,10 @@ def test_timeline_state_reads_paused_music():
 def test_timeline_implies_playing_maps_music_states():
     assert plexamp_client.plexamp_timeline_implies_playing("playing") is True
     assert plexamp_client.plexamp_timeline_implies_playing("paused") is False
+
+
+def test_build_track_list_server_uri_joins_rating_keys():
+    assert (
+        plexamp_client.build_track_list_server_uri("machine", "section-1", [10, 20, 30])
+        == "server://machine/section-1/library/metadata/10,20,30"
+    )
