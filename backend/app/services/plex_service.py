@@ -570,13 +570,6 @@ class PlexService:
                         return acc
             return acc
 
-        def most_for_section(section: MusicSection) -> list:
-            for sort in ("viewCount:desc", "lastViewedAt:desc", "lastRatedAt:desc", "addedAt:desc"):
-                rows = self._try_section_search(section, libtype, 20, sort=sort)
-                if rows:
-                    return rows
-            return self._try_section_search(section, libtype, 20, sort="titleSort")
-
         def random_for_section(section: MusicSection) -> list:
             rows = self._try_section_search(section, libtype, 40, sort="random")
             if rows:
@@ -585,6 +578,26 @@ class PlexService:
             pl = list(pool)
             random.shuffle(pl)
             return pl
+
+        if family == "album":
+            album_limit = 30
+
+            def album_rows(section: MusicSection, sort: str) -> list:
+                return self._try_section_search(section, libtype, album_limit + 10, sort=sort)
+
+            return MediaSuggestionsResponse(
+                recently_played=merge_unique(lambda s: album_rows(s, "lastViewedAt:desc"), album_limit),
+                most_played=merge_unique(lambda s: album_rows(s, "viewCount:desc"), album_limit),
+                recently_added=merge_unique(lambda s: album_rows(s, "addedAt:desc"), album_limit),
+                random=merge_unique(random_for_section, album_limit),
+            )
+
+        def most_for_section(section: MusicSection) -> list:
+            for sort in ("viewCount:desc", "lastViewedAt:desc", "lastRatedAt:desc", "addedAt:desc"):
+                rows = self._try_section_search(section, libtype, 20, sort=sort)
+                if rows:
+                    return rows
+            return self._try_section_search(section, libtype, 20, sort="titleSort")
 
         return MediaSuggestionsResponse(
             most_played=merge_unique(most_for_section, 10),

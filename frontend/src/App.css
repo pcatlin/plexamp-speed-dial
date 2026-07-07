@@ -597,6 +597,73 @@ button.favoriteWebhookLink .favoriteWebhookIcon {
   margin-bottom: 0.75rem;
 }
 
+.albumSuggestionRails {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  margin-top: 0.75rem;
+}
+
+.albumSuggestionSection {
+  min-width: 0;
+}
+
+.albumSuggestionHeading {
+  margin: 0 0 0.45rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: #6b7280;
+}
+
+.albumSuggestionRail {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  overflow-x: auto;
+  padding-bottom: 0.25rem;
+  -webkit-overflow-scrolling: touch;
+  scroll-snap-type: x proximity;
+}
+
+.albumSuggestionCard {
+  flex: 0 0 5.5rem;
+  width: 5.5rem;
+  border: none;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  text-align: center;
+  scroll-snap-align: start;
+}
+
+.albumSuggestionCard.isSelected .albumSuggestionCover {
+  border-color: #2563eb;
+}
+
+.albumSuggestionCover {
+  width: 5.5rem;
+  height: 5.5rem;
+  border: 2px solid transparent;
+  border-radius: 8px;
+  box-sizing: border-box;
+  object-fit: cover;
+  background: #e5e7eb;
+  display: block;
+}
+
+.albumSuggestionTitle {
+  margin-top: 0.3rem;
+  font-size: 0.7rem;
+  line-height: 1.2;
+  color: #374151;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
 .shuffleRow {
   display: flex;
   align-items: center;

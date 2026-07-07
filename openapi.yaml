@@ -1223,6 +1223,16 @@ components:
             $ref: '#/components/schemas/MediaItem'
           type: array
           title: Random
+        recently_played:
+          items:
+            $ref: '#/components/schemas/MediaItem'
+          type: array
+          title: Recently Played
+        recently_added:
+          items:
+            $ref: '#/components/schemas/MediaItem'
+          type: array
+          title: Recently Added
       type: object
       title: MediaSuggestionsResponse
     PlayRequest:

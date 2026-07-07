@@ -19,6 +19,8 @@ export interface MediaItem {
 export interface MediaSuggestions {
   most_played: MediaItem[];
   random: MediaItem[];
+  recently_played: MediaItem[];
+  recently_added: MediaItem[];
 }
 
 export interface Speaker {

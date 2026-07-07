@@ -37,7 +37,9 @@ const responses: Record<string, unknown> = {
 function mockPayload(path: string): unknown {
   const direct = responses[path];
   if (direct !== undefined) return direct;
-  if (path.startsWith("/media/suggestions")) return { most_played: [], random: [] };
+  if (path.startsWith("/media/suggestions")) {
+    return { most_played: [], random: [], recently_played: [], recently_added: [] };
+  }
   if (path.startsWith("/media/search")) return [];
   if (path.startsWith("/media/random-album"))
     return { id: "album-rand", title: "Random Album", type: "album" };

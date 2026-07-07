@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { api, API_BASE, MediaItem } from "./api";
+import { api, API_BASE, MediaItem, type MediaSuggestions } from "./api";
+import { AlbumSuggestionRails } from "./AlbumSuggestionRails";
 import { IconChevronDown, IconShuffle } from "./icons";
 import { ARTIST_ORDER_OPTIONS, artistOrderModeDisabledWithRadio, type ArtistOrderMode } from "./artistOrder";
 import {
@@ -15,11 +16,6 @@ export function playMediaTypeForTab(tab: PickTab): "playlist" | "album" | "artis
   if (tab === "random_album") return "album";
   return tab;
 }
-
-type MediaSuggestions = {
-  most_played: MediaItem[];
-  random: MediaItem[];
-};
 
 const TABS: Array<{ id: PickTab; label: string }> = [
   { id: "playlist", label: "Playlist" },
@@ -108,6 +104,7 @@ export function PickMusicSection({
   const [searchHits, setSearchHits] = useState<MediaItem[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [suggestions, setSuggestions] = useState<MediaSuggestions | null>(null);
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
   const [suggestionSelect, setSuggestionSelect] = useState("");
   const [previewTracks, setPreviewTracks] = useState<MediaItem[]>([]);
   const [previewTracksLoading, setPreviewTracksLoading] = useState(false);
@@ -156,15 +153,28 @@ export function PickMusicSection({
   useEffect(() => {
     if (!authConnected || !suggestionFamily) {
       setSuggestions(null);
+      setSuggestionsLoading(false);
       return;
     }
+    let cancelled = false;
+    setSuggestionsLoading(true);
     api
       .mediaSuggestions(suggestionFamily)
-      .then(setSuggestions)
+      .then((rows) => {
+        if (!cancelled) setSuggestions(rows);
+      })
       .catch((err) => {
-        onToast(err instanceof Error ? err.message : String(err));
-        setSuggestions(null);
+        if (!cancelled) {
+          onToast(err instanceof Error ? err.message : String(err));
+          setSuggestions(null);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setSuggestionsLoading(false);
       });
+    return () => {
+      cancelled = true;
+    };
   }, [authConnected, suggestionFamily, onToast]);
 
   useEffect(() => {
@@ -438,37 +448,56 @@ export function PickMusicSection({
             </ul>
           ) : null}
 
-          <label className="fieldLabel" htmlFor="pick-suggestions">
-            Suggestions
-          </label>
-          <select
-            id="pick-suggestions"
-            className="suggestionSelect"
-            value={suggestionSelect}
-            onChange={(e) => pickFromSuggestionSelect(e.target.value)}
-          >
-            <option value="">Choose from most played or random…</option>
-            {suggestions && suggestions.most_played.length > 0 ? (
-              <optgroup label="Most played">
-                {suggestions.most_played.map((item) => (
-                  <option key={`m-${item.id}`} value={item.id}>
-                    {item.title}
-                    {item.subtitle ? ` — ${item.subtitle}` : ""}
-                  </option>
-                ))}
-              </optgroup>
-            ) : null}
-            {suggestions && suggestions.random.length > 0 ? (
-              <optgroup label="Random">
-                {suggestions.random.map((item) => (
-                  <option key={`r-${item.id}`} value={item.id}>
-                    {item.title}
-                    {item.subtitle ? ` — ${item.subtitle}` : ""}
-                  </option>
-                ))}
-              </optgroup>
-            ) : null}
-          </select>
+          {pickTab === "album" ? (
+            <AlbumSuggestionRails
+              recentlyPlayed={suggestions?.recently_played ?? []}
+              mostPlayed={suggestions?.most_played ?? []}
+              recentlyAdded={suggestions?.recently_added ?? []}
+              random={suggestions?.random ?? []}
+              selectedId={selectedMedia?.type === "album" ? selectedMedia.id : null}
+              loading={suggestionsLoading}
+              onSelect={(item) => {
+                onSelectMedia(item);
+                setSuggestionSelect("");
+                setSearchQuery("");
+                setSearchHits([]);
+              }}
+            />
+          ) : (
+            <>
+              <label className="fieldLabel" htmlFor="pick-suggestions">
+                Suggestions
+              </label>
+              <select
+                id="pick-suggestions"
+                className="suggestionSelect"
+                value={suggestionSelect}
+                onChange={(e) => pickFromSuggestionSelect(e.target.value)}
+              >
+                <option value="">Choose from most played or random…</option>
+                {suggestions && suggestions.most_played.length > 0 ? (
+                  <optgroup label="Most played">
+                    {suggestions.most_played.map((item) => (
+                      <option key={`m-${item.id}`} value={item.id}>
+                        {item.title}
+                        {item.subtitle ? ` — ${item.subtitle}` : ""}
+                      </option>
+                    ))}
+                  </optgroup>
+                ) : null}
+                {suggestions && suggestions.random.length > 0 ? (
+                  <optgroup label="Random">
+                    {suggestions.random.map((item) => (
+                      <option key={`r-${item.id}`} value={item.id}>
+                        {item.title}
+                        {item.subtitle ? ` — ${item.subtitle}` : ""}
+                      </option>
+                    ))}
+                  </optgroup>
+                ) : null}
+              </select>
+            </>
+          )}
         </div>
       ) : null}
 
