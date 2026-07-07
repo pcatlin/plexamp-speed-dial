@@ -27,7 +27,7 @@ import {
   loadSpeedDialFilters,
   saveSpeedDialFilters,
 } from "./speedDialFilterStorage";
-import { favoriteMatchesSpeakerFilter, outputKindForPlayer, pioneerHostFromOutput, presetLabelForCode } from "./audioOutput";
+import { favoriteMatchesSpeakerFilter, outputKindForPlayer, pioneerHostFieldFromOutput, presetLabelForCode } from "./audioOutput";
 import {
   buildInitialVolumes,
   DEFAULT_INITIAL_VOLUME,
@@ -102,7 +102,7 @@ type ReceiverStatus = {
 function speedDialPlayTarget(favorite: SpeedDial, players: Player[], speakers: Speaker[]): string {
   const player = players.find((row) => row.id === favorite.player_id);
   const isPioneer = outputKindForPlayer(player) === "pioneer";
-  const pioneerLabel = pioneerHostFromOutput(player?.audio_output ?? { kind: "none", config: {} }).trim() || "Pioneer AVR";
+  const pioneerLabel = pioneerHostFieldFromOutput(player?.audio_output ?? { kind: "none", config: {} }).trim() || "Pioneer AVR";
   return formatSpeedDialPlayTarget({
     speakerIds: favorite.speaker_ids,
     initialVolumes: favorite.initial_volumes,
@@ -190,7 +190,7 @@ function App() {
   const outputKind = outputKindForPlayer(selectedPlayerRow);
 
   const pioneerAvrLabel = useMemo(() => {
-    const host = pioneerHostFromOutput(selectedPlayerRow?.audio_output ?? { kind: "none", config: {} });
+    const host = pioneerHostFieldFromOutput(selectedPlayerRow?.audio_output ?? { kind: "none", config: {} });
     return host.trim() || "Pioneer AVR";
   }, [selectedPlayerRow]);
 

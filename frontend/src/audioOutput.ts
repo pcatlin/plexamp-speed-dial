@@ -29,6 +29,8 @@ export const AUDIO_OUTPUT_KINDS: { id: AudioOutputKind; label: string }[] = [
   { id: "pioneer", label: "Pioneer AVR" },
 ];
 
+export const PIONEER_DEFAULT_ISCP_PORT = 60128;
+
 export function defaultAudioOutput(): AudioOutput {
   return { kind: "none", config: {} };
 }
@@ -66,9 +68,54 @@ export function pioneerInputCodeFromOutput(output: AudioOutput): string {
 }
 
 export function pioneerPortFromOutput(output: AudioOutput): number {
-  if (output.kind !== "pioneer") return 60128;
+  if (output.kind !== "pioneer") return PIONEER_DEFAULT_ISCP_PORT;
   const port = Number(output.config.port);
-  return Number.isFinite(port) && port > 0 ? port : 60128;
+  return Number.isFinite(port) && port > 0 ? port : PIONEER_DEFAULT_ISCP_PORT;
+}
+
+/** Host field value — includes `:port` only when not the default ISCP port. */
+export function pioneerHostFieldFromOutput(output: AudioOutput): string {
+  const host = pioneerHostFromOutput(output);
+  if (!host) return "";
+  const port = pioneerPortFromOutput(output);
+  if (port !== PIONEER_DEFAULT_ISCP_PORT) return `${host}:${port}`;
+  return host;
+}
+
+export function parsePioneerHostField(raw: string): { host: string; port: number } {
+  const s = raw.trim();
+  if (!s) return { host: "", port: PIONEER_DEFAULT_ISCP_PORT };
+
+  if (/^https?:\/\//i.test(s)) {
+    try {
+      const url = new URL(s);
+      const host = url.hostname;
+      if (!host) return { host: "", port: PIONEER_DEFAULT_ISCP_PORT };
+      const port = url.port ? Number.parseInt(url.port, 10) : PIONEER_DEFAULT_ISCP_PORT;
+      return {
+        host,
+        port: Number.isFinite(port) && port > 0 ? port : PIONEER_DEFAULT_ISCP_PORT,
+      };
+    } catch {
+      return { host: s, port: PIONEER_DEFAULT_ISCP_PORT };
+    }
+  }
+
+  const first = s.split(/[/\s]/)[0] ?? "";
+  if (first.includes(":")) {
+    const colon = first.lastIndexOf(":");
+    const maybeHost = first.slice(0, colon).trim();
+    const portStr = first.slice(colon + 1);
+    if (!portStr) {
+      return { host: maybeHost, port: PIONEER_DEFAULT_ISCP_PORT };
+    }
+    const port = Number.parseInt(portStr, 10);
+    if (maybeHost && Number.isFinite(port) && port > 0 && port < 65536) {
+      return { host: maybeHost, port };
+    }
+  }
+
+  return { host: first, port: PIONEER_DEFAULT_ISCP_PORT };
 }
 
 export function presetLabelForCode(code: string): string {

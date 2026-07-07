@@ -1,14 +1,14 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { AudioOutput, AudioOutputKind, Speaker } from "./api";
 import {
   AUDIO_OUTPUT_KINDS,
   PIONEER_INPUT_PRESETS,
   buildAudioOutput,
   defaultAudioOutput,
-  pioneerHostFromOutput,
+  parsePioneerHostField,
+  pioneerHostFieldFromOutput,
   pioneerInputCodeFromOutput,
   pioneerPortFromOutput,
-  presetLabelForCode,
   sonosSpeakerIdFromOutput,
 } from "./audioOutput";
 
@@ -37,10 +37,17 @@ export function PlayerAudioRouteFields({
 }: Props) {
   const kind = value.kind ?? "none";
   const [customInput, setCustomInput] = useState(false);
+  const [hostInput, setHostInput] = useState(() => pioneerHostFieldFromOutput(value));
 
   const inputCode = pioneerInputCodeFromOutput(value);
   const presetMatch = PIONEER_INPUT_PRESETS.some((p) => p.code === inputCode);
   const selectInputValue = customInput || !presetMatch ? "__custom__" : inputCode;
+
+  useEffect(() => {
+    if (value.kind === "pioneer") {
+      setHostInput(pioneerHostFieldFromOutput(value));
+    }
+  }, [idPrefix, value.kind, value.config?.host, value.config?.port, value.config?.input_code]);
 
   const build = (
     nextKind: AudioOutputKind,
@@ -49,6 +56,16 @@ export function PlayerAudioRouteFields({
     code: string,
     port: number,
   ) => buildAudioOutput(nextKind, sonosId, host, code, port);
+
+  const pioneerConnection = useMemo(() => parsePioneerHostField(hostInput), [hostInput]);
+
+  const commitPioneerHost = () => {
+    const { host, port } = parsePioneerHostField(hostInput);
+    const next = build("pioneer", sonosId, host, inputCode, port);
+    onChange(next);
+    onCommit?.(next);
+    setHostInput(pioneerHostFieldFromOutput(next));
+  };
 
   const emitDraft = (
     nextKind: AudioOutputKind,
@@ -73,8 +90,8 @@ export function PlayerAudioRouteFields({
   };
 
   const sonosId = sonosSpeakerIdFromOutput(value);
-  const host = pioneerHostFromOutput(value);
-  const port = pioneerPortFromOutput(value);
+  const storedHost = pioneerConnection.host;
+  const storedPort = kind === "pioneer" ? pioneerConnection.port : pioneerPortFromOutput(value);
 
   const kindName = useMemo(() => `${idPrefix}-route`, [idPrefix]);
 
@@ -89,7 +106,7 @@ export function PlayerAudioRouteFields({
               name={kindName}
               value={opt.id}
               checked={kind === opt.id}
-              onChange={() => emitCommit(opt.id, sonosId, host, inputCode, port)}
+              onChange={() => emitCommit(opt.id, sonosId, storedHost, inputCode, storedPort)}
             />
             {opt.label}
           </label>
@@ -97,13 +114,13 @@ export function PlayerAudioRouteFields({
       </fieldset>
 
       {kind === "sonos" ? (
-        <label className="fieldLabel mb0 stretch">
+        <label className="fieldLabel mb0">
           Line-in Sonos speaker
           <select
             className="textInput"
             value={sonosId}
             disabled={disabled}
-            onChange={(e) => emitCommit("sonos", e.target.value, host, inputCode, port)}
+            onChange={(e) => emitCommit("sonos", e.target.value, storedHost, inputCode, storedPort)}
           >
             <option value="">Select speaker…</option>
             {sonosSpeakers.map((s) => (
@@ -117,19 +134,19 @@ export function PlayerAudioRouteFields({
 
       {kind === "pioneer" ? (
         <div className="audioRoutePioneerFields">
-          <label className="fieldLabel mb0 stretch">
+          <label className="fieldLabel mb0 audioRoutePioneerHost">
             Receiver IP or hostname
             <input
               type="text"
               className="textInput"
-              placeholder="192.168.1.50"
-              value={host}
+              placeholder="192.168.1.50 or hostname:60128"
+              value={hostInput}
               disabled={disabled}
-              onChange={(e) => emitDraft("pioneer", sonosId, e.target.value, inputCode, port)}
-              onBlur={(e) => onCommit?.(build("pioneer", sonosId, e.target.value, inputCode, port))}
+              onChange={(e) => setHostInput(e.target.value)}
+              onBlur={() => commitPioneerHost()}
             />
           </label>
-          <label className="fieldLabel mb0 stretch">
+          <label className="fieldLabel mb0 audioRoutePioneerInput">
             Input
             <select
               className="textInput"
@@ -142,7 +159,7 @@ export function PlayerAudioRouteFields({
                   return;
                 }
                 setCustomInput(false);
-                emitCommit("pioneer", sonosId, host, v, port);
+                emitCommit("pioneer", sonosId, storedHost, v, storedPort);
               }}
             >
               {PIONEER_INPUT_PRESETS.map((p) => (
@@ -154,7 +171,7 @@ export function PlayerAudioRouteFields({
             </select>
           </label>
           {selectInputValue === "__custom__" ? (
-            <label className="fieldLabel mb0 stretch">
+            <label className="fieldLabel mb0 audioRoutePioneerCustom">
               ISCP input code (2 chars, e.g. 22)
               <input
                 type="text"
@@ -162,35 +179,20 @@ export function PlayerAudioRouteFields({
                 maxLength={2}
                 value={inputCode}
                 disabled={disabled}
-                onChange={(e) => emitDraft("pioneer", sonosId, host, e.target.value.toUpperCase(), port)}
+                onChange={(e) => emitDraft("pioneer", sonosId, storedHost, e.target.value.toUpperCase(), storedPort)}
                 onBlur={(e) =>
-                  onCommit?.(build("pioneer", sonosId, host, e.target.value.toUpperCase(), port))
+                  onCommit?.(build("pioneer", sonosId, storedHost, e.target.value.toUpperCase(), storedPort))
                 }
               />
             </label>
-          ) : (
-            <p className="hint subtle">
-              Selected: {presetLabelForCode(inputCode)} (SLI{inputCode}). HDMI 1–4 match VSX-LX505 factory Input
-              Assign; change codes if you reassigned jacks on the receiver.
-            </p>
-          )}
-          <label className="fieldLabel mb0 narrow">
-            ISCP port
-            <input
-              type="number"
-              className="textInput narrow"
-              min={1}
-              max={65535}
-              value={port}
-              disabled={disabled}
-              onChange={(e) => emitDraft("pioneer", sonosId, host, inputCode, Number(e.target.value) || 60128)}
-              onBlur={(e) =>
-                onCommit?.(build("pioneer", sonosId, host, inputCode, Number(e.target.value) || 60128))
-              }
-            />
-          </label>
+          ) : null}
           {onTest ? (
-            <button type="button" className="nowrap" disabled={disabled || testBusy} onClick={() => void onTest()}>
+            <button
+              type="button"
+              className="nowrap audioRoutePioneerTest"
+              disabled={disabled || testBusy}
+              onClick={() => void onTest()}
+            >
               {testBusy ? "Testing…" : "Test receiver"}
             </button>
           ) : null}

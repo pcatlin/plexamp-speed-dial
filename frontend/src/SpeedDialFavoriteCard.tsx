@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 
 import type { InitialVolumes, Player, Speaker, SpeedDial } from "./api";
 import { API_BASE, speedDialWebhookUrl } from "./api";
-import { outputKindForPlayer, pioneerHostFromOutput } from "./audioOutput";
+import { outputKindForPlayer, pioneerHostFieldFromOutput } from "./audioOutput";
 import { copyTextToClipboard } from "./clipboard";
 import { IconGrip, IconLink, IconPlay, IconTrash } from "./icons";
 import { DEFAULT_INITIAL_VOLUME, buildSpeedDialInitialVolumes, hasSonosInitialVolumes, initialVolumesWithoutSonos, mergeSonosVolumes } from "./initialVolumes";
@@ -136,7 +136,7 @@ export function SpeedDialFavoriteCard({
   const draftPlayTarget = useMemo(() => {
     const isPioneer = !draftIsSonosPlayer;
     const pioneerLabel =
-      pioneerHostFromOutput(draftPlayer?.audio_output ?? { kind: "none", config: {} }).trim() || "Pioneer AVR";
+      pioneerHostFieldFromOutput(draftPlayer?.audio_output ?? { kind: "none", config: {} }).trim() || "Pioneer AVR";
     return formatSpeedDialPlayTarget({
       speakerIds: draftSpeakerIds,
       initialVolumes: buildCommitVolumes(

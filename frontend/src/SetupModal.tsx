@@ -3,6 +3,16 @@ import type { AudioOutput, Player, RuntimeSettings, Speaker } from "./api";
 import { api } from "./api";
 import { audioOutputsEqual, defaultAudioOutput } from "./audioOutput";
 import { PlayerAudioRouteFields, audioOutputFromPlayer } from "./PlayerAudioRouteFields";
+import { ConfirmDialog } from "./ConfirmDialog";
+
+const SETUP_SECTIONS = [
+  { id: "plex", label: "Plex" },
+  { id: "sonos", label: "Sonos" },
+  { id: "plexamp", label: "Plexamp" },
+  { id: "webhooks", label: "Webhooks" },
+] as const;
+
+type SetupSection = (typeof SETUP_SECTIONS)[number]["id"];
 
 function parsePlexampEndpoint(raw: string): { label: string; host: string; port: number } {
   const s = raw.trim();
@@ -52,10 +62,10 @@ export function SetupModal({
 }: Props) {
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [activeSection, setActiveSection] = useState<SetupSection>("plex");
   const [authConnected, setAuthConnected] = useState(false);
   const [authUsername, setAuthUsername] = useState("");
   const [plexUrl, setPlexUrl] = useState("");
-  const [plexUrlEffective, setPlexUrlEffective] = useState("");
   const [plexSslVerify, setPlexSslVerify] = useState(true);
   const [sonosSeeds, setSonosSeeds] = useState("");
   const [sonosTimeout, setSonosTimeout] = useState(10);
@@ -71,11 +81,16 @@ export function SetupModal({
   const [playerInput, setPlayerInput] = useState("");
   const [playerNameHint, setPlayerNameHint] = useState("");
   const [testPlayerId, setTestPlayerId] = useState<number | null>(null);
+  const [playerDeleteTarget, setPlayerDeleteTarget] = useState<{ id: number; name: string } | null>(null);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      setPlayerDeleteTarget(null);
+      return;
+    }
     let cancelled = false;
     setLoading(true);
+    setActiveSection("plex");
     (async () => {
       try {
         const [settings, plist, auth, spk] = await Promise.all([
@@ -110,7 +125,6 @@ export function SetupModal({
 
   function applySettings(s: RuntimeSettings) {
     setPlexUrl(s.plex_server_url ?? "");
-    setPlexUrlEffective(s.plex_server_url_effective ?? "");
     setPlexSslVerify(s.plex_ssl_verify);
     setSonosSeeds(s.sonos_seed_ips);
     setSonosTimeout(s.sonos_discover_timeout);
@@ -121,27 +135,52 @@ export function SetupModal({
     setWebhookLinksHidden(Boolean(s.webhook_links_hidden));
   }
 
-  const saveSetup = async () => {
+  const saveAll = async () => {
+    const saved = await api.saveRuntimeSettings({
+      plex_server_url: plexUrl.trim(),
+      plex_ssl_verify: plexSslVerify,
+      sonos_seed_ips: sonosSeeds.trim(),
+      sonos_discover_timeout: sonosTimeout,
+      sonos_allow_network_scan: sonosScan,
+      sonos_interface_addr: sonosIface.trim(),
+      webhook_base_url: webhookBaseUrl.trim(),
+      webhooks_enabled: webhooksEnabled,
+      webhook_links_hidden: webhookLinksHidden,
+    });
+    applySettings(saved);
+
+    let nextPlayers = players;
+    for (const player of players) {
+      const draft = playerAudioDrafts[player.id];
+      if (!draft || audioOutputsEqual(audioOutputFromPlayer(player), draft)) {
+        continue;
+      }
+      const updated = await api.patchPlayer(player.id, { audio_output: draft });
+      nextPlayers = nextPlayers.map((p) => (p.id === player.id ? updated : p));
+      await onPlayerPatched?.(updated);
+    }
+    setPlayers(nextPlayers);
+    setPlayerAudioDrafts(
+      Object.fromEntries(nextPlayers.map((p) => [p.id, audioOutputFromPlayer(p)] as const)),
+    );
+
+    try {
+      setSonosSpeakers(await api.speakers());
+    } catch {
+      setSonosSpeakers([]);
+    }
+    await afterRuntimeSaved?.().catch(() => undefined);
+  };
+
+  const handleSave = async () => {
+    if (busy || loading) return;
+    (document.activeElement as HTMLElement | null)?.blur();
+    await new Promise<void>((resolve) => {
+      window.setTimeout(resolve, 0);
+    });
     setBusy(true);
     try {
-      const saved = await api.saveRuntimeSettings({
-        plex_server_url: plexUrl.trim(),
-        plex_ssl_verify: plexSslVerify,
-        sonos_seed_ips: sonosSeeds.trim(),
-        sonos_discover_timeout: sonosTimeout,
-        sonos_allow_network_scan: sonosScan,
-        sonos_interface_addr: sonosIface.trim(),
-        webhook_base_url: webhookBaseUrl.trim(),
-        webhooks_enabled: webhooksEnabled,
-        webhook_links_hidden: webhookLinksHidden,
-      });
-      applySettings(saved);
-      try {
-        setSonosSpeakers(await api.speakers());
-      } catch {
-        setSonosSpeakers([]);
-      }
-      await afterRuntimeSaved?.().catch(() => undefined);
+      await saveAll();
       onToast("Setup saved.");
     } catch (e) {
       onToast(e instanceof Error ? e.message : String(e));
@@ -265,6 +304,9 @@ export function SetupModal({
       await api.deletePlayer(id);
       const plist = await api.players();
       setPlayers(plist);
+      setPlayerAudioDrafts(
+        Object.fromEntries(plist.map((p) => [p.id, audioOutputFromPlayer(p)] as const)),
+      );
       await onPlayersUpdated();
       onToast("Removed player.");
     } catch (e) {
@@ -279,211 +321,287 @@ export function SetupModal({
   const hasBaseUrl = (plexUrl ?? "").trim().length > 0;
 
   return (
-    <div className="modalBackdrop" role="presentation" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modalPanel" role="dialog" aria-modal="true" aria-labelledby="setup-title" onMouseDown={(e) => e.stopPropagation()}>
+    <>
+    <div
+      className="modalBackdrop"
+      role="presentation"
+      onMouseDown={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <div
+        className="modalPanel setupModalPanel"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="setup-title"
+        onMouseDown={(e) => e.stopPropagation()}
+      >
         <div className="modalHeader">
           <h2 id="setup-title">Setup</h2>
-          <button type="button" className="ghost" disabled={busy} onClick={() => onClose()} aria-label="Close setup">
-            Close
-          </button>
+          <div className="setupModalHeaderActions">
+            <button type="button" className="primary" disabled={busy || loading} onClick={() => void handleSave()}>
+              Save
+            </button>
+            <button type="button" className="ghost" disabled={busy} onClick={onClose} aria-label="Close setup">
+              Close
+            </button>
+          </div>
         </div>
 
         {loading ? <p className="hint">Loading…</p> : null}
 
-        <section className="modalSection">
-          <h3>Plex Media Server</h3>
-          <label className="fieldLabel">
-            Base URL (required)
-            <input
-              type="url"
-              className="textInput"
-              placeholder="http://192.168.1.10:32400"
-              autoComplete="off"
-              value={plexUrl}
-              onChange={(e) => setPlexUrl(e.target.value)}
-            />
-          </label>
-          <p className="hint">
-            Effective URL:{" "}
-            <code>{plexUrlEffective || "(not set)"}</code>
-          </p>
-          <label className="checkboxRow slim">
-            <input type="checkbox" checked={plexSslVerify} onChange={(e) => setPlexSslVerify(e.target.checked)} />
-            Verify HTTPS certificates (disable for insecure / self-signed PMS HTTPS)
-          </label>
-        </section>
-
-        <section className="modalSection">
-          <h3>Plex account</h3>
-          <p>{authConnected ? `Connected as ${authUsername || "owner"}` : "Not connected"}</p>
-          <div className="modalButtonRow">
-            <button type="button" disabled={busy || loading || !authConnected} onClick={() => void testPlexServer()}>
-              Test Plex server
-            </button>
-            <button type="button" disabled={busy || loading || !hasBaseUrl} onClick={() => void connectPlex()}>
-              {authConnected ? "Reconnect Plex" : "Connect Plex"}
-            </button>
-          </div>
-          {!authConnected ? <p className="hint">Connect Plex first — the server test requires a linked account.</p> : null}
-        </section>
-
-        <section className="modalSection">
-          <h3>Speed-dial webhooks</h3>
-          <p className="hint">
-            LAN URL of this app for Home Assistant and other automations. Copied webhook links use this instead of the
-            public Cloudflare hostname.
-          </p>
-          <label className="checkboxRow slim">
-            <input
-              type="checkbox"
-              checked={webhooksEnabled}
-              onChange={(e) => setWebhooksEnabled(e.target.checked)}
-            />
-            Enable webhooks
-          </label>
-          <label className="checkboxRow slim">
-            <input
-              type="checkbox"
-              checked={webhookLinksHidden}
-              disabled={!webhooksEnabled}
-              onChange={(e) => setWebhookLinksHidden(e.target.checked)}
-            />
-            Hide webhook link icons on favorites
-          </label>
-          <label className="fieldLabel">
-            Webhook base URL (LAN)
-            <input
-              type="url"
-              className="textInput"
-              placeholder="http://192.168.1.50"
-              autoComplete="off"
-              disabled={!webhooksEnabled}
-              value={webhookBaseUrl}
-              onChange={(e) => setWebhookBaseUrl(e.target.value)}
-            />
-          </label>
-          {!webhooksEnabled ? (
-            <p className="hint">Webhook URLs return forbidden until enabled. Link icons stay hidden.</p>
-          ) : null}
-        </section>
-
-        <section className="modalSection">
-          <h3>Sonos discovery</h3>
-          <p className="hint">Use comma-separated IPs of a speaker if speakers cannot be detected.</p>
-          <label className="fieldLabel">
-            Seed IPs
-            <input
-              type="text"
-              className="textInput"
-              placeholder="192.168.1.20, 192.168.1.21"
-              value={sonosSeeds}
-              onChange={(e) => setSonosSeeds(e.target.value)}
-            />
-          </label>
-          <label className="fieldLabel">
-            Discover timeout (seconds)
-            <input
-              type="number"
-              className="textInput narrow"
-              min={2}
-              max={60}
-              value={sonosTimeout}
-              onChange={(e) => setSonosTimeout(Number(e.target.value) || 10)}
-            />
-          </label>
-          <label className="checkboxRow slim">
-            <input type="checkbox" checked={sonosScan} onChange={(e) => setSonosScan(e.target.checked)} />
-            Allow network scan (SSDP fallback)
-          </label>
-          <label className="fieldLabel">
-            Interface address (optional)
-            <input type="text" className="textInput" placeholder="192.168.1.50" value={sonosIface} onChange={(e) => setSonosIface(e.target.value)} />
-          </label>
-        </section>
-
-        <section className="modalSection">
-          <h3>Plexamp players</h3>
-          <p className="hint">
-            Hostname or IP of each Plexamp player. Route its analog output through Sonos line-in, a Pioneer AV receiver, or
-            none (Plexamp only).
-          </p>
-          <div className="inlineGrow">
-            <label className="fieldLabel mb0 stretch">
-              Add player
-              <input
-                type="text"
-                className="textInput"
-                placeholder="192.168.1.5 or http://kitchen.local"
-                value={playerInput}
-                onChange={(e) => {
-                  setPlayerInput(e.target.value);
-                  setPlayerNameHint("");
-                }}
-              />
-            </label>
-            <label className="fieldLabel mb0 stretch">
-              Display name (optional)
-              <input
-                type="text"
-                className="textInput"
-                placeholder="Kitchen Plexamp"
-                value={playerNameHint}
-                onChange={(e) => setPlayerNameHint(e.target.value)}
-              />
-            </label>
-            <button type="button" className="nowrap" disabled={busy} onClick={() => void addPlayer()}>
-              Add
-            </button>
-          </div>
-          <PlayerAudioRouteFields
-            idPrefix="new-player"
-            value={newPlayerAudioOutput}
-            onChange={setNewPlayerAudioOutput}
-            sonosSpeakers={sonosSpeakers}
-            disabled={busy}
-          />
-          <ul className="playerList">
-            {players.map((p) => (
-              <li key={p.id}>
-                <span className="playerMeta">
-                  <strong>{p.name}</strong>
-                  <span className="dim">
-                    {" "}
-                    {p.host}
-                  </span>
-                </span>
-                <div className="playerRouteCell">
-                  <PlayerAudioRouteFields
-                    idPrefix={`player-${p.id}`}
-                    value={playerAudioDrafts[p.id] ?? audioOutputFromPlayer(p)}
-                    onChange={(next) => setPlayerAudioDraft(p.id, next)}
-                    onCommit={(next) => void commitPlayerAudioOutput(p.id, next)}
-                    sonosSpeakers={sonosSpeakers}
-                    disabled={busy}
-                    onTest={() => testPlayerAudioOutput(p.id)}
-                    testBusy={testPlayerId === p.id}
-                  />
-                </div>
-                <button type="button" className="danger nowrap" disabled={busy} onClick={() => void removePlayer(p.id)}>
-                  Delete
-                </button>
-              </li>
+        <div className="setupModalBody">
+          <nav className="setupModalNav" aria-label="Setup sections">
+            {SETUP_SECTIONS.map((section) => (
+              <button
+                key={section.id}
+                type="button"
+                className={`setupModalNavItem${activeSection === section.id ? " isActive" : ""}`}
+                aria-current={activeSection === section.id ? "page" : undefined}
+                disabled={busy || loading}
+                onClick={() => setActiveSection(section.id)}
+              >
+                {section.label}
+              </button>
             ))}
-          </ul>
-          {players.length === 0 ? <p className="hint">No players yet.</p> : null}
-        </section>
+          </nav>
 
-        <div className="modalActions">
-          <button type="button" className="primary" disabled={busy || loading} onClick={() => void saveSetup()}>
-            Save connection settings
-          </button>
+          <div className="setupModalContent">
+            {activeSection === "plex" ? (
+              <>
+                <section className="setupModalPage" aria-labelledby="setup-plex-title">
+                  <h3 id="setup-plex-title">Plex Media Server</h3>
+                  <p className="hint setupModalIntro">
+                    Link your Plex account and point the app at your Plex Media Server on the LAN.
+                  </p>
+                  <label className="fieldLabel">
+                    Base URL (required)
+                    <input
+                      type="url"
+                      className="textInput"
+                      placeholder="http://192.168.1.10:32400"
+                      autoComplete="off"
+                      value={plexUrl}
+                      onChange={(e) => setPlexUrl(e.target.value)}
+                    />
+                  </label>
+                  <label className="checkboxRow slim">
+                    <input type="checkbox" checked={plexSslVerify} onChange={(e) => setPlexSslVerify(e.target.checked)} />
+                    Verify HTTPS certificates (disable for insecure / self-signed PMS HTTPS)
+                  </label>
+                </section>
+
+                <section className="setupModalPage setupModalPageSpaced" aria-labelledby="setup-plex-account-title">
+                  <h3 id="setup-plex-account-title">Plex account</h3>
+                  <p>{authConnected ? `Connected as ${authUsername || "owner"}` : "Not connected"}</p>
+                  <div className="modalButtonRow">
+                    <button type="button" disabled={busy || loading || !authConnected} onClick={() => void testPlexServer()}>
+                      Test Plex server
+                    </button>
+                    <button type="button" disabled={busy || loading || !hasBaseUrl} onClick={() => void connectPlex()}>
+                      {authConnected ? "Reconnect Plex" : "Connect Plex"}
+                    </button>
+                  </div>
+                  {!authConnected ? (
+                    <p className="hint">Connect Plex first — the server test requires a linked account.</p>
+                  ) : null}
+                </section>
+              </>
+            ) : null}
+
+            {activeSection === "sonos" ? (
+              <section className="setupModalPage" aria-labelledby="setup-sonos-title">
+                <h3 id="setup-sonos-title">Sonos discovery</h3>
+                <p className="hint setupModalIntro">
+                  Help the app find speakers on your network. Use seed IPs when SSDP discovery is unreliable.
+                </p>
+                <label className="fieldLabel">
+                  Seed IPs
+                  <input
+                    type="text"
+                    className="textInput"
+                    placeholder="192.168.1.20, 192.168.1.21"
+                    value={sonosSeeds}
+                    onChange={(e) => setSonosSeeds(e.target.value)}
+                  />
+                </label>
+                <label className="fieldLabel">
+                  Discover timeout (seconds)
+                  <input
+                    type="number"
+                    className="textInput narrow"
+                    min={2}
+                    max={60}
+                    value={sonosTimeout}
+                    onChange={(e) => setSonosTimeout(Number(e.target.value) || 10)}
+                  />
+                </label>
+                <label className="checkboxRow slim">
+                  <input type="checkbox" checked={sonosScan} onChange={(e) => setSonosScan(e.target.checked)} />
+                  Allow network scan (SSDP fallback)
+                </label>
+                <label className="fieldLabel">
+                  Interface address (optional)
+                  <input
+                    type="text"
+                    className="textInput"
+                    placeholder="192.168.1.50"
+                    value={sonosIface}
+                    onChange={(e) => setSonosIface(e.target.value)}
+                  />
+                </label>
+              </section>
+            ) : null}
+
+            {activeSection === "plexamp" ? (
+              <section className="setupModalPage" aria-labelledby="setup-plexamp-title">
+                <h3 id="setup-plexamp-title">Plexamp players</h3>
+                <p className="hint setupModalIntro">
+                  Hostname or IP of each Plexamp player. Route its analog output through Sonos line-in, a Pioneer AV
+                  receiver, or none (Plexamp only).
+                </p>
+                <div className="inlineGrow">
+                  <label className="fieldLabel mb0 stretch">
+                    Add player
+                    <input
+                      type="text"
+                      className="textInput"
+                      placeholder="192.168.1.5 or http://kitchen.local"
+                      value={playerInput}
+                      onChange={(e) => {
+                        setPlayerInput(e.target.value);
+                        setPlayerNameHint("");
+                      }}
+                    />
+                  </label>
+                  <label className="fieldLabel mb0 stretch">
+                    Display name (optional)
+                    <input
+                      type="text"
+                      className="textInput"
+                      placeholder="Kitchen Plexamp"
+                      value={playerNameHint}
+                      onChange={(e) => setPlayerNameHint(e.target.value)}
+                    />
+                  </label>
+                  <button type="button" className="nowrap" disabled={busy} onClick={() => void addPlayer()}>
+                    Add
+                  </button>
+                </div>
+                <PlayerAudioRouteFields
+                  idPrefix="new-player"
+                  value={newPlayerAudioOutput}
+                  onChange={setNewPlayerAudioOutput}
+                  sonosSpeakers={sonosSpeakers}
+                  disabled={busy}
+                />
+                <ul className="playerList">
+                  {players.map((p) => (
+                    <li key={p.id}>
+                      <span className="playerMeta">
+                        <strong>{p.name}</strong>
+                        <button
+                          type="button"
+                          className="danger nowrap"
+                          disabled={busy}
+                          onClick={() => setPlayerDeleteTarget({ id: p.id, name: p.name })}
+                        >
+                          Delete
+                        </button>
+                      </span>
+                      <div className="playerRouteCell">
+                        <PlayerAudioRouteFields
+                          idPrefix={`player-${p.id}`}
+                          value={playerAudioDrafts[p.id] ?? audioOutputFromPlayer(p)}
+                          onChange={(next) => setPlayerAudioDraft(p.id, next)}
+                          onCommit={(next) => void commitPlayerAudioOutput(p.id, next)}
+                          sonosSpeakers={sonosSpeakers}
+                          disabled={busy}
+                          onTest={() => testPlayerAudioOutput(p.id)}
+                          testBusy={testPlayerId === p.id}
+                        />
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+                {players.length === 0 ? <p className="hint">No players yet.</p> : null}
+              </section>
+            ) : null}
+
+            {activeSection === "webhooks" ? (
+              <section className="setupModalPage" aria-labelledby="setup-webhooks-title">
+                <h3 id="setup-webhooks-title">Speed-dial webhooks</h3>
+                <p className="hint setupModalIntro">
+                  LAN URL of this app for local LAN friendly links.
+                </p>
+                <label className="checkboxRow slim">
+                  <input
+                    type="checkbox"
+                    checked={webhooksEnabled}
+                    onChange={(e) => setWebhooksEnabled(e.target.checked)}
+                  />
+                  Enable webhooks
+                </label>
+                <label className="checkboxRow slim">
+                  <input
+                    type="checkbox"
+                    checked={webhookLinksHidden}
+                    disabled={!webhooksEnabled}
+                    onChange={(e) => setWebhookLinksHidden(e.target.checked)}
+                  />
+                  Hide webhook link icons on favorites
+                </label>
+                <label className="fieldLabel">
+                  Webhook base URL (LAN)
+                  <input
+                    type="url"
+                    className="textInput"
+                    placeholder="http://192.168.1.50"
+                    autoComplete="off"
+                    disabled={!webhooksEnabled}
+                    value={webhookBaseUrl}
+                    onChange={(e) => setWebhookBaseUrl(e.target.value)}
+                  />
+                </label>
+                {!webhooksEnabled ? (
+                  <p className="hint">Webhook URLs return forbidden until enabled. Link icons stay hidden.</p>
+                ) : null}
+              </section>
+            ) : null}
+          </div>
         </div>
+
         <footer className="modalCreditsFooter">
-          <a href="#/credits" className="creditsLink" onClick={() => onClose()}>
+          <a
+            href="#/credits"
+            className="creditsLink"
+            onClick={(e) => {
+              e.preventDefault();
+              onClose();
+              window.location.hash = "#/credits";
+            }}
+          >
             Credits
           </a>
         </footer>
       </div>
     </div>
+    <ConfirmDialog
+      open={playerDeleteTarget !== null}
+      title="Are you sure?"
+      message={
+        playerDeleteTarget
+          ? `Remove Plexamp player “${playerDeleteTarget.name}”?`
+          : ""
+      }
+      confirmLabel="Delete"
+      destructive
+      onCancel={() => setPlayerDeleteTarget(null)}
+      onConfirm={() => {
+        if (!playerDeleteTarget) return;
+        const { id } = playerDeleteTarget;
+        setPlayerDeleteTarget(null);
+        void removePlayer(id);
+      }}
+    />
+    </>
   );
 }

@@ -184,10 +184,16 @@ button.speedDialFilterPill--selected {
   color: #fff;
 }
 
+button.speedDialFilterPill:hover:not(:disabled) {
+  border-color: #9ca3af;
+  box-shadow: 0 2px 8px rgba(17, 24, 39, 0.1);
+}
+
 button.speedDialFilterPill--selected:hover {
   border-color: #1d4ed8;
   background: #1d4ed8;
   color: #fff;
+  box-shadow: 0 3px 10px rgba(37, 99, 235, 0.32);
 }
 
 .speedDialGrid {
@@ -250,6 +256,11 @@ button.favoriteDragHandle:active {
   cursor: grabbing;
 }
 
+button.favoriteDragHandle:hover:not(:disabled) {
+  border-color: #9ca3af;
+  box-shadow: 0 2px 7px rgba(17, 24, 39, 0.12);
+}
+
 button.favoriteDragHandle .favoriteDragIcon {
   width: 0.8rem;
   font-size: 0.75rem;
@@ -266,8 +277,9 @@ button.favoriteDragHandle .favoriteDragIcon {
   background: #fafafa;
 }
 
-button.favoritePlay:hover {
+button.favoritePlay:hover:not(:disabled) {
   background: transparent;
+  box-shadow: none;
 }
 
 .favoriteArt {
@@ -382,10 +394,11 @@ button.favoriteEditPlayTargetBtn {
   overflow: hidden;
 }
 
-button.favoriteEditPlayTargetBtn:hover {
+button.favoriteEditPlayTargetBtn:hover:not(:disabled) {
   border-color: #93c5fd;
   color: #1d4ed8;
   background: #f8fafc;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.14);
 }
 
 button.favoriteEditPlayTargetBtn:focus-visible {
@@ -450,8 +463,9 @@ button.favoriteDelete .mediaCtrlIcon {
   font-size: 0.75rem;
 }
 
-button.favoriteDelete:hover {
+button.favoriteDelete:hover:not(:disabled) {
   background: #fef2f2;
+  box-shadow: 0 3px 9px rgba(176, 0, 32, 0.22);
 }
 
 button.favoriteDelete:focus-visible {
@@ -478,9 +492,10 @@ button.favoriteWebhookLink {
   cursor: pointer;
 }
 
-button.favoriteWebhookLink:hover {
+button.favoriteWebhookLink:hover:not(:disabled) {
   color: #2563eb;
   background: #eff6ff;
+  box-shadow: 0 3px 9px rgba(37, 99, 235, 0.18);
 }
 
 button.favoriteWebhookLink:focus-visible {
@@ -1095,21 +1110,60 @@ button {
   border-radius: 10px;
   border: 1px solid #b0b0b0;
   background: #f5f5f5;
+  cursor: pointer;
+  box-shadow: none;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    color 0.15s ease;
+}
+
+button:hover:not(:disabled) {
+  border-color: #9ca3af;
+  background: #ebebeb;
+  box-shadow: 0 3px 10px rgba(17, 24, 39, 0.12);
+}
+
+button:disabled {
+  cursor: not-allowed;
+  box-shadow: none;
 }
 
 button.active {
   background: #111827;
   color: #fff;
+  border-color: #111827;
+}
+
+button.active:hover:not(:disabled) {
+  background: #1f2937;
+  border-color: #1f2937;
+  box-shadow: 0 4px 12px rgba(17, 24, 39, 0.28);
 }
 
 button.primary {
   background: #2d6cdf;
   color: #fff;
+  border-color: #2558b8;
+}
+
+button.primary:hover:not(:disabled) {
+  background: #2558b8;
+  border-color: #1d4ed8;
+  box-shadow: 0 4px 12px rgba(45, 108, 223, 0.35);
 }
 
 button.danger {
   background: #fff;
   color: #b00020;
+  border-color: #e8a0a8;
+}
+
+button.danger:hover:not(:disabled) {
+  background: #fef2f2;
+  border-color: #f87171;
+  box-shadow: 0 3px 10px rgba(176, 0, 32, 0.18);
 }
 
 select {
@@ -1136,9 +1190,10 @@ select {
   color: #fff;
 }
 
-.stickyActions button.primary:hover {
+.stickyActions button.primary:hover:not(:disabled) {
   background: #15803d;
   border-color: #166534;
+  box-shadow: 0 4px 12px rgba(22, 163, 74, 0.32);
 }
 
 .sticky {
@@ -1171,6 +1226,16 @@ button.iconBtn.primary {
   background: #2d6cdf;
   color: #fff;
   border-color: #2558b8;
+}
+
+button.iconBtn:hover:not(:disabled) {
+  box-shadow: 0 3px 10px rgba(17, 24, 39, 0.14);
+}
+
+button.iconBtn.primary:hover:not(:disabled) {
+  background: #2558b8;
+  border-color: #1d4ed8;
+  box-shadow: 0 4px 12px rgba(45, 108, 223, 0.35);
 }
 
 .mediaCtrlIcon {
@@ -1260,6 +1325,13 @@ button.smallBtn {
   cursor: pointer;
 }
 
+button.ghost:hover:not(:disabled),
+button.smallBtn:hover:not(:disabled) {
+  background: #f9fafb;
+  border-color: #9ca3af;
+  box-shadow: 0 2px 8px rgba(17, 24, 39, 0.08);
+}
+
 button.smallBtn {
   font-size: 0.85rem;
   padding: 0.35rem 0.55rem;
@@ -1287,6 +1359,77 @@ button.smallBtn {
   padding: 1rem 1.1rem 1.25rem;
   margin: 2rem auto;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
+}
+
+.setupModalPanel {
+  max-width: 760px;
+}
+
+.setupModalHeaderActions {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-shrink: 0;
+}
+
+.setupModalBody {
+  display: grid;
+  grid-template-columns: 9.5rem minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+  margin-top: 0.35rem;
+}
+
+.setupModalNav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding-right: 0.85rem;
+  border-right: 1px solid #e5e7eb;
+}
+
+.setupModalNavItem {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 0.55rem 0.65rem;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: #374151;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+.setupModalNavItem:hover:not(:disabled) {
+  background: #f3f4f6;
+  box-shadow: 0 2px 8px rgba(17, 24, 39, 0.08);
+}
+
+.setupModalNavItem.isActive {
+  background: #eef2ff;
+  color: #1d4ed8;
+  font-weight: 600;
+}
+
+.setupModalContent {
+  min-width: 0;
+}
+
+.setupModalPage h3 {
+  margin: 0 0 0.45rem;
+  font-size: 1rem;
+}
+
+.setupModalPageSpaced {
+  margin-top: 1.15rem;
+  padding-top: 1.15rem;
+  border-top: 1px solid #e5e7eb;
+}
+
+.setupModalIntro {
+  margin-top: 0;
+  margin-bottom: 0.85rem;
 }
 
 .modalHeader {
@@ -1394,17 +1537,25 @@ button.confirmDialogBtn {
 
 .playerList {
   list-style: none;
-  margin: 0.5rem 0 0;
+  margin: 0.75rem 0 0;
   padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
 }
 
 .playerList li {
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 0.65rem;
-  padding: 0.65rem 0;
-  border-bottom: 1px solid #efefef;
+  gap: 0.75rem;
+  padding: 0 0 1.5rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.playerList li:last-child {
+  padding-bottom: 0;
+  border-bottom: none;
 }
 
 .playerList li .playerMeta {
@@ -1446,9 +1597,32 @@ button.confirmDialogBtn {
 
 .audioRoutePioneerFields {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.5rem 0.65rem;
-  align-items: end;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0.65rem 0.85rem;
+  align-items: start;
+}
+
+.audioRoutePioneerFields .fieldLabel {
+  min-width: 0;
+}
+
+.audioRoutePioneerHost {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.audioRoutePioneerInput {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.audioRoutePioneerCustom {
+  grid-column: 1 / -1;
+}
+
+.audioRoutePioneerTest {
+  grid-column: 1 / -1;
+  justify-self: start;
 }
 
 .audioRoutePioneerFields .hint {
@@ -1458,6 +1632,14 @@ button.confirmDialogBtn {
 @media (max-width: 520px) {
   .audioRoutePioneerFields {
     grid-template-columns: 1fr;
+  }
+
+  .audioRoutePioneerHost,
+  .audioRoutePioneerInput,
+  .audioRoutePioneerCustom,
+  .audioRoutePioneerTest {
+    grid-column: 1;
+    grid-row: auto;
   }
 }
 
@@ -1617,6 +1799,29 @@ button.nowrap {
 @media (min-width: 480px) {
   .modalPanel {
     margin-top: min(15vh, 4rem);
+  }
+}
+
+@media (max-width: 640px) {
+  .setupModalBody {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+
+  .setupModalNav {
+    flex-direction: row;
+    flex-wrap: wrap;
+    padding-right: 0;
+    padding-bottom: 0.75rem;
+    border-right: none;
+    border-bottom: 1px solid #e5e7eb;
+  }
+
+  .setupModalNavItem {
+    width: auto;
+    flex: 1 1 calc(50% - 0.2rem);
+    min-width: 7rem;
+    text-align: center;
   }
 }
 
