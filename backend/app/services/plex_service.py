@@ -579,30 +579,28 @@ class PlexService:
             random.shuffle(pl)
             return pl
 
-        if family == "album":
-            album_limit = 30
+        if family in ("album", "artist", "track"):
+            rail_limit = 30
+            most_played_lookback = "365d"
 
-            def album_rows(section: MusicSection, sort: str) -> list:
-                return self._try_section_search(section, libtype, album_limit + 10, sort=sort)
+            def sorted_rows(section: MusicSection, sort: str) -> list:
+                return self._try_section_search(section, libtype, rail_limit + 10, sort=sort)
+
+            def most_played_rows(section: MusicSection) -> list:
+                return self._try_section_search(
+                    section,
+                    libtype,
+                    rail_limit + 10,
+                    sort="viewCount:desc",
+                    filters={"lastViewedAt>>": most_played_lookback},
+                )
 
             return MediaSuggestionsResponse(
-                recently_played=merge_unique(lambda s: album_rows(s, "lastViewedAt:desc"), album_limit),
-                most_played=merge_unique(lambda s: album_rows(s, "viewCount:desc"), album_limit),
-                recently_added=merge_unique(lambda s: album_rows(s, "addedAt:desc"), album_limit),
-                random=merge_unique(random_for_section, album_limit),
+                recently_played=merge_unique(lambda s: sorted_rows(s, "lastViewedAt:desc"), rail_limit),
+                most_played=merge_unique(most_played_rows, rail_limit),
+                recently_added=merge_unique(lambda s: sorted_rows(s, "addedAt:desc"), rail_limit),
+                random=merge_unique(random_for_section, rail_limit),
             )
-
-        def most_for_section(section: MusicSection) -> list:
-            for sort in ("viewCount:desc", "lastViewedAt:desc", "lastRatedAt:desc", "addedAt:desc"):
-                rows = self._try_section_search(section, libtype, 20, sort=sort)
-                if rows:
-                    return rows
-            return self._try_section_search(section, libtype, 20, sort="titleSort")
-
-        return MediaSuggestionsResponse(
-            most_played=merge_unique(most_for_section, 10),
-            random=merge_unique(random_for_section, 10),
-        )
 
     def thumb_path_for_item(self, rating_key: int, token: str, conn: PlexConn) -> str | None:
         """Return a thumb URL fragment or absolute URL suitable for fetch_thumb_bytes."""

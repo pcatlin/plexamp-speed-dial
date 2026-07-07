@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, API_BASE, MediaItem, type MediaSuggestions } from "./api";
-import { AlbumSuggestionRails } from "./AlbumSuggestionRails";
+import { MediaSuggestionRails, mediaSuggestionRailsForFamily } from "./MediaSuggestionRails";
 import { IconChevronDown, IconShuffle } from "./icons";
 import { ARTIST_ORDER_OPTIONS, artistOrderModeDisabledWithRadio, type ArtistOrderMode } from "./artistOrder";
 import {
@@ -105,7 +105,6 @@ export function PickMusicSection({
   const [searchLoading, setSearchLoading] = useState(false);
   const [suggestions, setSuggestions] = useState<MediaSuggestions | null>(null);
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
-  const [suggestionSelect, setSuggestionSelect] = useState("");
   const [previewTracks, setPreviewTracks] = useState<MediaItem[]>([]);
   const [previewTracksLoading, setPreviewTracksLoading] = useState(false);
 
@@ -250,23 +249,13 @@ export function PickMusicSection({
     };
   }, [authConnected, pickTab, selectedMedia?.id, selectedMedia?.type, onToast]);
 
-  const allSuggestionItems = useMemo(() => {
-    if (!suggestions) return [] as MediaItem[];
-    return [...suggestions.most_played, ...suggestions.random];
-  }, [suggestions]);
-
-  const pickFromSuggestionSelect = useCallback(
-    (value: string) => {
-      setSuggestionSelect(value);
-      if (!value) return;
-      const hit = allSuggestionItems.find((x) => x.id === value);
-      if (hit) {
-        onSelectMedia(hit);
-        setSearchQuery("");
-        setSearchHits([]);
-      }
+  const pickFromSuggestionRail = useCallback(
+    (item: MediaItem) => {
+      onSelectMedia(item);
+      setSearchQuery("");
+      setSearchHits([]);
     },
-    [allSuggestionItems, onSelectMedia],
+    [onSelectMedia],
   );
 
   const shuffleRandomAlbum = useCallback(async () => {
@@ -277,7 +266,6 @@ export function PickMusicSection({
     try {
       const album = await api.randomAlbum(selectedCollectionId);
       onSelectMedia(album);
-      setSuggestionSelect("");
       setSearchQuery("");
       setSearchHits([]);
       onToast(`Random: ${album.title}`);
@@ -326,7 +314,6 @@ export function PickMusicSection({
             className={pickTab === tab.id ? "active" : ""}
             onClick={() => {
               onPickTab(tab.id);
-              setSuggestionSelect("");
               setSearchQuery("");
               setSearchHits([]);
             }}
@@ -424,7 +411,6 @@ export function PickMusicSection({
             value={searchQuery}
             onChange={(e) => {
               setSearchQuery(e.target.value);
-              setSuggestionSelect("");
             }}
           />
           {searchLoading ? <p className="hint subtle">Searching…</p> : null}
@@ -437,7 +423,6 @@ export function PickMusicSection({
                     className="searchHitBtn"
                     onClick={() => {
                       onSelectMedia(item);
-                      setSuggestionSelect("");
                     }}
                   >
                     <span className="searchHitTitle">{item.title}</span>
@@ -448,56 +433,14 @@ export function PickMusicSection({
             </ul>
           ) : null}
 
-          {pickTab === "album" ? (
-            <AlbumSuggestionRails
-              recentlyPlayed={suggestions?.recently_played ?? []}
-              mostPlayed={suggestions?.most_played ?? []}
-              recentlyAdded={suggestions?.recently_added ?? []}
-              random={suggestions?.random ?? []}
-              selectedId={selectedMedia?.type === "album" ? selectedMedia.id : null}
-              loading={suggestionsLoading}
-              onSelect={(item) => {
-                onSelectMedia(item);
-                setSuggestionSelect("");
-                setSearchQuery("");
-                setSearchHits([]);
-              }}
-            />
-          ) : (
-            <>
-              <label className="fieldLabel" htmlFor="pick-suggestions">
-                Suggestions
-              </label>
-              <select
-                id="pick-suggestions"
-                className="suggestionSelect"
-                value={suggestionSelect}
-                onChange={(e) => pickFromSuggestionSelect(e.target.value)}
-              >
-                <option value="">Choose from most played or random…</option>
-                {suggestions && suggestions.most_played.length > 0 ? (
-                  <optgroup label="Most played">
-                    {suggestions.most_played.map((item) => (
-                      <option key={`m-${item.id}`} value={item.id}>
-                        {item.title}
-                        {item.subtitle ? ` — ${item.subtitle}` : ""}
-                      </option>
-                    ))}
-                  </optgroup>
-                ) : null}
-                {suggestions && suggestions.random.length > 0 ? (
-                  <optgroup label="Random">
-                    {suggestions.random.map((item) => (
-                      <option key={`r-${item.id}`} value={item.id}>
-                        {item.title}
-                        {item.subtitle ? ` — ${item.subtitle}` : ""}
-                      </option>
-                    ))}
-                  </optgroup>
-                ) : null}
-              </select>
-            </>
-          )}
+          <MediaSuggestionRails
+            rails={mediaSuggestionRailsForFamily(suggestionFamily, suggestions)}
+            selectedId={selectedMedia?.type === suggestionFamily ? selectedMedia.id : null}
+            loading={suggestionsLoading}
+            loadingMessage={`Loading ${suggestionFamily} suggestions…`}
+            emptyMessage={`No ${suggestionFamily} suggestions from Plex yet.`}
+            onSelect={pickFromSuggestionRail}
+          />
         </div>
       ) : null}
 
