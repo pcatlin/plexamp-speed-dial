@@ -34,7 +34,7 @@ class FakePMS:
 
 
 class FakePlexService:
-    def connect_server(self, token: str, conn=None) -> FakePMS:  # noqa: ANN001
+    def connect_server(self, token: str, conn=None, **kwargs) -> FakePMS:  # noqa: ANN001
         assert token == "dummy-token"
         return FakePMS()
 
@@ -264,7 +264,7 @@ class FakeArtistPMS:
 
 
 class FakeArtistPlexService:
-    def connect_server(self, token: str, conn=None) -> FakeArtistPMS:  # noqa: ANN001
+    def connect_server(self, token: str, conn=None, **kwargs) -> FakeArtistPMS:  # noqa: ANN001
         assert token == "dummy-token"
         return FakeArtistPMS()
 
@@ -356,7 +356,14 @@ def test_playback_artist_library_uses_metadata_uri(db_session, monkeypatch):
 
     service = PlaybackService(plex_service=FakeArtistPlexService(), sonos_service=FakeSonosService())
     result = service.play(
-        PlayRequest(media_type="artist", media_id="555", player_id=player.id, speaker_ids=[], artist_radio=False),
+        PlayRequest(
+            media_type="artist",
+            media_id="555",
+            player_id=player.id,
+            speaker_ids=[],
+            artist_radio=False,
+            artist_order_mode="shuffle",
+        ),
         db_session,
         auth_token="dummy-token",
     )
@@ -389,7 +396,7 @@ class FakeTrackPMS:
 
 
 class FakeTrackPlexService:
-    def connect_server(self, token: str, conn=None) -> FakeTrackPMS:  # noqa: ANN001
+    def connect_server(self, token: str, conn=None, **kwargs) -> FakeTrackPMS:  # noqa: ANN001
         assert token == "dummy-token"
         return FakeTrackPMS()
 
@@ -564,7 +571,7 @@ def test_playback_album_ignores_shuffle(db_session, monkeypatch):
             return FakeAlbumPMS._Al()
 
     class FakeAlbumPlexService:
-        def connect_server(self, token: str, conn=None) -> FakeAlbumPMS:  # noqa: ANN001
+        def connect_server(self, token: str, conn=None, **kwargs) -> FakeAlbumPMS:  # noqa: ANN001
             return FakeAlbumPMS()
 
     service = PlaybackService(plex_service=FakeAlbumPlexService(), sonos_service=FakeSonosService())

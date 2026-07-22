@@ -69,7 +69,7 @@ def test_player_create_and_play_flow(client, db_session, monkeypatch):
             return FakePMS.Album
 
     class FakePlex:
-        def connect_server(self, token: str, conn=None):  # noqa: ANN003
+        def connect_server(self, token: str, conn=None, **kwargs):  # noqa: ANN003
             return FakePMS()
 
     import app.api.routes as routes_module
@@ -296,7 +296,7 @@ def test_speed_dial_patch_player_to_pioneer_clears_sonos_speakers(client):
             "host": "den.local",
             "port": 32500,
             "is_active": True,
-            "audio_output": {"kind": "pioneer", "config": {"host": "10.0.0.9"}},
+            "audio_output": {"kind": "pioneer", "config": {"host": "10.0.0.9", "input_code": "23"}},
         },
     ).json()["id"]
 
