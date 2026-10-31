@@ -1402,6 +1402,17 @@ button.iconBtn.primary:hover:not(:disabled) {
   line-height: 1;
 }
 
+.sonosVolumeLevel {
+  margin: 0.15rem 0 0.45rem;
+  font-size: 0.82rem;
+  font-weight: 650;
+  line-height: 1.2;
+  color: #111827;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+}
+
 .appToast {
   position: fixed;
   top: 0;
@@ -2059,6 +2070,10 @@ button.nowrap {
 
   .volStepLabel {
     font-size: 1.35rem;
+  }
+
+  .sonosVolumeLevel {
+    font-size: 1rem;
   }
 
   .speedDialGrid {

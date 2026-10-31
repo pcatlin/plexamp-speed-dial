@@ -285,6 +285,16 @@ function App() {
     return `${speakerPart} · ${playerPart}`;
   }, [hasPlayTargetSelection, speakers, selectedSpeakers, selectedPlayer, selectedPlayerName, outputKind]);
 
+  const selectedSonosVolumePercent = useMemo(() => {
+    if (selectedSpeakers.length === 0) return null;
+    const levels = selectedSpeakers.map((id) => {
+      const speaker = speakers.find((row) => row.id === id);
+      if (speaker?.volume != null) return speaker.volume;
+      return sonosVolumes[id] ?? DEFAULT_INITIAL_VOLUME;
+    });
+    return Math.round(levels.reduce((sum, level) => sum + level, 0) / levels.length);
+  }, [selectedSpeakers, speakers, sonosVolumes]);
+
   const reloadCollections = useCallback(async (connected: boolean) => {
     if (!connected) {
       setCollections([]);
@@ -550,7 +560,11 @@ function App() {
   };
 
   const setSonosSpeakerVolume = (speakerId: string, volume: number) => {
-    setSonosVolumes((current) => ({ ...current, [speakerId]: volume }));
+    const clamped = Math.max(0, Math.min(100, Math.round(volume)));
+    setSonosVolumes((current) => ({ ...current, [speakerId]: clamped }));
+    setSpeakers((current) =>
+      current.map((speaker) => (speaker.id === speakerId ? { ...speaker, volume: clamped } : speaker)),
+    );
   };
 
   const initialVolumesForPlay = useCallback(
@@ -738,8 +752,17 @@ function App() {
       showToast("Select at least one Sonos speaker to change volume.");
       return;
     }
+    const selected = new Set(selectedSpeakers);
+    setSpeakers((current) =>
+      current.map((speaker) => {
+        if (!selected.has(speaker.id)) return speaker;
+        const base = speaker.volume ?? sonosVolumes[speaker.id] ?? DEFAULT_INITIAL_VOLUME;
+        return { ...speaker, volume: Math.max(0, Math.min(100, base + delta)) };
+      }),
+    );
     const result = await api.sonosVolumeAdjust(selectedSpeakers, delta);
     showToast(result.details);
+    void reloadSpeakersOnly();
   };
 
   const patchSpeedDialFavorite = async (
@@ -1265,6 +1288,19 @@ function App() {
                 onOpen: openSonosApp,
               }}
             />
+            {selectedSonosVolumePercent != null ? (
+              <div
+                className="sonosVolumeLevel"
+                aria-live="polite"
+                title={
+                  selectedSpeakers.length > 1
+                    ? "Average volume of selected speakers"
+                    : "Selected speaker volume"
+                }
+              >
+                {selectedSonosVolumePercent}%
+              </div>
+            ) : null}
             <div className="mediaToolbar mediaToolbarStack" role="group" aria-label="Sonos selected speakers">
               <button
                 type="button"
