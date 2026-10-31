@@ -1300,6 +1300,32 @@ components:
           title: Recently Added
       type: object
       title: MediaSuggestionsResponse
+    NowPlayingTrack:
+      properties:
+        title:
+          type: string
+          title: Title
+        artist:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Artist
+        album:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Album
+        rating_key:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Rating Key
+          description: Plex rating key when known (used for cover art).
+      type: object
+      required:
+      - title
+      title: NowPlayingTrack
+      description: Currently playing track for the selected companion player.
     PlayRequest:
       properties:
         media_type:
@@ -1402,6 +1428,11 @@ components:
           title: State
           description: Raw state string when available (e.g. Sonos transport or Plex
             timeline).
+        now_playing:
+          anyOf:
+          - $ref: '#/components/schemas/NowPlayingTrack'
+          - type: 'null'
+          description: Track metadata for the selected player when available.
         error:
           anyOf:
           - type: string

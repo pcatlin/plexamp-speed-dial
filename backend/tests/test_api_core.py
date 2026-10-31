@@ -427,6 +427,7 @@ def test_plexamp_skip_next_happy_path(client, db_session, monkeypatch):
 
 def test_plexamp_playback_state_happy_path(client, db_session, monkeypatch):
     from app.models import PlexCredential
+    from app.services.plexamp_client import TimelineSnapshot
 
     db_session.add(PlexCredential(auth_token="stub-token", is_connected=True))
     db_session.commit()
@@ -436,7 +437,10 @@ def test_plexamp_playback_state_happy_path(client, db_session, monkeypatch):
         json={"name": "Amp", "host": "plexamp.local", "port": 32500, "is_active": True},
     ).json()["id"]
 
-    monkeypatch.setattr("app.services.playback_service.plexamp_timeline_state", lambda **kwargs: "playing")
+    monkeypatch.setattr(
+        "app.services.playback_service.plexamp_timeline_snapshot",
+        lambda **kwargs: TimelineSnapshot(state="playing", title="Track A", artist="Artist B", rating_key="9"),
+    )
 
     r = client.post("/api/v1/plexamp/playback-state", json={"player_id": player_id})
     assert r.status_code == 200
@@ -444,6 +448,8 @@ def test_plexamp_playback_state_happy_path(client, db_session, monkeypatch):
     assert body["ok"] is True
     assert body["playing"] is True
     assert body["state"] == "playing"
+    assert body["now_playing"]["title"] == "Track A"
+    assert body["now_playing"]["artist"] == "Artist B"
 
 
 def test_speed_dial_play_by_id(client, db_session, monkeypatch):

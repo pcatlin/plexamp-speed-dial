@@ -45,6 +45,9 @@
   border-radius: 10px;
   background: linear-gradient(180deg, #eef0f4 0%, #dfe3ea 100%);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75), 0 1px 2px rgba(0, 0, 0, 0.06);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
 }
 
 .controlFrameset legend {
@@ -97,7 +100,59 @@
   justify-content: center;
 }
 
+.nowPlaying {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin: 0.15rem 0 0.45rem;
+  min-width: 0;
+}
+
+.nowPlayingArt {
+  flex: 0 0 2.6rem;
+  width: 2.6rem;
+  height: 2.6rem;
+  border-radius: 6px;
+  object-fit: cover;
+  background: #d1d5db;
+  display: block;
+}
+
+.nowPlayingArtPlaceholder {
+  border: 1px solid #c9ced6;
+}
+
+.nowPlayingText {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.nowPlayingTitle {
+  font-size: 0.82rem;
+  font-weight: 650;
+  color: #111827;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nowPlayingArtist,
+.nowPlayingAlbum {
+  font-size: 0.72rem;
+  color: #4b5563;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nowPlayingAlbum {
+  color: #6b7280;
+}
+
 .controlRail .mediaToolbar {
+  margin-top: auto;
   margin-bottom: 0;
   gap: 0.35rem;
 }

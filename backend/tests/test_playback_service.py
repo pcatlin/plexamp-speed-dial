@@ -230,18 +230,33 @@ def test_playback_sonos_playback_state_ok(db_session):
 
 
 def test_playback_plexamp_playback_state_ok(db_session, monkeypatch):
+    from app.services.plexamp_client import TimelineSnapshot
+
     player = PlexampPlayer(name="Kitchen", host="plexamp.local", port=32500, is_active=True)
     db_session.add(player)
     db_session.commit()
     db_session.refresh(player)
 
-    monkeypatch.setattr("app.services.playback_service.plexamp_timeline_state", lambda **kwargs: "paused")
+    monkeypatch.setattr(
+        "app.services.playback_service.plexamp_timeline_snapshot",
+        lambda **kwargs: TimelineSnapshot(
+            state="paused",
+            title="Weird Fishes",
+            artist="Radiohead",
+            album="In Rainbows",
+            rating_key="555",
+        ),
+    )
 
     service = PlaybackService(plex_service=FakePlexService(), sonos_service=FakeSonosService())
     r = service.plexamp_playback_state(player.id, db_session, auth_token="dummy-token")
     assert r.ok is True
     assert r.playing is False
     assert r.state == "paused"
+    assert r.now_playing is not None
+    assert r.now_playing.title == "Weird Fishes"
+    assert r.now_playing.artist == "Radiohead"
+    assert r.now_playing.rating_key == "555"
 
 
 class FakeArtistPMS:

@@ -617,6 +617,73 @@ class PlexService:
                     return s
         return None
 
+    def now_playing_for_player(
+        self,
+        token: str,
+        conn: PlexConn,
+        *,
+        player_name: str,
+        player_host: str,
+    ) -> dict[str, str | None] | None:
+        """
+        Find the active PMS music session for a companion player via ``/status/sessions``.
+
+        Returns title/artist/album/rating_key when a matching Track session is found.
+        """
+        server = self.connect_server(token, conn, request_timeout=8)
+        try:
+            sessions = list(server.sessions() or [])
+        except Exception:  # noqa: BLE001
+            return None
+
+        want_name = (player_name or "").strip().lower()
+        want_host = (player_host or "").strip().lower()
+        if want_host.startswith(("http://", "https://")):
+            from urllib.parse import urlparse
+
+            parsed = urlparse(want_host)
+            want_host = (parsed.hostname or want_host).lower()
+
+        def player_matches(session_player: object) -> bool:
+            title = (getattr(session_player, "title", None) or "").strip().lower()
+            address = (getattr(session_player, "address", None) or "").strip().lower()
+            product = (getattr(session_player, "product", None) or "").strip().lower()
+            if want_name and title == want_name:
+                return True
+            if want_host and address and (address == want_host or want_host.startswith(address) or address.startswith(want_host)):
+                return True
+            # Soft match: single local Plexamp/Caldera session when names differ slightly.
+            if want_name and title and (want_name in title or title in want_name):
+                if "plexamp" in product or "caldera" in product or not product:
+                    return True
+            return False
+
+        for item in sessions:
+            item_type = (getattr(item, "type", None) or getattr(item, "TAG", None) or "").strip().lower()
+            if item_type and item_type not in ("track", "audio"):
+                # plexapi Track objects often have type="track"
+                if "track" not in item_type and item_type not in ("", "music"):
+                    continue
+            players = getattr(item, "players", None) or []
+            if not players:
+                single = getattr(item, "player", None)
+                players = [single] if single is not None else []
+            if not any(player_matches(p) for p in players if p is not None):
+                continue
+            title = (getattr(item, "title", None) or "").strip()
+            if not title:
+                continue
+            rating_key = getattr(item, "ratingKey", None)
+            artist = (getattr(item, "grandparentTitle", None) or getattr(item, "originalTitle", None) or "").strip() or None
+            album = (getattr(item, "parentTitle", None) or "").strip() or None
+            return {
+                "title": title,
+                "artist": artist,
+                "album": album,
+                "rating_key": str(rating_key) if rating_key is not None else None,
+            }
+        return None
+
     def _plex_thumb_request_url(self, stored: str, token: str, conn: PlexConn) -> str:
         stored = (stored or "").strip()
         if not stored:

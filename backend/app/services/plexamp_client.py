@@ -1,10 +1,11 @@
-"""HTTP helpers for headless Plexamp player's createPlayQueue endpoint."""
+"""HTTP helpers for headless Plexamp/Caldera companion createPlayQueue + timeline."""
 
 from __future__ import annotations
 
 import logging
 import re
 import xml.etree.ElementTree as ET
+from dataclasses import dataclass
 from urllib.parse import urlencode, urlparse
 
 import requests
@@ -13,6 +14,17 @@ import requests.exceptions as requests_exc
 _log = logging.getLogger(__name__)
 
 _TIMELINE_TYPE_PRIORITY = ("music", "audio", "video", "photo")
+
+
+@dataclass(frozen=True)
+class TimelineSnapshot:
+    """Parsed companion timeline for music playback."""
+
+    state: str | None = None
+    title: str | None = None
+    artist: str | None = None
+    album: str | None = None
+    rating_key: str | None = None
 
 
 def sanitize_plexamp_base(player_url: str) -> str:
@@ -155,7 +167,39 @@ def _timeline_element_type(el: ET.Element) -> str:
     return ""
 
 
-def _timeline_state_from_xml(text: str) -> str | None:
+def _rating_key_from_timeline(el: ET.Element) -> str | None:
+    raw = (el.get("ratingKey") or "").strip()
+    if raw:
+        return raw
+    key = (el.get("key") or "").strip()
+    if not key:
+        return None
+    m = re.search(r"/library/metadata/(\d+)", key)
+    return m.group(1) if m else None
+
+
+def _attr(el: ET.Element, *names: str) -> str | None:
+    for name in names:
+        value = (el.get(name) or "").strip()
+        if value:
+            return value
+    return None
+
+
+def _timeline_snapshot_from_element(el: ET.Element) -> TimelineSnapshot | None:
+    state = (el.get("state") or "").strip() or None
+    if not state:
+        return None
+    return TimelineSnapshot(
+        state=state,
+        title=_attr(el, "title", "trackTitle"),
+        artist=_attr(el, "grandparentTitle", "artistTitle", "originalTitle"),
+        album=_attr(el, "parentTitle", "albumTitle"),
+        rating_key=_rating_key_from_timeline(el),
+    )
+
+
+def _timeline_snapshot_from_xml(text: str) -> TimelineSnapshot | None:
     """Parse Plex companion timeline XML, preferring the music timeline over photo/video entries."""
     if not text or not text.strip():
         return None
@@ -164,15 +208,15 @@ def _timeline_state_from_xml(text: str) -> str | None:
     except ET.ParseError:
         root = None
 
-    timelines: list[tuple[str, str]] = []
+    timelines: list[tuple[str, TimelineSnapshot]] = []
     if root is not None:
         for el in root.iter():
             tag = el.tag.split("}")[-1] if "}" in el.tag else el.tag
             if tag != "Timeline":
                 continue
-            state = (el.get("state") or "").strip()
-            if state:
-                timelines.append((_timeline_element_type(el), state))
+            snap = _timeline_snapshot_from_element(el)
+            if snap is not None:
+                timelines.append((_timeline_element_type(el), snap))
 
     if not timelines:
         m = re.search(
@@ -181,21 +225,26 @@ def _timeline_state_from_xml(text: str) -> str | None:
             re.IGNORECASE,
         )
         if m:
-            timelines.append((m.group(1).strip().lower(), m.group(2).strip()))
+            timelines.append((m.group(1).strip().lower(), TimelineSnapshot(state=m.group(2).strip())))
         else:
             m = re.search(r'<Timeline[^>]*\bstate="([^"]+)"', text, re.IGNORECASE)
             if m:
-                timelines.append(("", m.group(1).strip()))
+                timelines.append(("", TimelineSnapshot(state=m.group(1).strip())))
 
     if not timelines:
         return None
 
     for preferred in _TIMELINE_TYPE_PRIORITY:
-        for timeline_type, state in timelines:
+        for timeline_type, snap in timelines:
             if timeline_type == preferred:
-                return state
+                return snap
 
     return timelines[0][1]
+
+
+def _timeline_state_from_xml(text: str) -> str | None:
+    snap = _timeline_snapshot_from_xml(text)
+    return snap.state if snap else None
 
 
 def _plexamp_request_headers() -> dict[str, str]:
@@ -215,16 +264,16 @@ def _plexamp_request_headers() -> dict[str, str]:
     }
 
 
-def plexamp_timeline_state(
+def plexamp_timeline_snapshot(
     *,
     plexamp_base: str,
     token: str,
     timeout: float,
-) -> str | None:
+) -> TimelineSnapshot | None:
     """
-    Poll headless Plexamp companion ``/player/timeline/poll`` for music timeline state.
+    Poll companion ``/player/timeline/poll`` for music timeline state and track fields.
 
-    Returns lowercased state when known (e.g. ``playing``, ``paused``, ``stopped``), else ``None``.
+    Returns a snapshot when a music timeline is present; otherwise ``None``.
     """
     base = sanitize_plexamp_base(plexamp_base)
     param_variants = (
@@ -242,10 +291,32 @@ def plexamp_timeline_state(
         if resp.status_code != 200:
             _log.debug("Plexamp timeline poll HTTP %s %s", resp.status_code, safe)
             continue
-        state = _timeline_state_from_xml(resp.text or "")
-        if state:
-            return state.lower()
+        snap = _timeline_snapshot_from_xml(resp.text or "")
+        if snap and snap.state:
+            state = snap.state.lower()
+            return TimelineSnapshot(
+                state=state,
+                title=snap.title,
+                artist=snap.artist,
+                album=snap.album,
+                rating_key=snap.rating_key,
+            )
     return None
+
+
+def plexamp_timeline_state(
+    *,
+    plexamp_base: str,
+    token: str,
+    timeout: float,
+) -> str | None:
+    """
+    Poll headless companion ``/player/timeline/poll`` for music timeline state.
+
+    Returns lowercased state when known (e.g. ``playing``, ``paused``, ``stopped``), else ``None``.
+    """
+    snap = plexamp_timeline_snapshot(plexamp_base=plexamp_base, token=token, timeout=timeout)
+    return snap.state if snap else None
 
 
 def plexamp_timeline_implies_playing(raw: str | None) -> bool | None:

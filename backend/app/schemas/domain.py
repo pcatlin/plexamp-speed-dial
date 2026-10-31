@@ -213,12 +213,28 @@ class SonosLineInPlayRequest(BaseModel):
     player_id: int = Field(..., description="Plexamp player whose saved line-in Sonos id is used.")
 
 
+class NowPlayingTrack(BaseModel):
+    """Currently playing track for the selected companion player."""
+
+    title: str
+    artist: str | None = None
+    album: str | None = None
+    rating_key: str | None = Field(
+        default=None,
+        description="Plex rating key when known (used for cover art).",
+    )
+
+
 class PlaybackStateResponse(BaseModel):
     """Playback snapshot for UI toggles (Sonos transport / Plexamp timeline)."""
 
     ok: bool = True
     playing: bool | None = None
     state: str | None = Field(default=None, description="Raw state string when available (e.g. Sonos transport or Plex timeline).")
+    now_playing: NowPlayingTrack | None = Field(
+        default=None,
+        description="Track metadata for the selected player when available.",
+    )
     error: str | None = None
 
 

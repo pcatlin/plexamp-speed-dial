@@ -3,7 +3,7 @@ from app.services import plexamp_client
 MULTI_TIMELINE_XML = """<?xml version="1.0" encoding="UTF-8"?>
 <MediaContainer size="3" commandID="-1">
     <Timeline state="stopped" type="photo" itemType="photo" />
-    <Timeline state="playing" controllable="playPause,stop" type="music" itemType="music" />
+    <Timeline state="playing" controllable="playPause,stop" type="music" itemType="music" title="Daydreaming" grandparentTitle="Radiohead" parentTitle="A Moon Shaped Pool" ratingKey="42" key="/library/metadata/42" />
     <Timeline state="stopped" type="video" itemType="video" />
 </MediaContainer>
 """
@@ -11,6 +11,16 @@ MULTI_TIMELINE_XML = """<?xml version="1.0" encoding="UTF-8"?>
 
 def test_timeline_state_prefers_music_over_photo():
     assert plexamp_client._timeline_state_from_xml(MULTI_TIMELINE_XML) == "playing"
+
+
+def test_timeline_snapshot_reads_track_metadata():
+    snap = plexamp_client._timeline_snapshot_from_xml(MULTI_TIMELINE_XML)
+    assert snap is not None
+    assert snap.state == "playing"
+    assert snap.title == "Daydreaming"
+    assert snap.artist == "Radiohead"
+    assert snap.album == "A Moon Shaped Pool"
+    assert snap.rating_key == "42"
 
 
 def test_timeline_state_reads_paused_music():

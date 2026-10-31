@@ -90,11 +90,20 @@ export interface SpeedDial {
   has_cover_art?: boolean;
 }
 
+/** Currently playing track for the selected companion player. */
+export interface NowPlayingTrack {
+  title: string;
+  artist?: string | null;
+  album?: string | null;
+  rating_key?: string | null;
+}
+
 /** Snapshot from ``/sonos/playback-state``, ``/plexamp/playback-state``, or the playback WebSocket. */
 export interface PlaybackState {
   ok: boolean;
   playing: boolean | null;
   state?: string | null;
+  now_playing?: NowPlayingTrack | null;
   error?: string | null;
 }
 

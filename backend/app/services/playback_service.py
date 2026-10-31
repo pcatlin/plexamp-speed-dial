@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.models import PlexampPlayer, SonosGroupPreset
-from app.schemas.domain import PlaybackStateResponse, PlayRequest, PlayResponse
+from app.schemas.domain import NowPlayingTrack, PlaybackStateResponse, PlayRequest, PlayResponse
 from app.services.artist_playback import (
     ORDER_MODE_LABELS,
     build_ordered_artist_server_uri,
@@ -25,7 +25,7 @@ from app.services.plexamp_client import (
     parse_pms_host_port_protocol,
     plexamp_playback_command,
     plexamp_timeline_implies_playing,
-    plexamp_timeline_state,
+    plexamp_timeline_snapshot,
 )
 from app.services.plex_service import PlexService
 from app.services.audio_output.router import AudioOutputRouter
@@ -413,12 +413,48 @@ class PlaybackService:
         if not plexamp_base:
             return PlaybackStateResponse(ok=False, playing=None, state=None, error=perr or "Invalid player URL")
         try:
-            raw = plexamp_timeline_state(
+            snap = plexamp_timeline_snapshot(
                 plexamp_base=plexamp_base,
                 token=auth_token,
                 timeout=settings.plexamp_request_timeout_seconds,
             )
         except requests_exc.RequestException as exc:
             return PlaybackStateResponse(ok=False, playing=None, state=None, error=str(exc))
+
+        raw = snap.state if snap else None
         mapped = plexamp_timeline_implies_playing(raw)
-        return PlaybackStateResponse(ok=True, playing=mapped, state=raw)
+        now_playing: NowPlayingTrack | None = None
+        # Keep metadata while paused; clear when stopped/idle/unknown.
+        show_track = raw not in (None, "stopped", "idle", "")
+
+        if show_track:
+            title = (snap.title if snap else None) or None
+            artist = (snap.artist if snap else None) or None
+            album = (snap.album if snap else None) or None
+            rating_key = (snap.rating_key if snap else None) or None
+
+            if not title or not artist:
+                try:
+                    session_track = self._plex.now_playing_for_player(
+                        auth_token,
+                        resolve_plex_conn(db),
+                        player_name=player.name or "",
+                        player_host=player.host or "",
+                    )
+                except Exception:  # noqa: BLE001
+                    session_track = None
+                if session_track:
+                    title = title or session_track.get("title")
+                    artist = artist or session_track.get("artist")
+                    album = album or session_track.get("album")
+                    rating_key = rating_key or session_track.get("rating_key")
+
+            if title:
+                now_playing = NowPlayingTrack(
+                    title=title,
+                    artist=artist,
+                    album=album,
+                    rating_key=rating_key,
+                )
+
+        return PlaybackStateResponse(ok=True, playing=mapped, state=raw, now_playing=now_playing)

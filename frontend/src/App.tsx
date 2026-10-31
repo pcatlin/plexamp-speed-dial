@@ -1,6 +1,16 @@
 import { useCallback, useEffect, useMemo, useState, type DragEvent, type ReactNode } from "react";
 import "./App.css";
-import { api, InitialVolumes, MediaItem, Player, Speaker, SpeedDial, playbackStateWebSocketUrl } from "./api";
+import {
+  api,
+  API_BASE,
+  InitialVolumes,
+  MediaItem,
+  NowPlayingTrack,
+  Player,
+  Speaker,
+  SpeedDial,
+  playbackStateWebSocketUrl,
+} from "./api";
 import CreditsPage from "./CreditsPage";
 import { PickMusicSection, PickTab, playMediaTypeForTab } from "./PickMusicSection";
 import { artistOrderModeUsesShuffle, type ArtistOrderMode } from "./artistOrder";
@@ -177,6 +187,7 @@ function App() {
   const [sonosPlaying, setSonosPlaying] = useState<boolean | null>(null);
   const [sonosVolumeMixerOpen, setSonosVolumeMixerOpen] = useState(false);
   const [plexampPlaying, setPlexampPlaying] = useState<boolean | null>(null);
+  const [nowPlaying, setNowPlaying] = useState<NowPlayingTrack | null>(null);
   const [receiverPowerOn, setReceiverPowerOn] = useState(false);
   const [receiverStatus, setReceiverStatus] = useState<ReceiverStatus | null>(null);
 
@@ -440,6 +451,7 @@ function App() {
     if (!wantSonos && !wantPlex && !wantReceiver) {
       setSonosPlaying(null);
       setPlexampPlaying(null);
+      setNowPlaying(null);
       setReceiverStatus(null);
       return;
     }
@@ -462,7 +474,11 @@ function App() {
       try {
         const data = JSON.parse(ev.data) as {
           sonos?: { ok?: boolean; playing?: boolean | null };
-          plexamp?: { ok?: boolean; playing?: boolean | null };
+          plexamp?: {
+            ok?: boolean;
+            playing?: boolean | null;
+            now_playing?: NowPlayingTrack | null;
+          };
           receiver?: {
             ok?: boolean;
             power_on?: boolean | null;
@@ -480,10 +496,17 @@ function App() {
         }
         const p = data.plexamp;
         if (wantPlex) {
-          if (p?.ok) setPlexampPlaying(p.playing ?? null);
-          else setPlexampPlaying(null);
+          if (p?.ok) {
+            setPlexampPlaying(p.playing ?? null);
+            const track = p.now_playing;
+            setNowPlaying(track && track.title ? track : null);
+          } else {
+            setPlexampPlaying(null);
+            setNowPlaying(null);
+          }
         } else {
           setPlexampPlaying(null);
+          setNowPlaying(null);
         }
         if (wantReceiver) {
           applyReceiverSnapshot(data.receiver);
@@ -498,6 +521,7 @@ function App() {
       if (cancelled) return;
       setSonosPlaying(null);
       setPlexampPlaying(null);
+      setNowPlaying(null);
     };
     return () => {
       cancelled = true;
@@ -1284,7 +1308,7 @@ function App() {
 
         <fieldset className="controlFrameset">
           <ControlFramesetLegend
-            title="Plexamp"
+            title="Player"
             appLink={
               isMobileAppClient()
                 ? {
@@ -1296,15 +1320,35 @@ function App() {
                 : undefined
             }
           />
-          <div className="mediaToolbar mediaToolbarStack" role="group" aria-label="Plexamp transport">
+          {nowPlaying ? (
+            <div className="nowPlaying" aria-live="polite">
+              {nowPlaying.rating_key ? (
+                <img
+                  className="nowPlayingArt"
+                  src={`${API_BASE}/media/art/${nowPlaying.rating_key}`}
+                  alt=""
+                  loading="lazy"
+                  decoding="async"
+                />
+              ) : (
+                <div className="nowPlayingArt nowPlayingArtPlaceholder" aria-hidden="true" />
+              )}
+              <div className="nowPlayingText">
+                <div className="nowPlayingTitle">{nowPlaying.title}</div>
+                {nowPlaying.artist ? <div className="nowPlayingArtist">{nowPlaying.artist}</div> : null}
+                {nowPlaying.album ? <div className="nowPlayingAlbum">{nowPlaying.album}</div> : null}
+              </div>
+            </div>
+          ) : null}
+          <div className="mediaToolbar mediaToolbarStack" role="group" aria-label="Player transport">
             <button
               type="button"
               className="iconBtn"
-              aria-label={plexampPlaying ? "Pause Plexamp playback" : "Resume Plexamp playback"}
+              aria-label={plexampPlaying ? "Pause playback" : "Resume playback"}
               title={
                 plexampPlaying
-                  ? "Pause Plexamp playback"
-                  : "Resume playback on Plexamp (current queue; does not start a new queue)"
+                  ? "Pause playback"
+                  : "Resume playback (current queue; does not start a new queue)"
               }
               onClick={() => togglePlexampPlayPause().catch((e) => showToast(e.message))}
             >
