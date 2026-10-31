@@ -60,14 +60,14 @@ class PlaybackService:
 
     @staticmethod
     def _plexamp_base_for_player(player: PlexampPlayer) -> tuple[str | None, str | None]:
-        """Return ``(base_url, error_message)`` for the Plexamp companion HTTP API."""
+        """Return ``(base_url, error_message)`` for the companion createPlayQueue HTTP API."""
         raw_host = (player.host or "").strip()
         if not raw_host:
-            return None, "Plexamp player host is empty."
+            return None, "Player host is empty."
         if raw_host.startswith(("http://", "https://")):
             parsed = urlparse(raw_host)
             if not parsed.hostname:
-                return None, "Plexamp player host URL is invalid"
+                return None, "Player host URL is invalid"
             scheme = parsed.scheme if parsed.scheme in ("http", "https") else "http"
             port = player.port or parsed.port or 32500
             return f"{scheme}://{parsed.hostname}:{port}", None
@@ -77,7 +77,7 @@ class PlaybackService:
     def play(self, payload: PlayRequest, db: Session, *, auth_token: str) -> PlayResponse:
         player = db.get(PlexampPlayer, payload.player_id)
         if not player:
-            return PlayResponse(status="error", details="Selected Plexamp player not found")
+            return PlayResponse(status="error", details="Selected player not found")
 
         target_speakers = payload.speaker_ids
         if payload.preset_id:
@@ -98,7 +98,7 @@ class PlaybackService:
 
         plexamp_base, perr = self._plexamp_base_for_player(player)
         if not plexamp_base:
-            return PlayResponse(status="error", details=perr or "Invalid Plexamp URL")
+            return PlayResponse(status="error", details=perr or "Invalid player URL")
 
         try:
             rating_key = int(str(payload.media_id).strip())
@@ -242,7 +242,7 @@ class PlaybackService:
         except requests_exc.RequestException as exc:
             return PlayResponse(
                 status="error",
-                details=f"Plexamp at {plexamp_base} did not accept playback: {exc}",
+                details=f"Player at {plexamp_base} did not accept playback: {exc}",
             )
 
         if response.status_code != 200:
@@ -250,7 +250,7 @@ class PlaybackService:
             return PlayResponse(
                 status="error",
                 details=(
-                    f"Plexamp createPlayQueue failed (HTTP {response.status_code}). "
+                    f"Player createPlayQueue failed (HTTP {response.status_code}). "
                     f"{snippet or 'Empty response body'}"
                 ),
             )
@@ -265,7 +265,7 @@ class PlaybackService:
         title = getattr(item, "title", "") or getattr(item, "tag", "") or payload.media_id
         tail = output_note
         details_kind = f"{play_kind} (shuffled)" if shuffle_flag else play_kind
-        details = f"Plexamp playing {details_kind}: {title!r} via {player.name}. {tail}"
+        details = f"Playing {details_kind}: {title!r} via {player.name}. {tail}"
         return PlayResponse(status="ok", details=details)
 
     def _plexamp_playback_simple(
@@ -279,10 +279,10 @@ class PlaybackService:
     ) -> PlayResponse:
         player = db.get(PlexampPlayer, player_id)
         if not player:
-            return PlayResponse(status="error", details="Selected Plexamp player not found")
+            return PlayResponse(status="error", details="Selected player not found")
         plexamp_base, perr = self._plexamp_base_for_player(player)
         if not plexamp_base:
-            return PlayResponse(status="error", details=perr or "Invalid Plexamp URL")
+            return PlayResponse(status="error", details=perr or "Invalid player URL")
         try:
             response = plexamp_playback_command(
                 plexamp_base=plexamp_base,
@@ -291,12 +291,12 @@ class PlaybackService:
                 timeout=settings.plexamp_request_timeout_seconds,
             )
         except requests_exc.RequestException as exc:
-            return PlayResponse(status="error", details=f"Plexamp {action} failed: {exc}")
+            return PlayResponse(status="error", details=f"Player {action} failed: {exc}")
         if response.status_code != 200:
             snippet = (response.text or "")[:280]
             return PlayResponse(
                 status="error",
-                details=f"Plexamp {action} returned HTTP {response.status_code}. {snippet or 'Empty response body'}",
+                details=f"Player {action} returned HTTP {response.status_code}. {snippet or 'Empty response body'}",
             )
         return PlayResponse(status="ok", details=f"{ok_details} ({player.name}).")
 
@@ -354,12 +354,12 @@ class PlaybackService:
             return PlayResponse(status="error", details="Select at least one Sonos speaker, then press play.")
         player = db.get(PlexampPlayer, player_id)
         if not player:
-            return PlayResponse(status="error", details="Selected Plexamp player not found")
+            return PlayResponse(status="error", details="Selected player not found")
         route = self._audio_output.output_for_player(player)
         if route.kind != "sonos":
             return PlayResponse(
                 status="error",
-                details="Selected Plexamp player is not configured for Sonos line-in (check Setup).",
+                details="Selected player is not configured for Sonos line-in (check Setup).",
             )
         try:
             msg = self._audio_output.prepare_for_play(player, db, target_speaker_ids=speaker_ids)
@@ -408,10 +408,10 @@ class PlaybackService:
     def plexamp_playback_state(self, player_id: int, db: Session, *, auth_token: str) -> PlaybackStateResponse:
         player = db.get(PlexampPlayer, player_id)
         if not player:
-            return PlaybackStateResponse(ok=False, playing=None, state=None, error="Selected Plexamp player not found")
+            return PlaybackStateResponse(ok=False, playing=None, state=None, error="Selected player not found")
         plexamp_base, perr = self._plexamp_base_for_player(player)
         if not plexamp_base:
-            return PlaybackStateResponse(ok=False, playing=None, state=None, error=perr or "Invalid Plexamp URL")
+            return PlaybackStateResponse(ok=False, playing=None, state=None, error=perr or "Invalid player URL")
         try:
             raw = plexamp_timeline_state(
                 plexamp_base=plexamp_base,

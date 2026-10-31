@@ -1,8 +1,10 @@
 # Plexamp Sonos Speed Dial
 
-A web app to quickly play music through **Plexamp headless** players to **Sonos** speakers via **Line-In** input.
-Yes, a very specific, odd audio setup, I know.  I just want it all. To have lovely *sweet fades* provided by Plexamp and 
-Sonos speakers without the clunky Plexamp casting.
+A web app to quickly play music through **Plexamp** or **Caldera** headless players to **Sonos** speakers via **Line-In** input.
+Yes, a very specific, odd audio setup, I know.  I just want it all. To have lovely *sweet fades* provided by Plexamp/Caldera and
+Sonos speakers without the clunky casting UI.
+
+**Players:** Plexamp and Caldera are both supported. Playback uses the companion `createPlayQueue` API on the player (default port `32500`) — the same modern path both products use.
 
 ## Features
 
@@ -15,7 +17,7 @@ Sonos speakers without the clunky Plexamp casting.
 - Select playback target:
   - one or more Sonos speakers (via Line-In)
   - ignore this and just control Plexamp only
-- Manage multiple Plexamp players (route each to Sonos line-in, a Pioneer AV receiver, or none)
+- Manage multiple players (Plexamp or Caldera; route each to Sonos line-in, a Pioneer AV receiver, or none)
 - Save one-tap speed-dial favorites and delete them
 - Direct basic control Plexamp and Sonos speakers (Play, Pause, Volume, Skip, Prev)
 - Simple API-first backend with OpenAPI docs
@@ -80,7 +82,7 @@ python backend/export_openapi.py
 - Local network access to:
   - Plex server
   - Sonos speakers
-  - Plexamp headless players
+  - Plexamp or Caldera headless players
 
 ### Configuration
 

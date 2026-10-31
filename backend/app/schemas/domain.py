@@ -104,7 +104,7 @@ class PlayerRead(PlayerCreate):
 
 
 class PlayerPatch(BaseModel):
-    """Partial update for a Plexamp player (Setup UI)."""
+    """Partial update for a companion player (Setup UI)."""
 
     audio_output: AudioOutput | None = None
 

@@ -8,15 +8,15 @@ import { ConfirmDialog } from "./ConfirmDialog";
 const SETUP_SECTIONS = [
   { id: "plex", label: "Plex" },
   { id: "sonos", label: "Sonos" },
-  { id: "plexamp", label: "Plexamp" },
+  { id: "plexamp", label: "Players" },
   { id: "webhooks", label: "Webhooks" },
 ] as const;
 
 type SetupSection = (typeof SETUP_SECTIONS)[number]["id"];
 
-function parsePlexampEndpoint(raw: string): { label: string; host: string; port: number } {
+function parsePlayerEndpoint(raw: string): { label: string; host: string; port: number } {
   const s = raw.trim();
-  if (!s) throw new Error("Enter a Plexamp hostname or URL.");
+  if (!s) throw new Error("Enter a player hostname or URL.");
   if (/^https?:\/\//i.test(s)) {
     try {
       const url = new URL(s);
@@ -192,7 +192,7 @@ export function SetupModal({
   const addPlayer = async () => {
     setBusy(true);
     try {
-      const { label, host, port } = parsePlexampEndpoint(playerInput || playerNameHint);
+      const { label, host, port } = parsePlayerEndpoint(playerInput || playerNameHint);
       const name = playerNameHint.trim() || label;
       await api.createPlayer({
         name,
@@ -206,7 +206,7 @@ export function SetupModal({
       setPlayerNameHint("");
       setNewPlayerAudioOutput(defaultAudioOutput());
       await onPlayersUpdated();
-      onToast(`Added Plexamp player ${name} (${host}:${port}).`);
+      onToast(`Added player ${name} (${host}:${port}).`);
     } catch (e) {
       onToast(e instanceof Error ? e.message : String(e));
     } finally {
@@ -453,10 +453,11 @@ export function SetupModal({
 
             {activeSection === "plexamp" ? (
               <section className="setupModalPage" aria-labelledby="setup-plexamp-title">
-                <h3 id="setup-plexamp-title">Plexamp players</h3>
+                <h3 id="setup-plexamp-title">Players</h3>
                 <p className="hint setupModalIntro">
-                  Hostname or IP of each Plexamp player. Route its analog output through Sonos line-in, a Pioneer AV
-                  receiver, or none (Plexamp only).
+                  Hostname or IP of each Plexamp or Caldera player (companion port defaults to 32500). Playback uses the
+                  same createPlayQueue companion API for both. Route analog output through Sonos line-in, a Pioneer AV
+                  receiver, or none (player only).
                 </p>
                 <div className="inlineGrow">
                   <label className="fieldLabel mb0 stretch">
@@ -477,7 +478,7 @@ export function SetupModal({
                     <input
                       type="text"
                       className="textInput"
-                      placeholder="Kitchen Plexamp"
+                      placeholder="Kitchen"
                       value={playerNameHint}
                       onChange={(e) => setPlayerNameHint(e.target.value)}
                     />
@@ -589,7 +590,7 @@ export function SetupModal({
       title="Are you sure?"
       message={
         playerDeleteTarget
-          ? `Remove Plexamp player “${playerDeleteTarget.name}”?`
+          ? `Remove player “${playerDeleteTarget.name}”?`
           : ""
       }
       confirmLabel="Delete"

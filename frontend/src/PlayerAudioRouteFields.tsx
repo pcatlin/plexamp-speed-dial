@@ -199,7 +199,7 @@ export function PlayerAudioRouteFields({
         </div>
       ) : null}
 
-      {kind === "none" ? <p className="hint subtle">Plexamp only — no Sonos or AVR routing on play.</p> : null}
+      {kind === "none" ? <p className="hint subtle">Player only — no Sonos or AVR routing on play.</p> : null}
     </div>
   );
 }
