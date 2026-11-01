@@ -2098,6 +2098,11 @@ components:
           type: boolean
           title: Has Cover Art
           default: false
+        description:
+          type: string
+          title: Description
+          description: Human-readable play target — player, speakers/AVR, and saved volumes.
+          default: ''
       type: object
       required:
       - label

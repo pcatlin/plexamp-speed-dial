@@ -308,6 +308,10 @@ class SpeedDialCreate(BaseModel):
 class SpeedDialRead(SpeedDialCreate):
     id: int
     has_cover_art: bool = False
+    description: str = Field(
+        default="",
+        description="Human-readable play target: player, speakers/AVR, and saved volumes.",
+    )
 
 
 class SpeedDialPatch(BaseModel):

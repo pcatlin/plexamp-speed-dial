@@ -14,7 +14,7 @@ def test_speed_dial_read_is_distinct_subclass_of_create():
 
     assert "id" not in create_fields
     assert "has_cover_art" not in create_fields
-    assert {"id", "has_cover_art"}.issubset(read_fields)
+    assert {"id", "has_cover_art", "description"}.issubset(read_fields)
     assert "initial_volumes" in create_fields
     assert "initial_volumes" in read_fields
 
@@ -26,10 +26,12 @@ def test_speed_dial_read_is_distinct_subclass_of_create():
         player_id=2,
         speaker_ids=["s1"],
         has_cover_art=True,
+        description="Kitchen · Bathroom (20%)",
         initial_volumes=InitialVolumes(sonos={"s1": 20}, pioneer=35),
     )
     assert row.id == 1
     assert row.has_cover_art is True
+    assert row.description == "Kitchen · Bathroom (20%)"
     assert row.initial_volumes is not None
     assert row.initial_volumes.sonos == {"s1": 20}
     assert row.initial_volumes.pioneer == 35
@@ -40,7 +42,7 @@ def test_speed_dial_read_is_distinct_subclass_of_create():
     [
         ("SonosGroupPresetCreate", "SonosGroupPresetRead", {"id"}),
         ("PlayerCreate", "PlayerRead", {"id"}),
-        ("SpeedDialCreate", "SpeedDialRead", {"id", "has_cover_art"}),
+        ("SpeedDialCreate", "SpeedDialRead", {"id", "has_cover_art", "description"}),
         ("RuntimeSetupUpdate", "RuntimeSetupRead", {"plex_server_url_effective"}),
     ],
 )

@@ -89,6 +89,8 @@ export interface SpeedDial {
   shuffle?: boolean | null;
   initial_volumes?: InitialVolumes | null;
   has_cover_art?: boolean;
+  /** Player · speakers/AVR and volumes that play would activate. */
+  description?: string;
 }
 
 /** Currently playing track for the selected companion player. */
@@ -285,7 +287,7 @@ export const api = {
     }>(`/audio-output/status?player_id=${encodeURIComponent(String(playerId))}`),
   deletePlayer: (id: number) => request<{ message: string }>(`/players/${id}`, { method: "DELETE" }),
   speedDial: () => request<SpeedDial[]>("/speed-dial"),
-  createSpeedDial: (payload: Omit<SpeedDial, "id" | "has_cover_art">) =>
+  createSpeedDial: (payload: Omit<SpeedDial, "id" | "has_cover_art" | "description">) =>
     request<{ id: number }>("/speed-dial", { method: "POST", body: JSON.stringify(payload) }),
   patchSpeedDial: (
     id: number,

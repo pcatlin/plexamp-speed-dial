@@ -957,7 +957,59 @@ def speed_dial(db: Session = Depends(get_db)) -> list[SpeedDialRead]:
     return _speed_dial_list(db)
 
 
-def _speed_dial_row_to_read(row: SpeedDialFavorite) -> SpeedDialRead:
+def _sonos_speaker_name_map(db: Session) -> dict[str, str]:
+    try:
+        speakers = sonos_service.list_speakers(resolve_sonos_runtime(db))
+    except Exception:  # noqa: BLE001
+        return {}
+    return {str(s.id): s.name for s in speakers if getattr(s, "id", None)}
+
+
+def _pioneer_label_for_player(player: PlexampPlayer | None) -> str:
+    if player is None:
+        return "Pioneer AVR"
+    ao = audio_output_from_player_row(player)
+    if ao.kind != "pioneer":
+        return "Pioneer AVR"
+    try:
+        from app.services.audio_output.types import parse_pioneer_config
+
+        cfg = parse_pioneer_config(ao)
+    except Exception:  # noqa: BLE001
+        return "Pioneer AVR"
+    host = (cfg.host or "").strip()
+    if not host:
+        return "Pioneer AVR"
+    if cfg.port and cfg.port != 60128:
+        return f"{host}:{cfg.port}"
+    return host
+
+
+def _speed_dial_row_to_read(
+    row: SpeedDialFavorite,
+    db: Session,
+    *,
+    speaker_names: dict[str, str] | None = None,
+    players_by_id: dict[int, PlexampPlayer] | None = None,
+) -> SpeedDialRead:
+    from app.services.speed_dial_describe import format_speed_dial_play_description
+
+    if players_by_id is not None:
+        player = players_by_id.get(row.player_id)
+    else:
+        player = db.get(PlexampPlayer, row.player_id)
+    names = speaker_names if speaker_names is not None else _sonos_speaker_name_map(db)
+    output_kind = audio_output_from_player_row(player).kind if player else "none"
+    raw_volumes = getattr(row, "initial_volumes", None)
+    volumes = raw_volumes if isinstance(raw_volumes, dict) else None
+    description = format_speed_dial_play_description(
+        player_name=(player.name if player else "") or f"Player {row.player_id}",
+        output_kind=output_kind,
+        pioneer_label=_pioneer_label_for_player(player),
+        speaker_ids=list(row.speaker_ids or []),
+        speaker_names=names,
+        initial_volumes=volumes,
+    )
     return SpeedDialRead(
         id=row.id,
         label=row.label,
@@ -970,6 +1022,7 @@ def _speed_dial_row_to_read(row: SpeedDialFavorite) -> SpeedDialRead:
         shuffle=getattr(row, "shuffle", None),
         initial_volumes=getattr(row, "initial_volumes", None),
         has_cover_art=bool((getattr(row, "cover_thumb_path", None) or "").strip()),
+        description=description,
     )
 
 
@@ -979,7 +1032,12 @@ def _speed_dial_list(db: Session) -> list[SpeedDialRead]:
         .order_by(SpeedDialFavorite.sort_order.asc(), SpeedDialFavorite.id.asc())
         .all()
     )
-    return [_speed_dial_row_to_read(row) for row in rows]
+    players = {p.id: p for p in db.query(PlexampPlayer).all()}
+    speaker_names = _sonos_speaker_name_map(db)
+    return [
+        _speed_dial_row_to_read(row, db, speaker_names=speaker_names, players_by_id=players)
+        for row in rows
+    ]
 
 
 @router.put("/speed-dial/order", response_model=list[SpeedDialRead])
@@ -1142,7 +1200,7 @@ def patch_speed_dial(
             row.initial_volumes = {"pioneer": pioneer} if pioneer is not None else None
     db.commit()
     db.refresh(row)
-    return _speed_dial_row_to_read(row)
+    return _speed_dial_row_to_read(row, db)
 
 
 @router.delete("/speed-dial/{favorite_id}")
