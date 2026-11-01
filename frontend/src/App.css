@@ -1027,6 +1027,13 @@ button.pickGridBtn--pinned:active:not(:disabled) {
   color: #6b7280;
 }
 
+.sonosVolumeMixerHint {
+  margin: 0 0 0.75rem;
+  font-size: 0.88rem;
+  color: #6b7280;
+  line-height: 1.35;
+}
+
 .sonosVolumeMixerToggle {
   display: flex;
   align-items: center;
@@ -1039,6 +1046,23 @@ button.pickGridBtn--pinned:active:not(:disabled) {
 
 .sonosVolumeMixerToggle input {
   margin: 0;
+}
+
+.sonosVolumeMixerMember {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.15rem;
+  cursor: pointer;
+}
+
+.sonosVolumeMixerMember input {
+  margin: 0;
+  flex: 0 0 auto;
+}
+
+.sonosVolumeMixerMember .sonosVolumeMixerName {
+  margin-bottom: 0;
 }
 
 .sonosVolumeMixerList {

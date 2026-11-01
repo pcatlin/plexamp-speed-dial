@@ -923,6 +923,10 @@ function App() {
           fallbackVolumes={sonosVolumes}
           onClose={() => setSonosVolumeMixerOpen(false)}
           onSpeakerVolumeChange={setSonosSpeakerVolume}
+          onSelectedSpeakerIdsChange={(speakerIds) => {
+            setSelectedSpeakers(speakerIds);
+            setSonosVolumes((current) => mergeSonosVolumes(speakerIds, current));
+          }}
           onSpeakersRefreshed={applySpeakerList}
           onToast={showToast}
         />

@@ -162,7 +162,7 @@ class SonosService:
                 volume = int(device.volume)
             except Exception:  # noqa: BLE001
                 pass
-            source = self._playback_source_label(device, zones)
+            source, playing = self._playback_status(device, zones)
             speakers.append(
                 SonosSpeaker(
                     id=device.uid,
@@ -170,25 +170,30 @@ class SonosService:
                     ip=device.ip_address,
                     volume=volume,
                     source=source,
+                    playing=playing,
                 )
             )
         return speakers
 
-    def _playback_source_label(self, device: SoCo, zones: set[SoCo]) -> str | None:
+    def _playback_status(self, device: SoCo, zones: set[SoCo]) -> tuple[str | None, bool | None]:
+        """Return ``(source_label, playing)`` for a device via its group coordinator."""
         try:
             coord = self._group_coordinator(device)
             transport = coord.get_current_transport_info()
             track_info = coord.get_current_track_info()
-            return format_playback_source_label(
+            transport_state = str(transport.get("current_transport_state") or "")
+            source = format_playback_source_label(
                 uri=str(track_info.get("uri") or ""),
                 title=str(track_info.get("title") or ""),
                 artist=str(track_info.get("artist") or ""),
-                transport_state=str(transport.get("current_transport_state") or ""),
+                transport_state=transport_state,
                 resolve_speaker_name=lambda uid: _name_for_sonos_uid(zones, uid),
             )
+            playing = transport_state.upper() in ("PLAYING", "TRANSITIONING")
+            return source, playing
         except Exception as exc:  # noqa: BLE001
-            _log.debug("Sonos source label failed for %s: %s", device.player_name or device.uid, exc)
-            return None
+            _log.debug("Sonos playback status failed for %s: %s", device.player_name or device.uid, exc)
+            return None, None
 
     @staticmethod
     def _device_for_api_speaker_id(zones: set[SoCo], speaker_id: str) -> SoCo | None:
@@ -426,6 +431,80 @@ class SonosService:
         if not devices:
             return [], "Sonos: none of the selected speakers matched discovered zones."
         return devices, ""
+
+    def add_speakers_to_group(
+        self,
+        runtime: SonosRuntime,
+        group_speaker_ids: list[str],
+        speaker_ids_to_add: list[str],
+    ) -> str:
+        """Join speakers onto the coordinator of the current group (or form a new group)."""
+        to_add, err = self._unique_devices_for_speaker_ids(
+            runtime,
+            speaker_ids_to_add,
+            no_zones_detail="nothing to add.",
+        )
+        if err:
+            return err
+
+        group_devs: list[SoCo] = []
+        if group_speaker_ids:
+            group_devs, group_err = self._unique_devices_for_speaker_ids(
+                runtime,
+                group_speaker_ids,
+                no_zones_detail="nothing to add.",
+            )
+            if group_err and "no zones discovered" in group_err:
+                return group_err
+            # Stale ids are ignored; we still form/extend a group from matched devices.
+
+        if group_devs:
+            master = self._group_coordinator(group_devs[0])
+        else:
+            master = sorted(to_add, key=lambda z: (z.player_name or "").lower())[0]
+
+        for d in to_add:
+            if d.uid == master.uid:
+                continue
+            try:
+                d.unjoin()
+            except Exception as exc:  # noqa: BLE001
+                _log.warning("Sonos unjoin %s failed (continuing): %s", d.player_name, exc)
+            try:
+                d.join(master)
+            except Exception as exc:  # noqa: BLE001
+                _log.warning("Sonos join %s → %s failed: %s", d.player_name, master.player_name, exc)
+                raise
+
+        added_names = ", ".join(sorted((d.player_name or d.uid) for d in to_add))
+        master_name = master.player_name or master.uid
+        if group_devs:
+            return f"Sonos: added {added_names} to group with {master_name}."
+        if len(to_add) == 1:
+            return f"Sonos: selected {added_names}."
+        return f"Sonos: grouped {added_names} (coordinator {master_name})."
+
+    def remove_speakers_from_group(self, runtime: SonosRuntime, speaker_ids: list[str]) -> str:
+        """Unjoin speakers so they leave their current Sonos group."""
+        devices, err = self._unique_devices_for_speaker_ids(
+            runtime,
+            speaker_ids,
+            no_zones_detail="nothing to remove.",
+        )
+        if err:
+            return err
+
+        removed: list[str] = []
+        for d in devices:
+            try:
+                d.unjoin()
+            except Exception as exc:  # noqa: BLE001
+                _log.warning("Sonos unjoin %s failed: %s", d.player_name, exc)
+                raise
+            removed.append(d.player_name or d.uid)
+
+        names = ", ".join(sorted(removed))
+        return f"Sonos: removed {names} from group."
 
     def adjust_volume_selected(self, runtime: SonosRuntime, output_speaker_ids: list[str], delta: int) -> str:
         """Apply the same relative volume step to every selected zone (each player, not coordinator-only).

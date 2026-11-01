@@ -29,6 +29,7 @@ export interface Speaker {
   ip: string;
   volume?: number | null;
   source?: string | null;
+  playing?: boolean | null;
 }
 
 export interface GroupPreset {
@@ -349,5 +350,15 @@ export const api = {
     request<{ status: string; details: string }>("/sonos/volume/set", {
       method: "POST",
       body: JSON.stringify({ volumes }),
+    }),
+  sonosGroupAdd: (groupSpeakerIds: string[], speakerIds: string[]) =>
+    request<{ status: string; details: string }>("/sonos/group/add", {
+      method: "POST",
+      body: JSON.stringify({ group_speaker_ids: groupSpeakerIds, speaker_ids: speakerIds }),
+    }),
+  sonosGroupRemove: (speakerIds: string[]) =>
+    request<{ status: string; details: string }>("/sonos/group/remove", {
+      method: "POST",
+      body: JSON.stringify({ speaker_ids: speakerIds }),
     }),
 };

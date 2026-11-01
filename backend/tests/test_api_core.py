@@ -416,6 +416,16 @@ def test_sonos_volume_set_requires_volumes(client):
     assert r.status_code == 400
 
 
+def test_sonos_group_add_requires_speakers(client):
+    r = client.post("/api/v1/sonos/group/add", json={"group_speaker_ids": [], "speaker_ids": []})
+    assert r.status_code == 400
+
+
+def test_sonos_group_remove_requires_speakers(client):
+    r = client.post("/api/v1/sonos/group/remove", json={"speaker_ids": []})
+    assert r.status_code == 400
+
+
 def test_plexamp_skip_next_happy_path(client, db_session, monkeypatch):
     from app.models import PlexCredential
 

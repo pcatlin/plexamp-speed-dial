@@ -51,6 +51,8 @@ from app.schemas.domain import (
     RuntimeSetupUpdate,
     SonosGroupPresetCreate,
     SonosGroupPresetRead,
+    SonosGroupAddRequest,
+    SonosGroupRemoveRequest,
     SonosLineInPlayRequest,
     SonosSpeaker,
     SonosStopRequest,
@@ -767,6 +769,22 @@ def sonos_volume(payload: SonosVolumeAdjustRequest, db: Session = Depends(get_db
 @router.post("/sonos/volume/set", response_model=PlayResponse)
 def sonos_volume_set(payload: SonosVolumeSetRequest, db: Session = Depends(get_db)) -> PlayResponse:
     response = playback_service.sonos_volume_set(payload.volumes, db)
+    if response.status == "error":
+        raise HTTPException(status_code=400, detail=response.details)
+    return response
+
+
+@router.post("/sonos/group/add", response_model=PlayResponse)
+def sonos_group_add(payload: SonosGroupAddRequest, db: Session = Depends(get_db)) -> PlayResponse:
+    response = playback_service.sonos_group_add(payload.group_speaker_ids, payload.speaker_ids, db)
+    if response.status == "error":
+        raise HTTPException(status_code=400, detail=response.details)
+    return response
+
+
+@router.post("/sonos/group/remove", response_model=PlayResponse)
+def sonos_group_remove(payload: SonosGroupRemoveRequest, db: Session = Depends(get_db)) -> PlayResponse:
+    response = playback_service.sonos_group_remove(payload.speaker_ids, db)
     if response.status == "error":
         raise HTTPException(status_code=400, detail=response.details)
     return response

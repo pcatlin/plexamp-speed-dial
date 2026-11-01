@@ -444,6 +444,37 @@ class PlaybackService:
             return PlayResponse(status="error", details=f"Sonos line-in failed: {exc}")
         return PlayResponse(status="ok", details=msg)
 
+    def sonos_group_add(
+        self,
+        group_speaker_ids: list[str],
+        speaker_ids: list[str],
+        db: Session,
+    ) -> PlayResponse:
+        if not speaker_ids:
+            return PlayResponse(status="error", details="Select at least one Sonos speaker to add.")
+        try:
+            runtime = resolve_sonos_runtime(db)
+            msg = self._sonos.add_speakers_to_group(runtime, group_speaker_ids, speaker_ids)
+        except Exception as exc:  # noqa: BLE001
+            _log.exception("Sonos group add failed")
+            return PlayResponse(status="error", details=f"Sonos group add failed: {exc}")
+        if msg.startswith("Sonos: no ") or msg.startswith("Sonos: none "):
+            return PlayResponse(status="error", details=msg)
+        return PlayResponse(status="ok", details=msg)
+
+    def sonos_group_remove(self, speaker_ids: list[str], db: Session) -> PlayResponse:
+        if not speaker_ids:
+            return PlayResponse(status="error", details="Select at least one Sonos speaker to remove.")
+        try:
+            runtime = resolve_sonos_runtime(db)
+            msg = self._sonos.remove_speakers_from_group(runtime, speaker_ids)
+        except Exception as exc:  # noqa: BLE001
+            _log.exception("Sonos group remove failed")
+            return PlayResponse(status="error", details=f"Sonos group remove failed: {exc}")
+        if msg.startswith("Sonos: no ") or msg.startswith("Sonos: none "):
+            return PlayResponse(status="error", details=msg)
+        return PlayResponse(status="ok", details=msg)
+
     def sonos_volume_adjust_selected(self, speaker_ids: list[str], delta: int, db: Session) -> PlayResponse:
         if not speaker_ids:
             return PlayResponse(status="error", details="Select at least one Sonos speaker, then change volume.")

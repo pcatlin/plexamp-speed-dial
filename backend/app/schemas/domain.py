@@ -72,6 +72,10 @@ class SonosSpeaker(BaseModel):
         default=None,
         description="Human-readable current input or playback source.",
     )
+    playing: bool | None = Field(
+        default=None,
+        description="True when this speaker's group coordinator is PLAYING or TRANSITIONING.",
+    )
 
 
 class SonosGroupPresetCreate(BaseModel):
@@ -258,6 +262,24 @@ class SonosVolumeSetRequest(BaseModel):
     @classmethod
     def _clamp_volumes(cls, value: dict[str, int]) -> dict[str, int]:
         return {key: max(0, min(100, int(vol))) for key, vol in value.items()}
+
+
+class SonosGroupAddRequest(BaseModel):
+    group_speaker_ids: list[str] = Field(
+        default_factory=list,
+        description="Current group members (used to find the coordinator to join).",
+    )
+    speaker_ids: list[str] = Field(
+        default_factory=list,
+        description="Speakers to add to the group.",
+    )
+
+
+class SonosGroupRemoveRequest(BaseModel):
+    speaker_ids: list[str] = Field(
+        default_factory=list,
+        description="Speakers to unjoin / remove from their current group.",
+    )
 
 
 class SpeedDialCreate(BaseModel):

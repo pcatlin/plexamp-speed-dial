@@ -935,6 +935,52 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/sonos/group/add:
+    post:
+      summary: Sonos Group Add
+      operationId: sonos_group_add_api_v1_sonos_group_add_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SonosGroupAddRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlayResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/sonos/group/remove:
+    post:
+      summary: Sonos Group Remove
+      operationId: sonos_group_remove_api_v1_sonos_group_remove_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SonosGroupRemoveRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlayResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/speed-dial:
     get:
       summary: Speed Dial
@@ -1751,6 +1797,22 @@ components:
           title: Note
       type: object
       title: ServerTidalTracksResponse
+    SonosGroupAddRequest:
+      properties:
+        group_speaker_ids:
+          items:
+            type: string
+          type: array
+          title: Group Speaker Ids
+          description: Current group members (used to find the coordinator to join).
+        speaker_ids:
+          items:
+            type: string
+          type: array
+          title: Speaker Ids
+          description: Speakers to add to the group.
+      type: object
+      title: SonosGroupAddRequest
     SonosGroupPresetCreate:
       properties:
         name:
@@ -1783,6 +1845,16 @@ components:
       - name
       - id
       title: SonosGroupPresetRead
+    SonosGroupRemoveRequest:
+      properties:
+        speaker_ids:
+          items:
+            type: string
+          type: array
+          title: Speaker Ids
+          description: Speakers to unjoin / remove from their current group.
+      type: object
+      title: SonosGroupRemoveRequest
     SonosLineInPlayRequest:
       properties:
         speaker_ids:
@@ -1823,6 +1895,12 @@ components:
           - type: 'null'
           title: Source
           description: Human-readable current input or playback source.
+        playing:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Playing
+          description: True when this speaker's group coordinator is PLAYING or TRANSITIONING.
       type: object
       required:
       - id

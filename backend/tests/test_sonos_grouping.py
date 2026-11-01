@@ -133,6 +133,52 @@ def test_group_selected_sets_speaker_volumes_before_play(
     assert "22%" in msg
 
 
+def test_add_speakers_to_group_joins_onto_existing_coordinator(
+    runtime: SonosRuntime, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    kitchen = FakeSonosDevice("uid-k", "Kitchen")
+    kitchen.group = _FakeGroup(coordinator=kitchen)
+    dining = FakeSonosDevice("uid-d", "Dining")
+    patio = FakeSonosDevice("uid-p", "Patio")
+
+    svc = SonosService()
+    monkeypatch.setattr(svc, "discover_visible_zones", lambda rt: {kitchen, dining, patio})
+
+    msg = svc.add_speakers_to_group(runtime, ["uid-k"], ["uid-p"])
+    assert patio.unjoin_calls == 1
+    assert patio.join_targets == [kitchen.uid]
+    assert "Patio" in msg
+    assert "Kitchen" in msg
+
+
+def test_add_speakers_to_empty_group_selects_single(
+    runtime: SonosRuntime, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    kitchen = FakeSonosDevice("uid-k", "Kitchen")
+    svc = SonosService()
+    monkeypatch.setattr(svc, "discover_visible_zones", lambda rt: {kitchen})
+
+    msg = svc.add_speakers_to_group(runtime, [], ["uid-k"])
+    assert kitchen.join_targets == []
+    assert "selected Kitchen" in msg
+
+
+def test_remove_speakers_from_group_unjoins(
+    runtime: SonosRuntime, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    kitchen = FakeSonosDevice("uid-k", "Kitchen")
+    dining = FakeSonosDevice("uid-d", "Dining")
+    dining.group = _FakeGroup(coordinator=kitchen)
+
+    svc = SonosService()
+    monkeypatch.setattr(svc, "discover_visible_zones", lambda rt: {kitchen, dining})
+
+    msg = svc.remove_speakers_from_group(runtime, ["uid-d"])
+    assert dining.unjoin_calls == 1
+    assert dining.group is None
+    assert "Dining" in msg
+
+
 def test_adjust_volume_selected_applies_relative_step_to_each_selected_zone(
     runtime: SonosRuntime, monkeypatch: pytest.MonkeyPatch
 ) -> None:
