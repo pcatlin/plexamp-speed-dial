@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type DragEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type DragEvent } from "react";
 import "./App.css";
 import {
   api,
@@ -45,7 +45,6 @@ import {
 } from "./initialVolumes";
 import { buildSpeedDialLabel, formatSpeedDialPlayTarget, speedDialDisplayLabel } from "./speedDialLabel";
 import {
-  isMobileAppClient,
   openPlexampApp,
   openSonosApp,
   plexampAppHref,
@@ -53,14 +52,12 @@ import {
 } from "./appLinks";
 import {
   IconChevronDown,
-  IconLaunchApp,
   IconList,
   IconPause,
   IconPlay,
   IconPowerOff,
   IconSkipNext,
   IconSkipPrevious,
-  IconStop,
   IconVolumeDown,
   IconVolumeUp,
 } from "./icons";
@@ -72,32 +69,10 @@ function routeFromHash(hash: string): "app" | "credits" {
   return path === "/credits" || path.startsWith("/credits?") ? "credits" : "app";
 }
 
-type ControlFramesetLegendProps = {
-  title: string;
-  appLink?: {
-    href: string;
-    label: string;
-    icon: ReactNode;
-    mobileOnly?: boolean;
-    onOpen?: (event: { preventDefault: () => void }) => void;
-  };
-};
-
-function ControlFramesetLegend({ title, appLink }: ControlFramesetLegendProps) {
+function ControlFramesetLegend({ title }: { title: string }) {
   return (
     <legend className="controlFramesetLegend">
       <span>{title}</span>
-      {appLink ? (
-        <a
-          href={appLink.href}
-          className={`controlFramesetAppLink${appLink.mobileOnly ? " controlFramesetAppLink--mobileOnly" : ""}`}
-          aria-label={appLink.label}
-          title={appLink.label}
-          onClick={(event) => appLink.onOpen?.(event)}
-        >
-          {appLink.icon}
-        </a>
-      ) : null}
     </legend>
   );
 }
@@ -665,30 +640,6 @@ function App() {
     }
   };
 
-  const toggleSonosLineInTransport = async () => {
-    if (selectedSpeakers.length === 0) {
-      showToast("Select at least one Sonos speaker to play line-in.");
-      return;
-    }
-    try {
-      if (sonosPlaying) {
-        const result = await api.sonosStop(selectedSpeakers);
-        showToast(result.details);
-        setSonosPlaying(false);
-      } else {
-        if (!selectedPlayer) {
-          showToast("Select a Plexamp player first (line-in is configured per player in Setup).");
-          return;
-        }
-        const result = await api.sonosPlayLineIn(selectedSpeakers, selectedPlayer);
-        showToast(result.details);
-        setSonosPlaying(true);
-      }
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : String(err));
-    }
-  };
-
   const skipNextPlexamp = async () => {
     if (!selectedPlayer) {
       showToast("Select a Plexamp player first.");
@@ -707,21 +658,62 @@ function App() {
     showToast(result.details);
   };
 
-  const togglePlexampPlayPause = async () => {
-    if (!selectedPlayer) {
-      showToast("Select a Plexamp player first.");
+  const toggleSmartPlayback = async () => {
+    // Only drive Sonos when that output path is active (never under Pioneer / non-Sonos).
+    const sonosInScope =
+      outputKind !== "pioneer" && (outputKind === "sonos" || selectedSpeakers.length > 0);
+    const controlSonos = sonosInScope && selectedSpeakers.length > 0;
+    const anythingPlaying = Boolean(plexampPlaying) || (controlSonos && Boolean(sonosPlaying));
+
+    if (anythingPlaying) {
+      const notes: string[] = [];
+      try {
+        if (selectedPlayer) {
+          const result = await api.plexampPause(selectedPlayer);
+          notes.push(result.details);
+          setPlexampPlaying(false);
+        }
+        if (controlSonos) {
+          const result = await api.sonosStop(selectedSpeakers);
+          notes.push(result.details);
+          setSonosPlaying(false);
+        }
+        if (notes.length === 0) {
+          showToast("Select a player first.");
+          return;
+        }
+        showToast(notes.join(" "));
+      } catch (err) {
+        showToast(err instanceof Error ? err.message : String(err));
+      }
       return;
     }
+
+    const notes: string[] = [];
     try {
-      if (plexampPlaying) {
-        const result = await api.plexampPause(selectedPlayer);
-        showToast(result.details);
-        setPlexampPlaying(false);
-      } else {
+      if (selectedPlayer && plexampPlaying !== true) {
         const result = await api.plexampResume(selectedPlayer);
-        showToast(result.details);
+        notes.push(result.details);
         setPlexampPlaying(true);
       }
+      if (controlSonos && sonosPlaying !== true) {
+        if (!selectedPlayer) {
+          showToast("Select a Plexamp player first (line-in is configured per player in Setup).");
+          return;
+        }
+        const result = await api.sonosPlayLineIn(selectedSpeakers, selectedPlayer);
+        notes.push(result.details);
+        setSonosPlaying(true);
+      }
+      if (notes.length === 0) {
+        if (!selectedPlayer) {
+          showToast("Select a Plexamp player first.");
+        } else {
+          showToast("Already playing.");
+        }
+        return;
+      }
+      showToast(notes.join(" "));
     } catch (err) {
       showToast(err instanceof Error ? err.message : String(err));
     }
@@ -871,6 +863,11 @@ function App() {
   if (route === "credits") {
     return <CreditsPage />;
   }
+
+  const showPioneerControls = outputKind === "pioneer";
+  const showSonosControls = !showPioneerControls && (outputKind === "sonos" || selectedSpeakers.length > 0);
+  const showOutputControls = showPioneerControls || showSonosControls;
+  const playbackActive = Boolean(plexampPlaying) || (showSonosControls && Boolean(sonosPlaying));
 
   return (
     <>
@@ -1244,170 +1241,154 @@ function App() {
 
       <div className="controlRailDock">
         <aside className="controlRail" aria-label="Playback controls">
-        {outputKind === "pioneer" ? (
-          <fieldset className="controlFrameset">
-            <legend>Receiver</legend>
-            <p className="receiverStatusRow" aria-live="polite">
-              {receiverStatusLine}
-            </p>
-            <div className="mediaToolbar mediaToolbarStack" role="group" aria-label="Pioneer AV receiver">
-              <button
-                type="button"
-                className={`iconBtn${receiverPowerOn ? "" : " iconBtn--active"}`}
-                aria-label={receiverPowerOn ? "Standby" : "Power on"}
-                title={receiverPowerOn ? "Standby" : "Power on"}
-                onClick={() => toggleReceiverPower().catch((e) => showToast(e.message))}
-              >
-                <IconPowerOff />
-              </button>
-              <button
-                type="button"
-                className="iconBtn"
-                aria-label="Lower receiver volume"
-                title="Volume down"
-                onClick={() => adjustReceiverVolume(-5).catch((e) => showToast(e.message))}
-              >
-                <IconVolumeDown />
-              </button>
-              <button
-                type="button"
-                className="iconBtn"
-                aria-label="Raise receiver volume"
-                title="Volume up"
-                onClick={() => adjustReceiverVolume(5).catch((e) => showToast(e.message))}
-              >
-                <IconVolumeUp />
-              </button>
-            </div>
-          </fieldset>
-        ) : outputKind === "sonos" || selectedSpeakers.length > 0 ? (
-          <fieldset className="controlFrameset">
-            <ControlFramesetLegend
-              title="Sonos"
-              appLink={{
-                href: sonosAppHref(),
-                label: "Open Sonos app",
-                icon: <IconLaunchApp />,
-                mobileOnly: true,
-                onOpen: openSonosApp,
-              }}
-            />
-            {selectedSonosVolumePercent != null ? (
-              <div
-                className="sonosVolumeLevel"
-                aria-live="polite"
-                title={
-                  selectedSpeakers.length > 1
-                    ? "Average volume of selected speakers"
-                    : "Selected speaker volume"
-                }
-              >
-                {selectedSonosVolumePercent}%
+          <fieldset className="controlFrameset controlFrameset--unified">
+            <ControlFramesetLegend title="Playback" />
+            {nowPlaying ||
+            showPioneerControls ||
+            (showSonosControls && selectedSonosVolumePercent != null) ? (
+              <div className="playbackStatus" aria-live="polite">
+                {nowPlaying ? (
+                  <a
+                    className="nowPlaying playbackStatusLink"
+                    href={plexampAppHref()}
+                    aria-label="Open Plexamp app"
+                    title="Open Plexamp app"
+                    onClick={(event) => openPlexampApp(event)}
+                  >
+                    {nowPlaying.rating_key ? (
+                      <img
+                        className="nowPlayingArt"
+                        src={`${API_BASE}/media/art/${nowPlaying.rating_key}`}
+                        alt=""
+                        loading="lazy"
+                        decoding="async"
+                      />
+                    ) : (
+                      <div className="nowPlayingArt nowPlayingArtPlaceholder" aria-hidden="true" />
+                    )}
+                    <div className="nowPlayingText">
+                      <div className="nowPlayingTitle">{nowPlaying.title}</div>
+                      {nowPlaying.artist || nowPlaying.album ? (
+                        <div className="nowPlayingMeta">
+                          {[nowPlaying.artist, nowPlaying.album].filter(Boolean).join(" · ")}
+                        </div>
+                      ) : null}
+                    </div>
+                  </a>
+                ) : null}
+                {showSonosControls && selectedSonosVolumePercent != null ? (
+                  <a
+                    className="playbackStatusVolume playbackStatusLink"
+                    href={sonosAppHref()}
+                    aria-label="Open Sonos app"
+                    title="Open Sonos app"
+                    onClick={(event) => openSonosApp(event)}
+                  >
+                    {selectedSonosVolumePercent}%
+                  </a>
+                ) : null}
+                {showPioneerControls ? (
+                  <p className="receiverStatusRow">{receiverStatusLine}</p>
+                ) : null}
               </div>
             ) : null}
-            <div className="mediaToolbar mediaToolbarStack" role="group" aria-label="Sonos selected speakers">
+            <div className="mediaToolbar mediaToolbarStack" role="group" aria-label="Playback transport">
               <button
                 type="button"
                 className="iconBtn"
-                aria-label={sonosPlaying ? "Stop selected Sonos speakers" : "Play line-in on selected Sonos speakers"}
-                title={sonosPlaying ? "Stop selected speakers" : "Play line-in on selected speakers"}
-                onClick={() => toggleSonosLineInTransport().catch((e) => showToast(e.message))}
+                aria-label={playbackActive ? "Pause playback" : "Play"}
+                title={
+                  playbackActive
+                    ? "Pause player and stop speakers"
+                    : "Play paused/stopped player and speakers only"
+                }
+                onClick={() => toggleSmartPlayback().catch((e) => showToast(e.message))}
               >
-                {sonosPlaying ? <IconStop /> : <IconPlay />}
+                {playbackActive ? <IconPause /> : <IconPlay />}
               </button>
               <button
                 type="button"
                 className="iconBtn"
-                aria-label="Lower volume on selected Sonos speakers"
-                title="Volume down (selected speakers)"
-                onClick={() => adjustSonosVolume(-5).catch((e) => showToast(e.message))}
+                aria-label="Previous track"
+                title="Previous track"
+                onClick={() => skipPreviousPlexamp().catch((e) => showToast(e.message))}
               >
-                <IconVolumeDown />
+                <IconSkipPrevious />
               </button>
               <button
                 type="button"
                 className="iconBtn"
-                aria-label="Raise volume on selected Sonos speakers"
-                title="Volume up (selected speakers)"
-                onClick={() => adjustSonosVolume(5).catch((e) => showToast(e.message))}
+                aria-label="Next track"
+                title="Next track"
+                onClick={() => skipNextPlexamp().catch((e) => showToast(e.message))}
               >
-                <IconVolumeUp />
+                <IconSkipNext />
               </button>
-              <button
-                type="button"
-                className="iconBtn"
-                aria-label="Adjust all Sonos speaker volumes"
-                title="All speaker volumes"
-                onClick={() => setSonosVolumeMixerOpen(true)}
-              >
-                <IconList />
-              </button>
+              {showOutputControls ? <span className="controlToolbarDivider" aria-hidden="true" /> : null}
+              {showPioneerControls ? (
+                <>
+                  <button
+                    type="button"
+                    className={`iconBtn${receiverPowerOn ? "" : " iconBtn--active"}`}
+                    aria-label={receiverPowerOn ? "Standby" : "Power on"}
+                    title={receiverPowerOn ? "Standby" : "Power on"}
+                    onClick={() => toggleReceiverPower().catch((e) => showToast(e.message))}
+                  >
+                    <IconPowerOff />
+                  </button>
+                  <button
+                    type="button"
+                    className="iconBtn"
+                    aria-label="Lower receiver volume"
+                    title="Volume down"
+                    onClick={() => adjustReceiverVolume(-5).catch((e) => showToast(e.message))}
+                  >
+                    <IconVolumeDown />
+                  </button>
+                  <button
+                    type="button"
+                    className="iconBtn"
+                    aria-label="Raise receiver volume"
+                    title="Volume up"
+                    onClick={() => adjustReceiverVolume(5).catch((e) => showToast(e.message))}
+                  >
+                    <IconVolumeUp />
+                  </button>
+                </>
+              ) : null}
+              {showSonosControls ? (
+                <>
+                  <button
+                    type="button"
+                    className="iconBtn"
+                    aria-label="Lower volume on selected Sonos speakers"
+                    title="Volume down (selected speakers)"
+                    onClick={() => adjustSonosVolume(-5).catch((e) => showToast(e.message))}
+                  >
+                    <IconVolumeDown />
+                  </button>
+                  <button
+                    type="button"
+                    className="iconBtn"
+                    aria-label="Raise volume on selected Sonos speakers"
+                    title="Volume up (selected speakers)"
+                    onClick={() => adjustSonosVolume(5).catch((e) => showToast(e.message))}
+                  >
+                    <IconVolumeUp />
+                  </button>
+                  <button
+                    type="button"
+                    className="iconBtn"
+                    aria-label="Adjust all Sonos speaker volumes"
+                    title="All speaker volumes"
+                    onClick={() => setSonosVolumeMixerOpen(true)}
+                  >
+                    <IconList />
+                  </button>
+                </>
+              ) : null}
             </div>
           </fieldset>
-        ) : null}
-
-        <fieldset className="controlFrameset">
-          <ControlFramesetLegend
-            title="Player"
-            appLink={
-              isMobileAppClient()
-                ? {
-                    href: plexampAppHref(),
-                    label: "Open Plexamp app",
-                    icon: <IconLaunchApp />,
-                    onOpen: openPlexampApp,
-                  }
-                : undefined
-            }
-          />
-          {nowPlaying ? (
-            <div className="nowPlaying" aria-live="polite">
-              {nowPlaying.rating_key ? (
-                <img
-                  className="nowPlayingArt"
-                  src={`${API_BASE}/media/art/${nowPlaying.rating_key}`}
-                  alt=""
-                  loading="lazy"
-                  decoding="async"
-                />
-              ) : (
-                <div className="nowPlayingArt nowPlayingArtPlaceholder" aria-hidden="true" />
-              )}
-              <div className="nowPlayingText">
-                <div className="nowPlayingTitle">{nowPlaying.title}</div>
-                {nowPlaying.artist ? <div className="nowPlayingArtist">{nowPlaying.artist}</div> : null}
-                {nowPlaying.album ? <div className="nowPlayingAlbum">{nowPlaying.album}</div> : null}
-              </div>
-            </div>
-          ) : null}
-          <div className="mediaToolbar mediaToolbarStack" role="group" aria-label="Player transport">
-            <button
-              type="button"
-              className="iconBtn"
-              aria-label={plexampPlaying ? "Pause playback" : "Resume playback"}
-              title={
-                plexampPlaying
-                  ? "Pause playback"
-                  : "Resume playback (current queue; does not start a new queue)"
-              }
-              onClick={() => togglePlexampPlayPause().catch((e) => showToast(e.message))}
-            >
-              {plexampPlaying ? <IconPause /> : <IconPlay />}
-            </button>
-            <button
-              type="button"
-              className="iconBtn"
-              aria-label="Previous track"
-              title="Previous track"
-              onClick={() => skipPreviousPlexamp().catch((e) => showToast(e.message))}
-            >
-              <IconSkipPrevious />
-            </button>
-            <button type="button" className="iconBtn" aria-label="Next track" title="Next track" onClick={() => skipNextPlexamp().catch((e) => showToast(e.message))}>
-              <IconSkipNext />
-            </button>
-          </div>
-        </fieldset>
         </aside>
       </div>
     </>

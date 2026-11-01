@@ -2,7 +2,7 @@
   box-sizing: border-box;
   max-width: 960px;
   margin: 0 auto;
-  padding: 1rem 1rem 6.5rem;
+  padding: 1rem 1rem 5.5rem;
 }
 
 .appMain {
@@ -66,31 +66,16 @@
   box-sizing: border-box;
 }
 
-.controlFramesetAppLink {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: #4b5563;
-  text-decoration: none;
-  padding: 0.1rem 0.35rem;
-  border-radius: 6px;
-  line-height: 1;
+.controlFrameset--unified {
+  flex: 1 1 auto;
 }
 
-.controlFramesetAppLink:hover {
-  color: #111827;
-  background: rgba(0, 0, 0, 0.06);
-}
-
-.controlFramesetAppLink .mediaCtrlIcon {
-  width: 1.1rem;
-  font-size: 1rem;
-}
-
-@media (min-width: 769px) {
-  .controlFramesetAppLink--mobileOnly {
-    display: none;
-  }
+.controlToolbarDivider {
+  flex: 0 0 auto;
+  width: 1px;
+  height: 1.55rem;
+  margin: 0 0.2rem;
+  background: #b0b6c0;
 }
 
 .mediaToolbarStack {
@@ -100,18 +85,60 @@
   justify-content: center;
 }
 
+.playbackStatus {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  box-sizing: border-box;
+  width: min(100%, 26rem);
+  margin: 0.2rem auto 0.55rem;
+  padding: 0.35rem 0.65rem;
+  min-width: 0;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(184, 188, 196, 0.55);
+}
+
 .nowPlaying {
   display: flex;
   align-items: center;
   gap: 0.55rem;
-  margin: 0.15rem 0 0.45rem;
   min-width: 0;
+  flex: 1 1 auto;
+}
+
+a.playbackStatusLink {
+  color: inherit;
+  text-decoration: none;
+  border-radius: 6px;
+  outline-offset: 2px;
+  -webkit-tap-highlight-color: transparent;
+}
+
+a.playbackStatusLink:hover,
+a.playbackStatusLink:focus-visible {
+  background: rgba(255, 255, 255, 0.45);
+}
+
+a.nowPlaying.playbackStatusLink {
+  margin: -0.15rem;
+  padding: 0.15rem;
+}
+
+a.playbackStatusVolume.playbackStatusLink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2rem;
+  padding: 0.25rem 0.35rem;
+  border-radius: 6px;
 }
 
 .nowPlayingArt {
-  flex: 0 0 2.6rem;
-  width: 2.6rem;
-  height: 2.6rem;
+  flex: 0 0 2.5rem;
+  width: 2.5rem;
+  height: 2.5rem;
   border-radius: 6px;
   object-fit: cover;
   background: #d1d5db;
@@ -125,10 +152,11 @@
 .nowPlayingText {
   min-width: 0;
   flex: 1 1 auto;
+  text-align: left;
 }
 
 .nowPlayingTitle {
-  font-size: 0.82rem;
+  font-size: 0.84rem;
   font-weight: 650;
   color: #111827;
   line-height: 1.2;
@@ -137,18 +165,32 @@
   white-space: nowrap;
 }
 
-.nowPlayingArtist,
-.nowPlayingAlbum {
+.nowPlayingMeta {
+  margin-top: 0.1rem;
   font-size: 0.72rem;
   color: #4b5563;
-  line-height: 1.2;
+  line-height: 1.25;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.nowPlayingAlbum {
-  color: #6b7280;
+.playbackStatusVolume {
+  flex: 0 0 auto;
+  min-width: 2.75rem;
+  font-size: 0.92rem;
+  font-weight: 650;
+  line-height: 1;
+  color: #111827;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+}
+
+.playbackStatus .receiverStatusRow {
+  margin: 0;
+  flex: 1 1 auto;
+  text-align: center;
 }
 
 .controlRail .mediaToolbar {
@@ -1426,16 +1468,6 @@ button.iconBtn.primary:hover:not(:disabled) {
   line-height: 1;
 }
 
-.sonosVolumeLevel {
-  margin: 0.15rem 0 0.45rem;
-  font-size: 0.82rem;
-  font-weight: 650;
-  line-height: 1.2;
-  color: #111827;
-  text-align: center;
-  font-variant-numeric: tabular-nums;
-  user-select: none;
-}
 
 .appToast {
   position: fixed;
@@ -2096,8 +2128,22 @@ button.nowrap {
     font-size: 1.35rem;
   }
 
-  .sonosVolumeLevel {
-    font-size: 1rem;
+  .playbackStatus {
+    width: min(100%, 22rem);
+    padding: 0.4rem 0.7rem;
+  }
+
+  .playbackStatusVolume {
+    font-size: 1.05rem;
+    min-width: 3rem;
+  }
+
+  .nowPlayingTitle {
+    font-size: 0.95rem;
+  }
+
+  .nowPlayingMeta {
+    font-size: 0.8rem;
   }
 
   .speedDialGrid {
@@ -2133,7 +2179,7 @@ button.nowrap {
 
 @media (max-width: 500px) {
   .appShell {
-    padding-bottom: 9rem;
+    padding-bottom: 7rem;
   }
 
   .controlRailDock {
@@ -2153,6 +2199,10 @@ button.nowrap {
     padding: 0.3rem 0.45rem 0.35rem;
   }
 
+  .controlToolbarDivider {
+    height: 1.75rem;
+  }
+
   .controlFrameset legend {
     font-size: 1rem;
     padding: 0 0.4rem;
@@ -2160,7 +2210,6 @@ button.nowrap {
 
   .receiverStatusRow {
     font-size: 1rem;
-    margin-bottom: 0.25rem;
   }
 
   .mediaToolbarStack {
