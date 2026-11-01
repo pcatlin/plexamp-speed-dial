@@ -363,7 +363,11 @@ class PlexService:
         limit: int = 50,
         request_timeout: float = 10,
     ) -> list[MediaItem]:
-        """Return up to `limit` tracks (capped at 50) for a playlist, album, or artist."""
+        """Return up to `limit` tracks (capped at 50) for a playlist, album, or artist.
+
+        Uses Plex container pagination (``maxresults`` / ``X-Plex-Container-Size``) so large
+        playlists do not download every track just to preview the first page.
+        """
         fam = family.lower()
         if fam not in ("playlist", "album", "artist"):
             raise ValueError(f"Unsupported family: {family!r} (use playlist, album, or artist).")
@@ -387,8 +391,11 @@ class PlexService:
             pt = (getattr(item, "playlistType", None) or "").lower()
             if pt and pt != "audio":
                 raise ValueError("Only audio playlists can list tracks here.")
+            # Avoid Playlist.items() — it loads the entire playlist (and may reconnect
+            # remote servers per item). Page just the preview window from PMS.
             try:
-                children = item.items()
+                key = getattr(item, "key", None) or f"/playlists/{rk}"
+                children = item.fetchItems(f"{key}/items", maxresults=cap, container_size=cap)
             except Exception as exc:  # noqa: BLE001
                 raise ValueError(f"Unable to load playlist items: {exc}") from exc
         else:
@@ -396,7 +403,13 @@ class PlexService:
             if not callable(tracks_fn):
                 raise ValueError(f"{fam.title()} has no track listing.")
             try:
-                children = tracks_fn()
+                children = tracks_fn(maxresults=cap, container_size=cap)
+            except TypeError:
+                # Older plexapi stubs / unexpected callables without kwargs.
+                try:
+                    children = tracks_fn()
+                except Exception as exc:  # noqa: BLE001
+                    raise ValueError(f"Unable to load {fam} tracks: {exc}") from exc
             except Exception as exc:  # noqa: BLE001
                 raise ValueError(f"Unable to load {fam} tracks: {exc}") from exc
 
