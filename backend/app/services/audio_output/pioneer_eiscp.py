@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import socket
 import struct
+import threading
 import time
 from dataclasses import dataclass
 from typing import Literal
@@ -13,6 +14,31 @@ DEFAULT_PORT = 60128
 DEFAULT_TIMEOUT = 4.0
 # Pioneer main-zone MVL index: dB = (index / 2) - offset (0.5 dB per step). Index 0 = mute (−∞).
 PIONEER_MVL_DB_OFFSET = 82.0
+# Many Pioneer/Onkyo units allow only one ISCP TCP client; overlapping polls (phone PWA via
+# tunnel + localhost, or status + volume) produce Broken pipe. Serialize per host and briefly
+# cache status reads. RLock so prepare_playback can nest power/input queries.
+_host_locks: dict[str, threading.RLock] = {}
+_host_locks_guard = threading.Lock()
+_status_cache: dict[str, tuple[float, object]] = {}
+_STATUS_CACHE_TTL_S = 3.0
+
+
+def _host_key(host: str, port: int) -> str:
+    return f"{host.strip().lower()}:{port}"
+
+
+def _lock_for(host: str, port: int) -> threading.RLock:
+    key = _host_key(host, port)
+    with _host_locks_guard:
+        lock = _host_locks.get(key)
+        if lock is None:
+            lock = threading.RLock()
+            _host_locks[key] = lock
+        return lock
+
+
+def _invalidate_status_cache(host: str, port: int) -> None:
+    _status_cache.pop(_host_key(host, port), None)
 
 # Earlier UI builds used wrong SLI codes for HDMI presets (e.g. 22 = phono, not HDMI 2).
 # Remap codes saved by older UI builds. Do not remap "23" — it is CD on VSX-LX505 (old builds wrongly used it for HDMI 3).
@@ -160,10 +186,11 @@ def _send_query(
     port: int = DEFAULT_PORT,
     timeout: float = DEFAULT_TIMEOUT,
 ) -> str | None:
-    packet = _frame(command)
-    with socket.create_connection((host, port), timeout=timeout) as sock:
-        sock.sendall(packet)
-        return _recv_query_answer(sock, command, timeout)
+    with _lock_for(host, port):
+        packet = _frame(command)
+        with socket.create_connection((host, port), timeout=timeout) as sock:
+            sock.sendall(packet)
+            return _recv_query_answer(sock, command, timeout)
 
 
 def _send_command(
@@ -174,16 +201,18 @@ def _send_command(
     timeout: float = DEFAULT_TIMEOUT,
     expect_response: bool = False,
 ) -> bytes:
-    packet = _frame(command)
-    with socket.create_connection((host, port), timeout=timeout) as sock:
-        sock.sendall(packet)
-        if expect_response:
-            answer = _recv_query_answer(sock, command, timeout)
-            return answer.encode("ascii") if answer else b""
-        try:
-            return _recv_response(sock, min(timeout, 1.0))
-        except OSError:
-            return b""
+    with _lock_for(host, port):
+        _invalidate_status_cache(host, port)
+        packet = _frame(command)
+        with socket.create_connection((host, port), timeout=timeout) as sock:
+            sock.sendall(packet)
+            if expect_response:
+                answer = _recv_query_answer(sock, command, timeout)
+                return answer.encode("ascii") if answer else b""
+            try:
+                return _recv_response(sock, min(timeout, 1.0))
+            except OSError:
+                return b""
     return b""
 
 
@@ -346,33 +375,49 @@ class PioneerReceiverStatus:
 def query_status(host: str, *, port: int = DEFAULT_PORT, timeout: float = DEFAULT_TIMEOUT) -> PioneerReceiverStatus:
     """Query power, input, and volume over one TCP session.
 
-    Each QSTN returns as soon as its answer arrives. Connect timeout is capped so an
-    unreachable AVR cannot stall playback-status polls for the full command timeout.
+    Serialized per AVR (one ISCP client at a time). Brief cache collapses overlapping
+    status polls from multiple browsers/PWAs so they share one eISCP round-trip.
     """
-    connect_timeout = min(timeout, 1.5)
-    per_query_timeout = min(timeout, 1.5)
-    messages: list[str] = []
-    with socket.create_connection((host, port), timeout=connect_timeout) as sock:
-        for command in ("PWRQSTN", "SLIQSTN", "MVLQSTN"):
-            sock.sendall(_frame(command))
-            _recv_query_answer(sock, command, per_query_timeout, collected=messages)
+    key = _host_key(host, port)
+    cached = _status_cache.get(key)
+    if cached is not None:
+        cached_at, snap = cached
+        if time.monotonic() - cached_at <= _STATUS_CACHE_TTL_S:
+            return snap  # type: ignore[return-value]
 
-    power_on = _parse_power_from_session(messages, b"")
-    input_msg = _latest_answer(messages, "SLI")
-    volume_msg = _latest_answer(messages, "MVL")
-    input_code = _parse_iscp_hex_value(input_msg, "SLI") if input_msg else None
-    volume_level = _parse_volume_answer(volume_msg)
-    if power_on is None and (input_code is not None or volume_level is not None):
-        # VSX units often omit a distinct PWR QSTN body but still answer SLI/MVL when the main zone is active.
-        power_on = True
-    muted = volume_level_is_muted(volume_level)
-    return PioneerReceiverStatus(
-        power_on=power_on,
-        input_code=input_code,
-        volume_level=volume_level,
-        volume_db=volume_level_to_db(volume_level),
-        volume_muted=muted,
-    )
+    with _lock_for(host, port):
+        cached = _status_cache.get(key)
+        if cached is not None:
+            cached_at, snap = cached
+            if time.monotonic() - cached_at <= _STATUS_CACHE_TTL_S:
+                return snap  # type: ignore[return-value]
+
+        connect_timeout = min(timeout, 1.5)
+        per_query_timeout = min(timeout, 1.5)
+        messages: list[str] = []
+        with socket.create_connection((host, port), timeout=connect_timeout) as sock:
+            for command in ("PWRQSTN", "SLIQSTN", "MVLQSTN"):
+                sock.sendall(_frame(command))
+                _recv_query_answer(sock, command, per_query_timeout, collected=messages)
+
+        power_on = _parse_power_from_session(messages, b"")
+        input_msg = _latest_answer(messages, "SLI")
+        volume_msg = _latest_answer(messages, "MVL")
+        input_code = _parse_iscp_hex_value(input_msg, "SLI") if input_msg else None
+        volume_level = _parse_volume_answer(volume_msg)
+        if power_on is None and (input_code is not None or volume_level is not None):
+            # VSX units often omit a distinct PWR QSTN body but still answer SLI/MVL when the main zone is active.
+            power_on = True
+        muted = volume_level_is_muted(volume_level)
+        status = PioneerReceiverStatus(
+            power_on=power_on,
+            input_code=input_code,
+            volume_level=volume_level,
+            volume_db=volume_level_to_db(volume_level),
+            volume_muted=muted,
+        )
+        _status_cache[key] = (time.monotonic(), status)
+        return status
 
 
 def prepare_playback(host: str, input_code: str, *, port: int = DEFAULT_PORT) -> str:
