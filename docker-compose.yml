@@ -5,9 +5,9 @@
 #   docker compose build api web && docker compose up -d
 # Or in one step: docker compose up --build -d
 #
-# The API uses host networking so Pioneer eISCP and Sonos can reach LAN devices without
-# Docker bridge NAT (typical Linux self-host / Cloudflare tunnel box). Docker Desktop for
-# Mac does not support host networking the same way — use a LAN-reachable API or seed IPs.
+# Host ports (optional .env or shell):
+#   API_HOST_PORT=8322   # published API, default 8000
+#   WEB_HOST_PORT=8080   # published web UI, default 80
 #
 # Alternate host port for web: docker compose -f docker-compose.yml -f docker-compose.build.yml up [--build]
 # Vite HMR while editing frontend: docker compose -f docker-compose.yml -f docker-compose.dev.yml up
@@ -20,36 +20,36 @@ services:
       POSTGRES_PASSWORD: plexamp_local_only
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U plexamp -d plexamp_speed_dial"]
       interval: 5s
       timeout: 5s
       retries: 10
+    restart: unless-stopped
 
   api:
     image: paulcatlin/plexamp-speed-dial-api:latest
     build:
       context: ./backend
-    network_mode: host
     environment:
-      DATABASE_URL: postgresql+psycopg://plexamp:plexamp_local_only@127.0.0.1:5432/plexamp_speed_dial
+      DATABASE_URL: postgresql+psycopg://plexamp:plexamp_local_only@db:5432/plexamp_speed_dial
     depends_on:
       db:
         condition: service_healthy
     command: sh -c "python -m app.db.init_db && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+    ports:
+      - "${API_HOST_PORT:-8000}:8000"
+    restart: unless-stopped
 
   web:
     image: paulcatlin/plexamp-speed-dial-web:latest
     build:
       context: ./frontend
     ports:
-      - "80:80"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      - "${WEB_HOST_PORT:-80}:80"
     depends_on:
       - api
+    restart: unless-stopped
 
 volumes:
   postgres_data:
