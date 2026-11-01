@@ -114,20 +114,23 @@ class PlaybackService:
         timeout: float,
     ) -> str | None:
         """
-        After createPlayQueue, explicitly start playback and briefly verify timeline.
+        After createPlayQueue, start playback only if the companion is not already playing.
 
-        Cold Caldera/Plexamp instances may load a queue without auto-starting. Returns an
-        optional note when playing could not be confirmed (createPlayQueue still succeeded).
+        Warm players often keep transporting through a queue swap; a bare ``play`` would
+        briefly continue the previous playlist. Cold Caldera/Plexamp may load a queue
+        without auto-starting — only then send ``play``. Returns an optional note when
+        playing could not be confirmed (createPlayQueue still succeeded).
         """
-        # Best-effort wake/identity handshake before the first play.
-        try:
-            plexamp_timeline_snapshot(plexamp_base=plexamp_base, token=auth_token, timeout=timeout)
-        except Exception:  # noqa: BLE001
-            pass
+        poll_timeout = min(timeout, 3.0)
+
+        # Give createPlayQueue a moment to report playing on its own (warm or auto-start).
+        for _ in range(3):
+            if self._companion_timeline_playing(plexamp_base, auth_token=auth_token, timeout=poll_timeout):
+                return None
+            time.sleep(0.2)
 
         self._send_companion_play(plexamp_base, auth_token=auth_token, timeout=timeout)
 
-        poll_timeout = min(timeout, 3.0)
         for attempt in range(3):
             if self._companion_timeline_playing(plexamp_base, auth_token=auth_token, timeout=poll_timeout):
                 return None
