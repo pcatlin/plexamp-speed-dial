@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import time
 from urllib.parse import urlparse
 
 import logging
@@ -73,6 +74,72 @@ class PlaybackService:
             return f"{scheme}://{parsed.hostname}:{port}", None
         scheme = "https" if player.port == 443 else "http"
         return f"{scheme}://{raw_host}:{player.port or 32500}", None
+
+    def _send_companion_play(self, plexamp_base: str, *, auth_token: str, timeout: float) -> bool:
+        try:
+            response = plexamp_playback_command(
+                plexamp_base=plexamp_base,
+                token=auth_token,
+                action="play",
+                timeout=timeout,
+            )
+        except requests_exc.RequestException as exc:
+            _log.warning("Companion play command failed for %s: %s", plexamp_base, exc)
+            return False
+        if response.status_code != 200:
+            _log.warning(
+                "Companion play command HTTP %s for %s",
+                response.status_code,
+                plexamp_base,
+            )
+            return False
+        return True
+
+    def _companion_timeline_playing(self, plexamp_base: str, *, auth_token: str, timeout: float) -> bool:
+        try:
+            snap = plexamp_timeline_snapshot(
+                plexamp_base=plexamp_base,
+                token=auth_token,
+                timeout=timeout,
+            )
+        except Exception:  # noqa: BLE001
+            return False
+        return plexamp_timeline_implies_playing(snap.state if snap else None) is True
+
+    def _ensure_companion_playing(
+        self,
+        plexamp_base: str,
+        *,
+        auth_token: str,
+        timeout: float,
+    ) -> str | None:
+        """
+        After createPlayQueue, explicitly start playback and briefly verify timeline.
+
+        Cold Caldera/Plexamp instances may load a queue without auto-starting. Returns an
+        optional note when playing could not be confirmed (createPlayQueue still succeeded).
+        """
+        # Best-effort wake/identity handshake before the first play.
+        try:
+            plexamp_timeline_snapshot(plexamp_base=plexamp_base, token=auth_token, timeout=timeout)
+        except Exception:  # noqa: BLE001
+            pass
+
+        self._send_companion_play(plexamp_base, auth_token=auth_token, timeout=timeout)
+
+        poll_timeout = min(timeout, 3.0)
+        for attempt in range(3):
+            if self._companion_timeline_playing(plexamp_base, auth_token=auth_token, timeout=poll_timeout):
+                return None
+            if attempt == 1:
+                self._send_companion_play(plexamp_base, auth_token=auth_token, timeout=timeout)
+            time.sleep(0.35)
+
+        self._send_companion_play(plexamp_base, auth_token=auth_token, timeout=timeout)
+        if self._companion_timeline_playing(plexamp_base, auth_token=auth_token, timeout=poll_timeout):
+            return None
+        _log.warning("Companion at %s did not confirm playing after createPlayQueue", plexamp_base)
+        return "Player did not confirm playing yet."
 
     def play(self, payload: PlayRequest, db: Session, *, auth_token: str) -> PlayResponse:
         player = db.get(PlexampPlayer, payload.player_id)
@@ -255,6 +322,12 @@ class PlaybackService:
                 ),
             )
 
+        start_note = self._ensure_companion_playing(
+            plexamp_base,
+            auth_token=auth_token,
+            timeout=settings.plexamp_request_timeout_seconds,
+        )
+
         output_note = self._audio_output.prepare_for_play(
             player,
             db,
@@ -263,10 +336,13 @@ class PlaybackService:
         )
 
         title = getattr(item, "title", "") or getattr(item, "tag", "") or payload.media_id
-        tail = output_note
         details_kind = f"{play_kind} (shuffled)" if shuffle_flag else play_kind
-        details = f"Playing {details_kind}: {title!r} via {player.name}. {tail}"
-        return PlayResponse(status="ok", details=details)
+        parts = [f"Playing {details_kind}: {title!r} via {player.name}."]
+        if start_note:
+            parts.append(start_note)
+        if output_note:
+            parts.append(output_note)
+        return PlayResponse(status="ok", details=" ".join(parts))
 
     def _plexamp_playback_simple(
         self,

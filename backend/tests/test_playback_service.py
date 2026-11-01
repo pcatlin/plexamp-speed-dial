@@ -5,14 +5,36 @@ import pytest
 from app.models import PlexCredential, PlexampPlayer, SonosGroupPreset
 from app.schemas.domain import PlayRequest
 from app.services.playback_service import PlaybackService
+from app.services.plexamp_client import TimelineSnapshot
+
+
+def _ok_response() -> Mock:
+    fake = Mock()
+    fake.status_code = 200
+    fake.text = ""
+    return fake
+
+
+def patch_companion_start(monkeypatch, *, create_play_queue=None):  # noqa: ANN001
+    """Stub createPlayQueue + follow-up play/timeline used after a successful queue load."""
+    monkeypatch.setattr(
+        "app.services.playback_service.create_play_queue",
+        create_play_queue or (lambda **kwargs: _ok_response()),
+    )
+    monkeypatch.setattr(
+        "app.services.playback_service.plexamp_playback_command",
+        lambda **kwargs: _ok_response(),
+    )
+    monkeypatch.setattr(
+        "app.services.playback_service.plexamp_timeline_snapshot",
+        lambda **kwargs: TimelineSnapshot(state="playing"),
+    )
 
 
 @pytest.fixture()
 def patched_play_queue(monkeypatch):
-    fake = Mock()
-    fake.status_code = 200
-    fake.text = ""
-    monkeypatch.setattr("app.services.playback_service.create_play_queue", lambda **kwargs: fake)
+    fake = _ok_response()
+    patch_companion_start(monkeypatch, create_play_queue=lambda **kwargs: fake)
     return fake
 
 
@@ -148,6 +170,76 @@ def test_playback_plexamp_resume_ok(db_session, monkeypatch):
     result = service.plexamp_resume(player.id, db_session, auth_token="dummy-token")
     assert result.status == "ok"
     assert "Resumed playback" in result.details
+
+
+def test_playback_sends_play_after_create_play_queue(db_session, monkeypatch):
+    db_session.add(PlexCredential(auth_token="dummy-token", is_connected=True))
+    db_session.commit()
+    player = PlexampPlayer(name="Caldera", host="caldera.local", port=32500, is_active=True)
+    db_session.add(player)
+    db_session.commit()
+    db_session.refresh(player)
+
+    play_actions: list[str] = []
+
+    def capture_play(**kwargs):  # noqa: ANN001
+        play_actions.append(kwargs["action"])
+        return _ok_response()
+
+    monkeypatch.setattr("app.services.playback_service.create_play_queue", lambda **kwargs: _ok_response())
+    monkeypatch.setattr("app.services.playback_service.plexamp_playback_command", capture_play)
+    monkeypatch.setattr(
+        "app.services.playback_service.plexamp_timeline_snapshot",
+        lambda **kwargs: TimelineSnapshot(state="playing"),
+    )
+    monkeypatch.setattr("app.services.playback_service.time.sleep", lambda _seconds: None)
+
+    service = PlaybackService(plex_service=FakePlexService(), sonos_service=FakeSonosService())
+    result = service.play(
+        PlayRequest(media_type="playlist", media_id="100", player_id=player.id, speaker_ids=[]),
+        db_session,
+        auth_token="dummy-token",
+    )
+    assert result.status == "ok"
+    assert play_actions == ["play"]
+    assert "did not confirm" not in result.details.lower()
+
+
+def test_playback_retries_play_when_timeline_stays_idle(db_session, monkeypatch):
+    db_session.add(PlexCredential(auth_token="dummy-token", is_connected=True))
+    db_session.commit()
+    player = PlexampPlayer(name="Caldera", host="caldera.local", port=32500, is_active=True)
+    db_session.add(player)
+    db_session.commit()
+    db_session.refresh(player)
+
+    play_actions: list[str] = []
+    timeline_calls = {"n": 0}
+
+    def capture_play(**kwargs):  # noqa: ANN001
+        play_actions.append(kwargs["action"])
+        return _ok_response()
+
+    def idle_then_playing(**kwargs):  # noqa: ANN001
+        timeline_calls["n"] += 1
+        # First polls idle (wake + verify loop); eventually report playing after retries.
+        if timeline_calls["n"] < 5:
+            return TimelineSnapshot(state="stopped")
+        return TimelineSnapshot(state="playing")
+
+    monkeypatch.setattr("app.services.playback_service.create_play_queue", lambda **kwargs: _ok_response())
+    monkeypatch.setattr("app.services.playback_service.plexamp_playback_command", capture_play)
+    monkeypatch.setattr("app.services.playback_service.plexamp_timeline_snapshot", idle_then_playing)
+    monkeypatch.setattr("app.services.playback_service.time.sleep", lambda _seconds: None)
+
+    service = PlaybackService(plex_service=FakePlexService(), sonos_service=FakeSonosService())
+    result = service.play(
+        PlayRequest(media_type="playlist", media_id="100", player_id=player.id, speaker_ids=[]),
+        db_session,
+        auth_token="dummy-token",
+    )
+    assert result.status == "ok"
+    assert play_actions.count("play") >= 2
 
 
 def test_playback_sonos_stop_empty_returns_error(db_session):
@@ -296,12 +388,9 @@ def test_playback_artist_radio_uses_station_in_uri(db_session, monkeypatch):
 
     def capture_queue(**kwargs):  # noqa: ANN001
         captured["server_uri"] = kwargs["server_uri"]
-        fake = Mock()
-        fake.status_code = 200
-        fake.text = ""
-        return fake
+        return _ok_response()
 
-    monkeypatch.setattr("app.services.playback_service.create_play_queue", capture_queue)
+    patch_companion_start(monkeypatch, create_play_queue=capture_queue)
 
     service = PlaybackService(plex_service=FakeArtistPlexService(), sonos_service=FakeSonosService())
     result = service.play(
@@ -326,12 +415,9 @@ def test_playback_artist_radio_appends_degrees_of_separation(db_session, monkeyp
 
     def capture_queue(**kwargs):  # noqa: ANN001
         captured["server_uri"] = kwargs["server_uri"]
-        fake = Mock()
-        fake.status_code = 200
-        fake.text = ""
-        return fake
+        return _ok_response()
 
-    monkeypatch.setattr("app.services.playback_service.create_play_queue", capture_queue)
+    patch_companion_start(monkeypatch, create_play_queue=capture_queue)
 
     service = PlaybackService(plex_service=FakeArtistPlexService(), sonos_service=FakeSonosService())
     result = service.play(
@@ -362,12 +448,9 @@ def test_playback_artist_library_uses_metadata_uri(db_session, monkeypatch):
 
     def capture_queue(**kwargs):  # noqa: ANN001
         captured["server_uri"] = kwargs["server_uri"]
-        fake = Mock()
-        fake.status_code = 200
-        fake.text = ""
-        return fake
+        return _ok_response()
 
-    monkeypatch.setattr("app.services.playback_service.create_play_queue", capture_queue)
+    patch_companion_start(monkeypatch, create_play_queue=capture_queue)
 
     service = PlaybackService(plex_service=FakeArtistPlexService(), sonos_service=FakeSonosService())
     result = service.play(
@@ -428,12 +511,9 @@ def test_playback_track_radio_uses_station_in_uri(db_session, monkeypatch):
 
     def capture_queue(**kwargs):  # noqa: ANN001
         captured.update(kwargs)
-        fake = Mock()
-        fake.status_code = 200
-        fake.text = ""
-        return fake
+        return _ok_response()
 
-    monkeypatch.setattr("app.services.playback_service.create_play_queue", capture_queue)
+    patch_companion_start(monkeypatch, create_play_queue=capture_queue)
 
     service = PlaybackService(plex_service=FakeTrackPlexService(), sonos_service=FakeSonosService())
     result = service.play(
@@ -460,12 +540,9 @@ def test_playback_track_radio_appends_degrees_of_separation(db_session, monkeypa
 
     def capture_queue(**kwargs):  # noqa: ANN001
         captured.update(kwargs)
-        fake = Mock()
-        fake.status_code = 200
-        fake.text = ""
-        return fake
+        return _ok_response()
 
-    monkeypatch.setattr("app.services.playback_service.create_play_queue", capture_queue)
+    patch_companion_start(monkeypatch, create_play_queue=capture_queue)
 
     service = PlaybackService(plex_service=FakeTrackPlexService(), sonos_service=FakeSonosService())
     result = service.play(
@@ -495,12 +572,9 @@ def test_playback_track_radio_unlimited_degrees_of_separation(db_session, monkey
 
     def capture_queue(**kwargs):  # noqa: ANN001
         captured.update(kwargs)
-        fake = Mock()
-        fake.status_code = 200
-        fake.text = ""
-        return fake
+        return _ok_response()
 
-    monkeypatch.setattr("app.services.playback_service.create_play_queue", capture_queue)
+    patch_companion_start(monkeypatch, create_play_queue=capture_queue)
 
     service = PlaybackService(plex_service=FakeTrackPlexService(), sonos_service=FakeSonosService())
     result = service.play(
@@ -530,12 +604,9 @@ def test_playback_playlist_shuffle_passed_to_plexamp(db_session, monkeypatch):
 
     def capture_queue(**kwargs):  # noqa: ANN001
         captured.update(kwargs)
-        fake = Mock()
-        fake.status_code = 200
-        fake.text = ""
-        return fake
+        return _ok_response()
 
-    monkeypatch.setattr("app.services.playback_service.create_play_queue", capture_queue)
+    patch_companion_start(monkeypatch, create_play_queue=capture_queue)
 
     service = PlaybackService(plex_service=FakePlexService(), sonos_service=FakeSonosService())
     result = service.play(
@@ -566,12 +637,9 @@ def test_playback_album_ignores_shuffle(db_session, monkeypatch):
 
     def capture_queue(**kwargs):  # noqa: ANN001
         captured.update(kwargs)
-        fake = Mock()
-        fake.status_code = 200
-        fake.text = ""
-        return fake
+        return _ok_response()
 
-    monkeypatch.setattr("app.services.playback_service.create_play_queue", capture_queue)
+    patch_companion_start(monkeypatch, create_play_queue=capture_queue)
 
     class FakeAlbumPMS:
         machineIdentifier = "machine-id"

@@ -133,7 +133,7 @@ def create_play_queue(
         query_params["shuffle"] = "1"
     query = urlencode(query_params)
     url = f"{base}/player/playback/createPlayQueue?{query}"
-    resp = requests.get(url, timeout=timeout)
+    resp = requests.get(url, timeout=timeout, headers=_plexamp_request_headers())
     if resp.status_code != 200:
         _log.warning(
             "Plexamp createPlayQueue HTTP %s server_uri=%s",
@@ -156,7 +156,7 @@ def plexamp_playback_command(
     url = f"{base}/player/playback/{action}?{query}"
     safe = _redact_token_query(url)
     _log.info("Plexamp playback %s GET %s", action, safe)
-    return requests.get(url, timeout=timeout)
+    return requests.get(url, timeout=timeout, headers=_plexamp_request_headers())
 
 
 def _timeline_element_type(el: ET.Element) -> str:

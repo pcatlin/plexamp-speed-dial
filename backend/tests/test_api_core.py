@@ -81,9 +81,19 @@ def test_player_create_and_play_flow(client, db_session, monkeypatch):
     fake_resp.status_code = 200
     fake_resp.text = ""
 
+    from app.services.plexamp_client import TimelineSnapshot
+
     monkeypatch.setattr(
         "app.services.playback_service.create_play_queue",
         lambda **_kwargs: fake_resp,
+    )
+    monkeypatch.setattr(
+        "app.services.playback_service.plexamp_playback_command",
+        lambda **_kwargs: fake_resp,
+    )
+    monkeypatch.setattr(
+        "app.services.playback_service.plexamp_timeline_snapshot",
+        lambda **_kwargs: TimelineSnapshot(state="playing"),
     )
 
     player_response = client.post(
