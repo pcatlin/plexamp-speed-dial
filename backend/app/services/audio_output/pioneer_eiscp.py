@@ -120,10 +120,14 @@ def _recv_query_answer(
     *,
     collected: list[str] | None = None,
 ) -> str | None:
-    """Read eISCP packets until the receiver answers a QSTN query (not the echo)."""
+    """Read eISCP packets until the receiver answers a QSTN query (not the echo).
+
+    Returns as soon as the first matching answer arrives instead of waiting out the
+    full timeout (Pioneer status used to burn ~2.5s per query even on a healthy AVR).
+    """
     deadline = time.time() + timeout
     buffer = b""
-    last_match: str | None = None
+    emitted = 0
     while time.time() < deadline:
         remaining = deadline - time.time()
         if remaining <= 0:
@@ -132,17 +136,14 @@ def _recv_query_answer(
         if not chunk:
             continue
         buffer += chunk
-        for message in _iter_iscp_packets(buffer):
+        messages = _iter_iscp_packets(buffer)
+        for message in messages[emitted:]:
+            emitted += 1
             if collected is not None:
                 collected.append(message)
             if _is_query_answer(sent_command, message):
-                last_match = message
-    for message in _iter_iscp_packets(buffer):
-        if collected is not None and message not in collected:
-            collected.append(message)
-        if _is_query_answer(sent_command, message):
-            last_match = message
-    return last_match
+                return message
+    return None
 
 
 def _latest_answer(messages: list[str], prefix: str) -> str | None:
@@ -343,28 +344,20 @@ class PioneerReceiverStatus:
 
 
 def query_status(host: str, *, port: int = DEFAULT_PORT, timeout: float = DEFAULT_TIMEOUT) -> PioneerReceiverStatus:
-    """Query power, input, and volume over one TCP session."""
-    per_query_timeout = min(timeout, 2.5)
+    """Query power, input, and volume over one TCP session.
+
+    Each QSTN returns as soon as its answer arrives. Connect timeout is capped so an
+    unreachable AVR cannot stall playback-status polls for the full command timeout.
+    """
+    connect_timeout = min(timeout, 1.5)
+    per_query_timeout = min(timeout, 1.5)
     messages: list[str] = []
-    raw = b""
-    with socket.create_connection((host, port), timeout=timeout) as sock:
+    with socket.create_connection((host, port), timeout=connect_timeout) as sock:
         for command in ("PWRQSTN", "SLIQSTN", "MVLQSTN"):
             sock.sendall(_frame(command))
-            deadline = time.time() + per_query_timeout
-            buffer = b""
-            while time.time() < deadline:
-                remaining = deadline - time.time()
-                if remaining <= 0:
-                    break
-                chunk = _recv_response(sock, min(0.35, remaining))
-                if not chunk:
-                    continue
-                buffer += chunk
-                raw += chunk
-                for message in _iter_iscp_packets(buffer):
-                    messages.append(message)
+            _recv_query_answer(sock, command, per_query_timeout, collected=messages)
 
-    power_on = _parse_power_from_session(messages, raw)
+    power_on = _parse_power_from_session(messages, b"")
     input_msg = _latest_answer(messages, "SLI")
     volume_msg = _latest_answer(messages, "MVL")
     input_code = _parse_iscp_hex_value(input_msg, "SLI") if input_msg else None

@@ -273,34 +273,49 @@ def plexamp_timeline_snapshot(
     """
     Poll companion ``/player/timeline/poll`` for music timeline state and track fields.
 
-    Returns a snapshot when a music timeline is present; otherwise ``None``.
+    Tries music-typed and generic poll URLs in parallel and returns the first usable snapshot.
     """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
     base = sanitize_plexamp_base(plexamp_base)
     param_variants = (
         {"type": "music", "wait": "0", "commandID": "1", "token": token},
         {"wait": "0", "commandID": "1", "token": token},
     )
-    for params in param_variants:
+
+    def _poll_one(params: dict[str, str]) -> TimelineSnapshot | None:
         url = f"{base}/player/timeline/poll?{urlencode(params)}"
         safe = _redact_token_query(url)
         try:
             resp = requests.get(url, timeout=timeout, headers=_plexamp_request_headers())
         except requests_exc.RequestException as exc:
             _log.debug("Plexamp timeline poll transport error %s: %s", safe, exc)
-            continue
+            return None
         if resp.status_code != 200:
             _log.debug("Plexamp timeline poll HTTP %s %s", resp.status_code, safe)
-            continue
+            return None
         snap = _timeline_snapshot_from_xml(resp.text or "")
         if snap and snap.state:
-            state = snap.state.lower()
             return TimelineSnapshot(
-                state=state,
+                state=snap.state.lower(),
                 title=snap.title,
                 artist=snap.artist,
                 album=snap.album,
                 rating_key=snap.rating_key,
             )
+        return None
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        futures = [pool.submit(_poll_one, params) for params in param_variants]
+        for fut in as_completed(futures):
+            try:
+                snap = fut.result()
+            except Exception:  # noqa: BLE001
+                continue
+            if snap is not None:
+                for other in futures:
+                    other.cancel()
+                return snap
     return None
 
 

@@ -93,7 +93,16 @@ describe("App", () => {
         }
 
         send(_data: string) {
-          /* subscribe payload from App */
+          // Resubscribe should get an immediate snapshot (mirrors server behaviour).
+          queueMicrotask(() => {
+            this.onmessage?.({
+              data: JSON.stringify({
+                sonos: { ok: true, playing: false, state: null, error: null },
+                plexamp: { ok: true, playing: false, state: null, error: null },
+                receiver: { ok: true, power_on: null, input_code: null, volume_db: null },
+              }),
+            });
+          });
         }
 
         close() {

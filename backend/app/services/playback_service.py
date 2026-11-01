@@ -519,11 +519,13 @@ class PlaybackService:
         plexamp_base, perr = self._plexamp_base_for_player(player)
         if not plexamp_base:
             return PlaybackStateResponse(ok=False, playing=None, state=None, error=perr or "Invalid player URL")
+        # Status polls should fail fast; command paths keep the longer configured timeout.
+        status_timeout = min(3.0, float(settings.plexamp_request_timeout_seconds))
         try:
             snap = plexamp_timeline_snapshot(
                 plexamp_base=plexamp_base,
                 token=auth_token,
-                timeout=settings.plexamp_request_timeout_seconds,
+                timeout=status_timeout,
             )
         except requests_exc.RequestException as exc:
             return PlaybackStateResponse(ok=False, playing=None, state=None, error=str(exc))
@@ -547,6 +549,7 @@ class PlaybackService:
                         resolve_plex_conn(db),
                         player_name=player.name or "",
                         player_host=player.host or "",
+                        request_timeout=min(3.0, status_timeout + 1.0),
                     )
                 except Exception:  # noqa: BLE001
                     session_track = None

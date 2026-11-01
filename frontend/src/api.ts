@@ -118,8 +118,10 @@ export interface ReceiverState {
   error?: string | null;
 }
 
-/** Combined snapshot pushed by ``/playback-state/ws``. */
+/** Combined snapshot pushed by ``/playback-state/ws`` (includes selection echo for retarget races). */
 export interface PlaybackSnapshotMessage {
+  player_id?: number | null;
+  speaker_ids?: string[];
   sonos: PlaybackState;
   plexamp: PlaybackState;
   receiver: ReceiverState;

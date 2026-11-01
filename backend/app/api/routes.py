@@ -1,5 +1,6 @@
 import asyncio
 import json
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, WebSocket, WebSocketDisconnect
@@ -100,29 +101,95 @@ def _fetch_receiver_state(player_id: int, db: Session) -> ReceiverStateResponse:
     return audio_output_router.receiver_state(player)
 
 
-def _fetch_playback_snapshot(speaker_ids: list[str], player_id: int | None) -> dict[str, Any]:
-    """Blocking: read Sonos + Plexamp + Pioneer receiver state (own DB session for threadpool use)."""
+def _fetch_sonos_playback_slice(speaker_ids: list[str]) -> PlaybackStateResponse:
+    """Blocking Sonos transport snapshot (own DB session for threadpool use)."""
     db = SessionLocal()
     try:
-        sonos = playback_service.sonos_playback_state(speaker_ids, db)
-        receiver = ReceiverStateResponse(ok=True, power_on=None, input_code=None, volume_db=None)
-        if player_id is None:
-            plex = PlaybackStateResponse(ok=True, playing=None, state=None)
-        else:
-            receiver = _fetch_receiver_state(player_id, db)
-            creds = db.query(PlexCredential).first()
-            conn = resolve_plex_conn(db)
-            if creds and creds.auth_token and conn.base_url.strip():
-                plex = playback_service.plexamp_playback_state(player_id, db, auth_token=creds.auth_token)
-            else:
-                plex = PlaybackStateResponse(ok=True, playing=None, state=None)
-        return {
-            "sonos": sonos.model_dump(),
-            "plexamp": plex.model_dump(),
-            "receiver": receiver.model_dump(),
-        }
+        return playback_service.sonos_playback_state(speaker_ids, db)
     finally:
         db.close()
+
+
+def _fetch_plexamp_playback_slice(player_id: int) -> PlaybackStateResponse:
+    """Blocking Plexamp timeline snapshot (own DB session for threadpool use)."""
+    db = SessionLocal()
+    try:
+        creds = db.query(PlexCredential).first()
+        conn = resolve_plex_conn(db)
+        if creds and creds.auth_token and conn.base_url.strip():
+            return playback_service.plexamp_playback_state(player_id, db, auth_token=creds.auth_token)
+        return PlaybackStateResponse(ok=True, playing=None, state=None)
+    finally:
+        db.close()
+
+
+def _fetch_receiver_playback_slice(player_id: int) -> ReceiverStateResponse:
+    """Blocking Pioneer receiver snapshot (own DB session for threadpool use)."""
+    db = SessionLocal()
+    try:
+        return _fetch_receiver_state(player_id, db)
+    finally:
+        db.close()
+
+
+def _player_is_pioneer(player_id: int) -> bool:
+    db = SessionLocal()
+    try:
+        player = db.get(PlexampPlayer, player_id)
+        if not player:
+            return False
+        return audio_output_from_player_row(player).kind == "pioneer"
+    finally:
+        db.close()
+
+
+def _fetch_playback_snapshot(
+    speaker_ids: list[str],
+    player_id: int | None,
+    *,
+    include_receiver: bool = False,
+) -> dict[str, Any]:
+    """
+    Blocking: read Sonos + Plexamp in parallel (separate DB sessions per worker).
+
+    Pioneer AVR status is opt-in via ``include_receiver``. The WebSocket path sends the
+    Sonos/Plexamp slice first (same fast path as Sonos play-to), then follows up with
+    AVR state so a slow/unreachable receiver cannot delay now-playing.
+    """
+    empty_receiver = ReceiverStateResponse(ok=True, power_on=None, input_code=None, volume_db=None)
+    empty_plex = PlaybackStateResponse(ok=True, playing=None, state=None)
+    # Echo selection so clients can drop superseded snapshots after a fast retarget.
+    meta = {"player_id": player_id, "speaker_ids": list(speaker_ids)}
+
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        sonos_f = pool.submit(_fetch_sonos_playback_slice, speaker_ids)
+        if player_id is None:
+            sonos = sonos_f.result()
+            return {
+                **meta,
+                "sonos": sonos.model_dump(),
+                "plexamp": empty_plex.model_dump(),
+                "receiver": empty_receiver.model_dump(),
+            }
+        plex_f = pool.submit(_fetch_plexamp_playback_slice, player_id)
+        recv_f = pool.submit(_fetch_receiver_playback_slice, player_id) if include_receiver else None
+        sonos = sonos_f.result()
+        plex = plex_f.result()
+        receiver = recv_f.result() if recv_f is not None else empty_receiver
+    return {
+        **meta,
+        "sonos": sonos.model_dump(),
+        "plexamp": plex.model_dump(),
+        "receiver": receiver.model_dump(),
+    }
+
+
+def _discard_task_result(task: asyncio.Task[Any]) -> None:
+    """Drain abandoned fetch tasks so their exceptions are not logged as 'never retrieved'."""
+    try:
+        task.result()
+    except (asyncio.CancelledError, Exception):  # noqa: BLE001
+        pass
 
 
 def _serialize_runtime_setup_read(db: Session) -> RuntimeSetupRead:
@@ -648,13 +715,41 @@ def sonos_playback_state(payload: SonosStopRequest, db: Session = Depends(get_db
     return playback_service.sonos_playback_state(payload.speaker_ids, db)
 
 
+def _parse_playback_subscribe(payload: object) -> tuple[list[str], int | None, float] | None:
+    """Parse a playback-state subscribe message. Returns ``(speaker_ids, player_id, interval_s)`` or ``None``."""
+    if not isinstance(payload, dict) or payload.get("type") != "subscribe":
+        return None
+    raw_ids = payload.get("speaker_ids") or []
+    if not isinstance(raw_ids, list):
+        return None
+    speaker_ids = [str(x) for x in raw_ids]
+    raw_player = payload.get("player_id")
+    player_id: int | None
+    if raw_player is None or raw_player is False:
+        player_id = None
+    else:
+        try:
+            player_id = int(raw_player)
+        except (TypeError, ValueError):
+            return None
+    interval_ms = payload.get("interval_ms", 2500)
+    try:
+        interval_ms = int(interval_ms)
+    except (TypeError, ValueError):
+        interval_ms = 2500
+    interval_ms = max(500, min(interval_ms, 30_000))
+    return speaker_ids, player_id, interval_ms / 1000.0
+
+
 @router.websocket("/playback-state/ws")
 async def playback_state_websocket(websocket: WebSocket) -> None:
     """
     Stream combined Sonos + Plexamp playback snapshots over one connection (avoids REST polling spam).
 
-    First message must be JSON: ``{"type": "subscribe", "speaker_ids": [...], "player_id": null|int, "interval_ms"?: 500-30000}``.
-    Server then sends ``{"sonos": {...}, "plexamp": {...}, "receiver": {...}}`` repeatedly on that interval until disconnect.
+    Client sends JSON: ``{"type": "subscribe", "speaker_ids": [...], "player_id": null|int, "interval_ms"?: 500-30000}``.
+    Server pushes a Sonos/Plexamp snapshot immediately (same fast path for every play-to), then
+    again each interval. Pioneer AVR status is a follow-up frame so eISCP latency cannot delay
+    now-playing. Another ``subscribe`` mid-stream retargets immediately and abandons in-flight work.
     """
     await websocket.accept()
     try:
@@ -669,39 +764,148 @@ async def playback_state_websocket(websocket: WebSocket) -> None:
     except json.JSONDecodeError:
         await websocket.close(code=4400)
         return
-    if payload.get("type") != "subscribe":
+    parsed = _parse_playback_subscribe(payload)
+    if parsed is None:
         await websocket.close(code=4400)
         return
-    raw_ids = payload.get("speaker_ids") or []
-    if not isinstance(raw_ids, list):
-        await websocket.close(code=4400)
-        return
-    speaker_ids = [str(x) for x in raw_ids]
-    raw_player = payload.get("player_id")
-    player_id: int | None
-    if raw_player is None or raw_player is False:
-        player_id = None
-    else:
-        try:
-            player_id = int(raw_player)
-        except (TypeError, ValueError):
-            await websocket.close(code=4400)
+    speaker_ids, player_id, interval_s = parsed
+
+    epoch = 0
+    fetch_task: asyncio.Task[tuple[int, dict[str, Any]]] | None = None
+    receiver_task: asyncio.Task[tuple[int, dict[str, Any]]] | None = None
+    recv_task: asyncio.Task[str] | None = None
+
+    def _abandon(task: asyncio.Task[Any] | None) -> None:
+        if task is None:
             return
-    interval_ms = payload.get("interval_ms", 2500)
-    try:
-        interval_ms = int(interval_ms)
-    except (TypeError, ValueError):
-        interval_ms = 2500
-    interval_ms = max(500, min(interval_ms, 30_000))
-    interval_s = interval_ms / 1000.0
+        if not task.done():
+            task.add_done_callback(_discard_task_result)
+        else:
+            _discard_task_result(task)
+
+    def _start_fetch() -> asyncio.Task[tuple[int, dict[str, Any]]]:
+        nonlocal epoch
+        epoch += 1
+        current = epoch
+        speakers = list(speaker_ids)
+        target = player_id
+
+        async def _run() -> tuple[int, dict[str, Any]]:
+            # Fast path matches Sonos: never wait on Pioneer eISCP for now-playing.
+            snap = await asyncio.to_thread(
+                _fetch_playback_snapshot,
+                speakers,
+                target,
+                include_receiver=False,
+            )
+            return current, snap
+
+        return asyncio.create_task(_run())
+
+    def _start_receiver_followup(
+        current: int,
+        base_snap: dict[str, Any],
+        target: int,
+    ) -> asyncio.Task[tuple[int, dict[str, Any]]]:
+        async def _run() -> tuple[int, dict[str, Any]]:
+            receiver = await asyncio.to_thread(_fetch_receiver_playback_slice, target)
+            return current, {**base_snap, "receiver": receiver.model_dump()}
+
+        return asyncio.create_task(_run())
+
+    def _start_recv() -> asyncio.Task[str]:
+        return asyncio.create_task(websocket.receive_text())
+
+    fetch_task = _start_fetch()
+    recv_task = _start_recv()
+    waiting_for_interval = False
 
     try:
         while True:
-            snap = await asyncio.to_thread(_fetch_playback_snapshot, speaker_ids, player_id)
-            await websocket.send_json(snap)
-            await asyncio.sleep(interval_s)
+            wait_set: set[asyncio.Task[Any]] = set()
+            if fetch_task is not None:
+                wait_set.add(fetch_task)
+            if receiver_task is not None:
+                wait_set.add(receiver_task)
+            if recv_task is not None:
+                wait_set.add(recv_task)
+
+            timeout: float | None = (
+                interval_s if waiting_for_interval and fetch_task is None else None
+            )
+            done, _pending = await asyncio.wait(
+                wait_set,
+                timeout=timeout,
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+
+            if not done and waiting_for_interval and fetch_task is None:
+                # Poll interval elapsed with no retarget — kick the next snapshot.
+                waiting_for_interval = False
+                _abandon(receiver_task)
+                receiver_task = None
+                fetch_task = _start_fetch()
+                continue
+
+            if recv_task is not None and recv_task in done:
+                try:
+                    raw = recv_task.result()
+                except WebSocketDisconnect:
+                    return
+                recv_task = _start_recv()
+                try:
+                    msg = json.loads(raw)
+                except json.JSONDecodeError:
+                    continue
+                next_sub = _parse_playback_subscribe(msg)
+                if next_sub is None:
+                    continue
+                speaker_ids, player_id, interval_s = next_sub
+                # Abandon in-flight work so retarget is not blocked by a previous poll/AVR query.
+                _abandon(fetch_task)
+                _abandon(receiver_task)
+                fetch_task = None
+                receiver_task = None
+                waiting_for_interval = False
+                fetch_task = _start_fetch()
+                continue
+
+            if fetch_task is not None and fetch_task in done:
+                try:
+                    done_epoch, snap = fetch_task.result()
+                except Exception:  # noqa: BLE001
+                    fetch_task = None
+                    waiting_for_interval = True
+                    continue
+                fetch_task = None
+                if done_epoch != epoch:
+                    continue
+                await websocket.send_json(snap)
+                waiting_for_interval = True
+                # Pioneer AVR follows on its own timeline — same now-playing latency as Sonos.
+                target = snap.get("player_id")
+                if isinstance(target, int) and await asyncio.to_thread(_player_is_pioneer, target):
+                    _abandon(receiver_task)
+                    receiver_task = _start_receiver_followup(done_epoch, snap, target)
+                continue
+
+            if receiver_task is not None and receiver_task in done:
+                try:
+                    done_epoch, snap = receiver_task.result()
+                except Exception:  # noqa: BLE001
+                    receiver_task = None
+                    continue
+                receiver_task = None
+                if done_epoch != epoch:
+                    continue
+                await websocket.send_json(snap)
     except WebSocketDisconnect:
         return
+    finally:
+        for task in (fetch_task, receiver_task, recv_task):
+            if task is not None and not task.done():
+                task.cancel()
+                task.add_done_callback(_discard_task_result)
 
 
 @router.get("/audio-output/status", response_model=AudioOutputStatusResponse)

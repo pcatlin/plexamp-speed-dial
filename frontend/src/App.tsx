@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type DragEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import "./App.css";
 import {
   api,
@@ -429,35 +429,57 @@ function App() {
     }
   }, [artistRadio, artistOrderMode]);
 
+  const playbackWsRef = useRef<WebSocket | null>(null);
+  const playbackSelectionRef = useRef({
+    speakerIds: selectedSpeakers,
+    playerId: selectedPlayer,
+    outputKind,
+  });
+  playbackSelectionRef.current = {
+    speakerIds: selectedSpeakers,
+    playerId: selectedPlayer,
+    outputKind,
+  };
+
+  const sendPlaybackSubscribe = useCallback((ws: WebSocket) => {
+    if (ws.readyState !== WebSocket.OPEN) return;
+    const { speakerIds, playerId } = playbackSelectionRef.current;
+    ws.send(
+      JSON.stringify({
+        type: "subscribe",
+        speaker_ids: speakerIds,
+        player_id: playerId,
+      }),
+    );
+  }, []);
+
+  // Keep one playback-state socket; retarget with subscribe when selection changes.
   useEffect(() => {
-    const wantSonos = outputKind === "sonos" && selectedSpeakers.length > 0;
-    const wantPlex = selectedPlayer !== null;
-    const wantReceiver = outputKind === "pioneer" && selectedPlayer !== null;
-    if (!wantSonos && !wantPlex && !wantReceiver) {
+    const url = playbackStateWebSocketUrl();
+    if (!url || !authConnected) {
+      playbackWsRef.current?.close();
+      playbackWsRef.current = null;
       setSonosPlaying(null);
       setPlexampPlaying(null);
       setNowPlaying(null);
       setReceiverStatus(null);
       return;
     }
-    const url = playbackStateWebSocketUrl();
-    if (!url) return;
+
     let cancelled = false;
     const ws = new WebSocket(url);
+    playbackWsRef.current = ws;
+
     ws.onopen = () => {
       if (cancelled) return;
-      ws.send(
-        JSON.stringify({
-          type: "subscribe",
-          speaker_ids: selectedSpeakers,
-          player_id: selectedPlayer,
-        }),
-      );
+      sendPlaybackSubscribe(ws);
     };
     ws.onmessage = (ev) => {
       if (cancelled) return;
       try {
         const data = JSON.parse(ev.data) as {
+          player_id?: number | null;
+          speaker_ids?: string[];
           sonos?: { ok?: boolean; playing?: boolean | null };
           plexamp?: {
             ok?: boolean;
@@ -472,6 +494,25 @@ function App() {
             volume_muted?: boolean;
           };
         };
+        const { speakerIds, playerId, outputKind: kind } = playbackSelectionRef.current;
+        // Drop snapshots that lag behind a player/speaker retarget.
+        if ("player_id" in data) {
+          const snapPlayer = data.player_id ?? null;
+          if (snapPlayer !== playerId) return;
+        }
+        if (Array.isArray(data.speaker_ids)) {
+          const snapSpeakers = data.speaker_ids;
+          if (
+            snapSpeakers.length !== speakerIds.length ||
+            [...snapSpeakers].sort().join("\0") !== [...speakerIds].sort().join("\0")
+          ) {
+            return;
+          }
+        }
+        const wantSonos = kind !== "pioneer" && speakerIds.length > 0;
+        const wantPlex = playerId !== null;
+        const wantReceiver = kind === "pioneer" && playerId !== null;
+
         const s = data.sonos;
         if (wantSonos) {
           if (s?.ok && typeof s.playing === "boolean") setSonosPlaying(s.playing);
@@ -510,9 +551,30 @@ function App() {
     };
     return () => {
       cancelled = true;
+      if (playbackWsRef.current === ws) playbackWsRef.current = null;
       ws.close();
     };
-  }, [selectedSpeakers, authConnected, selectedPlayer, outputKind, applyReceiverSnapshot]);
+  }, [authConnected, applyReceiverSnapshot, sendPlaybackSubscribe]);
+
+  // Clear stale player status as soon as the selected player changes.
+  useEffect(() => {
+    setNowPlaying(null);
+    setPlexampPlaying(null);
+    if (outputKind !== "pioneer") setReceiverStatus(null);
+  }, [selectedPlayer, outputKind]);
+
+  // Clear stale Sonos transport as soon as the speaker selection / output kind changes.
+  useEffect(() => {
+    setSonosPlaying(null);
+  }, [selectedSpeakers, outputKind]);
+
+  // Retarget the live socket immediately (server pushes a fresh snapshot on subscribe).
+  useEffect(() => {
+    const ws = playbackWsRef.current;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      sendPlaybackSubscribe(ws);
+    }
+  }, [selectedSpeakers, selectedPlayer, outputKind, sendPlaybackSubscribe]);
 
   useEffect(() => {
     if (!volumeEditor) return;

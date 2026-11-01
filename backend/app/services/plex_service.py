@@ -624,13 +624,14 @@ class PlexService:
         *,
         player_name: str,
         player_host: str,
+        request_timeout: float = 3.0,
     ) -> dict[str, str | None] | None:
         """
         Find the active PMS music session for a companion player via ``/status/sessions``.
 
         Returns title/artist/album/rating_key when a matching Track session is found.
         """
-        server = self.connect_server(token, conn, request_timeout=8)
+        server = self.connect_server(token, conn, request_timeout=request_timeout)
         try:
             sessions = list(server.sessions() or [])
         except Exception:  # noqa: BLE001
