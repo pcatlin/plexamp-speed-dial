@@ -2,7 +2,7 @@ import react from "@vitejs/plugin-react";
 import { defineConfig } from "vitest/config";
 import { inlineWebManifest } from "./plugins/inlineWebManifest";
 
-/** In Docker dev compose, set to http://api:8000 so Vite proxies to the API container. */
+/** In Docker dev compose, set to http://host.docker.internal:8000 (host-network API). */
 const apiProxyTarget = process.env.VITE_API_PROXY ?? "http://127.0.0.1:8000";
 const useFilePolling = process.env.VITE_USE_POLLING === "1";
 
