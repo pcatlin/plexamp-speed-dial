@@ -132,17 +132,6 @@ def _fetch_receiver_playback_slice(player_id: int) -> ReceiverStateResponse:
         db.close()
 
 
-def _player_is_pioneer(player_id: int) -> bool:
-    db = SessionLocal()
-    try:
-        player = db.get(PlexampPlayer, player_id)
-        if not player:
-            return False
-        return audio_output_from_player_row(player).kind == "pioneer"
-    finally:
-        db.close()
-
-
 def _fetch_playback_snapshot(
     speaker_ids: list[str],
     player_id: int | None,
@@ -770,11 +759,10 @@ async def playback_state_websocket(websocket: WebSocket) -> None:
     if parsed is None:
         await websocket.close(code=4400)
         return
-    speaker_ids, player_id, interval_s, want_receiver = parsed
+    speaker_ids, player_id, interval_s, _want_receiver = parsed
 
     epoch = 0
     fetch_task: asyncio.Task[tuple[int, dict[str, Any]]] | None = None
-    receiver_task: asyncio.Task[tuple[int, dict[str, Any]]] | None = None
     recv_task: asyncio.Task[str] | None = None
 
     def _abandon(task: asyncio.Task[Any] | None) -> None:
@@ -793,7 +781,7 @@ async def playback_state_websocket(websocket: WebSocket) -> None:
         target = player_id
 
         async def _run() -> tuple[int, dict[str, Any]]:
-            # Fast path matches Sonos: never wait on Pioneer eISCP for now-playing.
+            # Never wait on Pioneer eISCP here — client polls /audio-output/status for AVR.
             snap = await asyncio.to_thread(
                 _fetch_playback_snapshot,
                 speakers,
@@ -801,17 +789,6 @@ async def playback_state_websocket(websocket: WebSocket) -> None:
                 include_receiver=False,
             )
             return current, snap
-
-        return asyncio.create_task(_run())
-
-    def _start_receiver_followup(
-        current: int,
-        base_snap: dict[str, Any],
-        target: int,
-    ) -> asyncio.Task[tuple[int, dict[str, Any]]]:
-        async def _run() -> tuple[int, dict[str, Any]]:
-            receiver = await asyncio.to_thread(_fetch_receiver_playback_slice, target)
-            return current, {**base_snap, "receiver": receiver.model_dump()}
 
         return asyncio.create_task(_run())
 
@@ -827,27 +804,17 @@ async def playback_state_websocket(websocket: WebSocket) -> None:
             wait_set: set[asyncio.Task[Any]] = set()
             if fetch_task is not None:
                 wait_set.add(fetch_task)
-            if receiver_task is not None:
-                wait_set.add(receiver_task)
             if recv_task is not None:
                 wait_set.add(recv_task)
 
-            # Do not start the poll timer while a Pioneer follow-up is still in flight —
-            # abandoning it after interval_ms dropped AVR status whenever eISCP was slower
-            # than the poll (common when the receiver is waking from network standby).
-            timeout: float | None = (
-                interval_s
-                if waiting_for_interval and fetch_task is None and receiver_task is None
-                else None
-            )
+            timeout: float | None = interval_s if waiting_for_interval and fetch_task is None else None
             done, _pending = await asyncio.wait(
                 wait_set,
                 timeout=timeout,
                 return_when=asyncio.FIRST_COMPLETED,
             )
 
-            if not done and waiting_for_interval and fetch_task is None and receiver_task is None:
-                # Poll interval elapsed with no retarget — kick the next snapshot.
+            if not done and waiting_for_interval and fetch_task is None:
                 waiting_for_interval = False
                 fetch_task = _start_fetch()
                 continue
@@ -865,12 +832,9 @@ async def playback_state_websocket(websocket: WebSocket) -> None:
                 next_sub = _parse_playback_subscribe(msg)
                 if next_sub is None:
                     continue
-                speaker_ids, player_id, interval_s, want_receiver = next_sub
-                # Abandon in-flight work so retarget is not blocked by a previous poll/AVR query.
+                speaker_ids, player_id, interval_s, _want_receiver = next_sub
                 _abandon(fetch_task)
-                _abandon(receiver_task)
                 fetch_task = None
-                receiver_task = None
                 waiting_for_interval = False
                 fetch_task = _start_fetch()
                 continue
@@ -887,31 +851,10 @@ async def playback_state_websocket(websocket: WebSocket) -> None:
                     continue
                 await websocket.send_json(snap)
                 waiting_for_interval = True
-                # Pioneer AVR follows on its own timeline — same now-playing latency as Sonos.
-                # Prefer the client's want_receiver flag (avoids a DB round-trip / miss).
-                target = snap.get("player_id")
-                need_receiver = want_receiver
-                if not need_receiver and isinstance(target, int):
-                    need_receiver = await asyncio.to_thread(_player_is_pioneer, target)
-                if need_receiver and isinstance(target, int):
-                    _abandon(receiver_task)
-                    receiver_task = _start_receiver_followup(done_epoch, snap, target)
-                continue
-
-            if receiver_task is not None and receiver_task in done:
-                try:
-                    done_epoch, snap = receiver_task.result()
-                except Exception:  # noqa: BLE001
-                    receiver_task = None
-                    continue
-                receiver_task = None
-                if done_epoch != epoch:
-                    continue
-                await websocket.send_json(snap)
     except WebSocketDisconnect:
         return
     finally:
-        for task in (fetch_task, receiver_task, recv_task):
+        for task in (fetch_task, recv_task):
             if task is not None and not task.done():
                 task.cancel()
                 task.add_done_callback(_discard_task_result)
@@ -919,14 +862,20 @@ async def playback_state_websocket(websocket: WebSocket) -> None:
 
 @router.get("/audio-output/status", response_model=AudioOutputStatusResponse)
 def audio_output_status(player_id: int = Query(...), db: Session = Depends(get_db)) -> AudioOutputStatusResponse:
+    """Pioneer AVR snapshot. Transient eISCP failures return ``ok=false`` (HTTP 200), not 400."""
     player = db.get(PlexampPlayer, player_id)
     if not player:
         raise HTTPException(status_code=404, detail="Player not found")
+    output = audio_output_from_player_row(player)
+    if output.kind != "pioneer":
+        raise HTTPException(status_code=400, detail="Status is only available for Pioneer audio output.")
     try:
         status = audio_output_router.pioneer_status(player)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        # Connection refused / timeout after frequent polls — not a bad request.
+        return AudioOutputStatusResponse(ok=False, error=str(exc))
     return AudioOutputStatusResponse(
+        ok=True,
         power_on=status.power_on,
         input_code=status.input_code,
         volume_level=status.volume_level,

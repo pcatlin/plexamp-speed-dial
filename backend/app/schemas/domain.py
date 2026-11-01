@@ -128,11 +128,13 @@ class AudioOutputTestRequest(BaseModel):
 
 
 class AudioOutputStatusResponse(BaseModel):
+    ok: bool = True
     power_on: bool | None = None
     input_code: str | None = None
     volume_level: int | None = None
     volume_db: float | None = None
     volume_muted: bool = False
+    error: str | None = None
 
 
 class ReceiverStateResponse(BaseModel):

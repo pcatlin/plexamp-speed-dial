@@ -587,33 +587,48 @@ function App() {
     }
   }, [selectedSpeakers, selectedPlayer, outputKind, sendPlaybackSubscribe]);
 
-  // Pioneer AVR status via REST — does not depend on the playback WebSocket follow-up frame.
-  // (Sonos volume % in the rail is local UI state; only now-playing/transport need the socket.)
+  // Pioneer AVR status via REST. Back off when the receiver is busy/unreachable —
+  // hammering eISCP every couple of seconds can make the AVR start refusing connections.
   useEffect(() => {
     if (!authConnected || outputKind !== "pioneer" || selectedPlayer == null) {
       return;
     }
     let cancelled = false;
+    let timer: number | undefined;
+    let delayMs = 5000;
+
+    const schedule = () => {
+      timer = window.setTimeout(() => {
+        void pull();
+      }, delayMs);
+    };
+
     const pull = async () => {
       try {
         const status = await api.audioOutputStatus(selectedPlayer);
         if (cancelled) return;
-        applyReceiverSnapshot({
-          ok: true,
-          power_on: status.power_on,
-          input_code: status.input_code,
-          volume_db: status.volume_db,
-          volume_muted: status.volume_muted,
-        });
+        if (status.ok === false) {
+          delayMs = Math.min(delayMs * 2, 30_000);
+        } else {
+          delayMs = 5000;
+          applyReceiverSnapshot({
+            ok: true,
+            power_on: status.power_on,
+            input_code: status.input_code,
+            volume_db: status.volume_db,
+            volume_muted: status.volume_muted,
+          });
+        }
       } catch {
-        /* AVR unreachable / transient — leave prior status */
+        delayMs = Math.min(delayMs * 2, 30_000);
       }
+      if (!cancelled) schedule();
     };
+
     void pull();
-    const timer = window.setInterval(pull, 2500);
     return () => {
       cancelled = true;
-      window.clearInterval(timer);
+      if (timer !== undefined) window.clearTimeout(timer);
     };
   }, [authConnected, outputKind, selectedPlayer, applyReceiverSnapshot]);
 
