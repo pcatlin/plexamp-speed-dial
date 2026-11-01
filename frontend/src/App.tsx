@@ -217,6 +217,16 @@ function App() {
     if (!receiver?.ok) {
       return;
     }
+    // Fast-path WS frames omit AVR fields (all null) — keep any prior Pioneer status
+    // until the follow-up frame arrives instead of wiping the row.
+    const hasAny =
+      receiver.power_on != null ||
+      receiver.input_code != null ||
+      receiver.volume_db != null ||
+      receiver.volume_muted === true;
+    if (!hasAny) {
+      return;
+    }
     const volumeMuted = receiver.volume_muted ?? false;
     setReceiverStatus((prev) => ({
       power_on: receiver.power_on ?? prev?.power_on ?? null,

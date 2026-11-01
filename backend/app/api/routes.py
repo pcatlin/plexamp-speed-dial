@@ -830,8 +830,13 @@ async def playback_state_websocket(websocket: WebSocket) -> None:
             if recv_task is not None:
                 wait_set.add(recv_task)
 
+            # Do not start the poll timer while a Pioneer follow-up is still in flight —
+            # abandoning it after interval_ms dropped AVR status whenever eISCP was slower
+            # than the poll (common when the receiver is waking from network standby).
             timeout: float | None = (
-                interval_s if waiting_for_interval and fetch_task is None else None
+                interval_s
+                if waiting_for_interval and fetch_task is None and receiver_task is None
+                else None
             )
             done, _pending = await asyncio.wait(
                 wait_set,
@@ -839,11 +844,9 @@ async def playback_state_websocket(websocket: WebSocket) -> None:
                 return_when=asyncio.FIRST_COMPLETED,
             )
 
-            if not done and waiting_for_interval and fetch_task is None:
+            if not done and waiting_for_interval and fetch_task is None and receiver_task is None:
                 # Poll interval elapsed with no retarget — kick the next snapshot.
                 waiting_for_interval = False
-                _abandon(receiver_task)
-                receiver_task = None
                 fetch_task = _start_fetch()
                 continue
 
