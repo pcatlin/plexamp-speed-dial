@@ -279,6 +279,7 @@ export const api = {
       input_code: string | null;
       volume_level: number | null;
       volume_db: number | null;
+      volume_muted?: boolean;
     }>(`/audio-output/status?player_id=${encodeURIComponent(String(playerId))}`),
   deletePlayer: (id: number) => request<{ message: string }>(`/players/${id}`, { method: "DELETE" }),
   speedDial: () => request<SpeedDial[]>("/speed-dial"),

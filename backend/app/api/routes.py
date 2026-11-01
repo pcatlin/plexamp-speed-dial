@@ -715,8 +715,8 @@ def sonos_playback_state(payload: SonosStopRequest, db: Session = Depends(get_db
     return playback_service.sonos_playback_state(payload.speaker_ids, db)
 
 
-def _parse_playback_subscribe(payload: object) -> tuple[list[str], int | None, float] | None:
-    """Parse a playback-state subscribe message. Returns ``(speaker_ids, player_id, interval_s)`` or ``None``."""
+def _parse_playback_subscribe(payload: object) -> tuple[list[str], int | None, float, bool] | None:
+    """Parse subscribe JSON → ``(speaker_ids, player_id, interval_s, want_receiver)`` or ``None``."""
     if not isinstance(payload, dict) or payload.get("type") != "subscribe":
         return None
     raw_ids = payload.get("speaker_ids") or []
@@ -738,7 +738,8 @@ def _parse_playback_subscribe(payload: object) -> tuple[list[str], int | None, f
     except (TypeError, ValueError):
         interval_ms = 2500
     interval_ms = max(500, min(interval_ms, 30_000))
-    return speaker_ids, player_id, interval_ms / 1000.0
+    want_receiver = bool(payload.get("want_receiver"))
+    return speaker_ids, player_id, interval_ms / 1000.0, want_receiver
 
 
 @router.websocket("/playback-state/ws")
@@ -746,7 +747,8 @@ async def playback_state_websocket(websocket: WebSocket) -> None:
     """
     Stream combined Sonos + Plexamp playback snapshots over one connection (avoids REST polling spam).
 
-    Client sends JSON: ``{"type": "subscribe", "speaker_ids": [...], "player_id": null|int, "interval_ms"?: 500-30000}``.
+    Client sends JSON: ``{"type": "subscribe", "speaker_ids": [...], "player_id": null|int,
+    "interval_ms"?: 500-30000, "want_receiver"?: bool}``.
     Server pushes a Sonos/Plexamp snapshot immediately (same fast path for every play-to), then
     again each interval. Pioneer AVR status is a follow-up frame so eISCP latency cannot delay
     now-playing. Another ``subscribe`` mid-stream retargets immediately and abandons in-flight work.
@@ -768,7 +770,7 @@ async def playback_state_websocket(websocket: WebSocket) -> None:
     if parsed is None:
         await websocket.close(code=4400)
         return
-    speaker_ids, player_id, interval_s = parsed
+    speaker_ids, player_id, interval_s, want_receiver = parsed
 
     epoch = 0
     fetch_task: asyncio.Task[tuple[int, dict[str, Any]]] | None = None
@@ -863,7 +865,7 @@ async def playback_state_websocket(websocket: WebSocket) -> None:
                 next_sub = _parse_playback_subscribe(msg)
                 if next_sub is None:
                     continue
-                speaker_ids, player_id, interval_s = next_sub
+                speaker_ids, player_id, interval_s, want_receiver = next_sub
                 # Abandon in-flight work so retarget is not blocked by a previous poll/AVR query.
                 _abandon(fetch_task)
                 _abandon(receiver_task)
@@ -886,8 +888,12 @@ async def playback_state_websocket(websocket: WebSocket) -> None:
                 await websocket.send_json(snap)
                 waiting_for_interval = True
                 # Pioneer AVR follows on its own timeline — same now-playing latency as Sonos.
+                # Prefer the client's want_receiver flag (avoids a DB round-trip / miss).
                 target = snap.get("player_id")
-                if isinstance(target, int) and await asyncio.to_thread(_player_is_pioneer, target):
+                need_receiver = want_receiver
+                if not need_receiver and isinstance(target, int):
+                    need_receiver = await asyncio.to_thread(_player_is_pioneer, target)
+                if need_receiver and isinstance(target, int):
                     _abandon(receiver_task)
                     receiver_task = _start_receiver_followup(done_epoch, snap, target)
                 continue

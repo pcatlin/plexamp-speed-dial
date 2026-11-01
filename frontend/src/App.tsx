@@ -453,12 +453,13 @@ function App() {
 
   const sendPlaybackSubscribe = useCallback((ws: WebSocket) => {
     if (ws.readyState !== WebSocket.OPEN) return;
-    const { speakerIds, playerId } = playbackSelectionRef.current;
+    const { speakerIds, playerId, outputKind: kind } = playbackSelectionRef.current;
     ws.send(
       JSON.stringify({
         type: "subscribe",
         speaker_ids: speakerIds,
         player_id: playerId,
+        want_receiver: kind === "pioneer",
       }),
     );
   }, []);
@@ -585,6 +586,36 @@ function App() {
       sendPlaybackSubscribe(ws);
     }
   }, [selectedSpeakers, selectedPlayer, outputKind, sendPlaybackSubscribe]);
+
+  // Pioneer AVR status via REST — does not depend on the playback WebSocket follow-up frame.
+  // (Sonos volume % in the rail is local UI state; only now-playing/transport need the socket.)
+  useEffect(() => {
+    if (!authConnected || outputKind !== "pioneer" || selectedPlayer == null) {
+      return;
+    }
+    let cancelled = false;
+    const pull = async () => {
+      try {
+        const status = await api.audioOutputStatus(selectedPlayer);
+        if (cancelled) return;
+        applyReceiverSnapshot({
+          ok: true,
+          power_on: status.power_on,
+          input_code: status.input_code,
+          volume_db: status.volume_db,
+          volume_muted: status.volume_muted,
+        });
+      } catch {
+        /* AVR unreachable / transient — leave prior status */
+      }
+    };
+    void pull();
+    const timer = window.setInterval(pull, 2500);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [authConnected, outputKind, selectedPlayer, applyReceiverSnapshot]);
 
   useEffect(() => {
     if (!volumeEditor) return;
