@@ -46,7 +46,8 @@ class FakePMS:
         def __init__(self) -> None:
             self.type = "playlist"
             self.title = "My Mix"
-            self.key = "/library/metadata/100"
+            self.ratingKey = 100
+            self.key = "/playlists/100"
 
         def station(self):  # pragma: no cover - not artist
             return None
@@ -662,6 +663,9 @@ def test_playback_playlist_shuffle_passed_to_plexamp(db_session, monkeypatch):
     )
     assert result.status == "ok"
     assert captured.get("shuffle") == 1
+    assert captured.get("machine_identifier") == "machine-id"
+    assert captured.get("playlist_id") == "100"
+    assert captured["server_uri"].endswith("/playlists/100/items")
     assert "shuffled" in result.details
 
 

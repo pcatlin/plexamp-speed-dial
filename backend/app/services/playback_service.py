@@ -24,6 +24,7 @@ from app.services.plexamp_client import (
     build_server_playback_uri,
     create_play_queue,
     parse_pms_host_port_protocol,
+    playlist_playback_library_key,
     plexamp_playback_command,
     plexamp_timeline_implies_playing,
     plexamp_timeline_snapshot,
@@ -255,9 +256,9 @@ class PlaybackService:
         else:
             libtype = (getattr(item, "type", None) or "").lower()
             raw_key = item.key or ""
-            # Playlists: keep `/playlist/{id}` as-is; do not append search type=15 (breaks Plexamp).
-            if libtype == "playlist":
-                library_key = raw_key
+            # Playlists: Desktop/Caldera use `/playlists/{id}/items` (not bare key / type=15).
+            if libtype == "playlist" or effective_type == "playlist":
+                library_key = playlist_playback_library_key(payload.media_id, raw_key)
             else:
                 library_key = append_type_if_missing(raw_key, libtype)
 
@@ -286,6 +287,10 @@ class PlaybackService:
                 library_key=library_key,
             )
 
+        playlist_id = None
+        if effective_type == "playlist":
+            playlist_id = str(getattr(item, "ratingKey", None) or payload.media_id)
+
         if effective_type == "track":
             play_kind = "track radio"
         elif effective_type == "artist":
@@ -307,7 +312,9 @@ class PlaybackService:
                 pms_port=pms_port,
                 pms_protocol=pms_protocol,
                 timeout=settings.plexamp_request_timeout_seconds,
+                machine_identifier=pms.machineIdentifier,
                 shuffle=shuffle_flag,
+                playlist_id=playlist_id,
             )
         except requests_exc.RequestException as exc:
             return PlayResponse(

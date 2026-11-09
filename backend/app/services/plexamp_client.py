@@ -61,12 +61,30 @@ def build_server_playback_uri(machine_identifier: str, library_identifier: str, 
     Build `server://{machine}/{identifier}{path}` for Plexamp createPlayQueue.
 
     Must match plexapi PlayQueue.create: literal slashes in the path, not slash-encoded (%2F).
-    library_key is e.g. `/playlist/123`, `/library/metadata/456`, or station paths with `?type=10`.
+    library_key is e.g. `/playlists/123/items`, `/library/metadata/456`, or station paths with `?type=10`.
     """
     path = (library_key or "").strip()
     if path and not path.startswith("/"):
         path = "/" + path
     return f"server://{machine_identifier}/{library_identifier}{path}"
+
+
+def playlist_playback_library_key(rating_key: str | int, raw_key: str = "") -> str:
+    """
+    Normalize a playlist path to `/playlists/{id}/items` for companion createPlayQueue.
+
+    Working Desktop/Caldera casts use this shape (not bare `/playlists/{id}` or `/playlist/{id}`).
+    """
+    key = (raw_key or "").strip().split("?", 1)[0].rstrip("/")
+    match = re.match(r"^/playlists?/(\d+)(?:/items)?$", key)
+    if match:
+        return f"/playlists/{match.group(1)}/items"
+    rk = str(rating_key).strip()
+    if rk.isdigit():
+        return f"/playlists/{rk}/items"
+    if key:
+        return f"{key}/items" if not key.endswith("/items") else key
+    raise ValueError("Playlist has no library path for playback.")
 
 
 def build_track_list_server_uri(
@@ -117,20 +135,33 @@ def create_play_queue(
     pms_port: int,
     pms_protocol: str,
     timeout: float,
+    machine_identifier: str,
     shuffle: int = 0,
+    playlist_id: str | int | None = None,
 ) -> requests.Response:
+    """
+    Companion createPlayQueue matching working Desktop/Plexamp casts.
+
+    Always sends source, machineIdentifier, includeExternalMedia, and shuffle=0|1.
+    For playlists, also sends playlistID (Desktop does the same).
+    """
     base = sanitize_plexamp_base(plexamp_base)
+    mid = (machine_identifier or "").strip()
     query_params: dict[str, str] = {
+        "source": mid,
+        "machineIdentifier": mid,
         "uri": server_uri,
         "token": token,
+        "includeExternalMedia": "1",
         "type": "audio",
         "protocol": pms_protocol,
         "address": pms_address,
         "port": str(pms_port),
+        "shuffle": "1" if shuffle else "0",
         "commandID": "1",
     }
-    if shuffle:
-        query_params["shuffle"] = "1"
+    if playlist_id is not None and str(playlist_id).strip():
+        query_params["playlistID"] = str(playlist_id).strip()
     query = urlencode(query_params)
     url = f"{base}/player/playback/createPlayQueue?{query}"
     resp = requests.get(url, timeout=timeout, headers=_plexamp_request_headers())
