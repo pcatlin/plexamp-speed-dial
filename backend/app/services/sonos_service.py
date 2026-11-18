@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import time
 from collections.abc import Callable
+from datetime import datetime, timezone
 
 from soco import SoCo
 from soco import discover
@@ -12,6 +13,19 @@ from app.services.runtime_setup import SonosRuntime
 
 _log = logging.getLogger(__name__)
 _DISCOVERY_CACHE_TTL_SECONDS = 60
+
+
+def _utc_ts() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+
+
+def _speaker_label(device: SoCo) -> str:
+    return device.player_name or device.uid or "?"
+
+
+def _log_sonos(message: str) -> None:
+    """Short timestamped Sonos action line (mirrors companion request logging)."""
+    _log.info("%s Sonos %s", _utc_ts(), message)
 
 
 def _normalize_sonos_uid(raw: str) -> tuple[str, str | None]:
@@ -298,11 +312,18 @@ class SonosService:
         else:
             master = sorted(targets, key=lambda z: (z.player_name or "").lower())[0]
 
+        target_names = ", ".join(sorted(_speaker_label(t) for t in targets))
+        _log_sonos(
+            f"line-in start group=[{target_names}] master={_speaker_label(master)} "
+            f"source={_speaker_label(line_src)}"
+        )
+
         # Each selected player may still be in an old zone group (e.g. user unchecked one room).
         # SoCo join() does not remove other members of that group — unjoin first so only the
         # checked speakers end up in the new group before line-in / play.
         for d in sorted(targets, key=lambda z: (z.uid or "")):
             try:
+                _log_sonos(f"unjoin {_speaker_label(d)}")
                 d.unjoin()
             except Exception as exc:  # noqa: BLE001
                 _log.warning("Sonos unjoin %s failed (continuing): %s", d.player_name, exc)
@@ -310,6 +331,7 @@ class SonosService:
         for d in targets:
             if d.uid != master.uid:
                 try:
+                    _log_sonos(f"join {_speaker_label(d)} → {_speaker_label(master)}")
                     d.join(master)
                 except Exception as exc:  # noqa: BLE001
                     _log.warning("Sonos join %s → %s failed: %s", d.player_name, master.player_name, exc)
@@ -322,9 +344,12 @@ class SonosService:
         coord = self._group_coordinator(master)
         try:
             if coord.uid == line_src.uid:
+                _log_sonos(f"switch_to_line_in {_speaker_label(coord)}")
                 coord.switch_to_line_in()
             else:
+                _log_sonos(f"switch_to_line_in {_speaker_label(coord)} ← {_speaker_label(line_src)}")
                 coord.switch_to_line_in(source=line_src)
+            _log_sonos(f"play {_speaker_label(coord)}")
             coord.play()
         except Exception as exc:  # noqa: BLE001
             _log.exception("Sonos line-in playback failed")
@@ -332,6 +357,7 @@ class SonosService:
 
         names = ", ".join(sorted((t.player_name or t.uid) for t in targets))
         base = f"Sonos: grouped [{names}] → line-in from {line_src.player_name or line_src.uid}."
+        _log_sonos(f"line-in ok group=[{names}] source={line_src.player_name or line_src.uid}")
         return f"{base} {volume_note}".strip() if volume_note else base
 
     def _apply_speaker_volumes(
@@ -351,6 +377,7 @@ class SonosService:
             seen_uid.add(dev.uid)
             vol = max(0, min(100, int(speaker_volumes[sid])))
             try:
+                _log_sonos(f"volume {_speaker_label(dev)}={vol}")
                 dev.volume = vol
             except Exception as exc:  # noqa: BLE001
                 _log.warning("Sonos volume set failed for %s: %s", dev.player_name or dev.uid, exc)
@@ -373,6 +400,7 @@ class SonosService:
 
         stopped: list[str] = []
         for coord in coordinators:
+            _log_sonos(f"stop {_speaker_label(coord)}")
             coord.stop()
             stopped.append(coord.player_name or coord.uid)
 
@@ -463,14 +491,20 @@ class SonosService:
         else:
             master = sorted(to_add, key=lambda z: (z.player_name or "").lower())[0]
 
+        _log_sonos(
+            f"group add master={_speaker_label(master)} "
+            f"speakers=[{', '.join(sorted(_speaker_label(d) for d in to_add))}]"
+        )
         for d in to_add:
             if d.uid == master.uid:
                 continue
             try:
+                _log_sonos(f"unjoin {_speaker_label(d)}")
                 d.unjoin()
             except Exception as exc:  # noqa: BLE001
                 _log.warning("Sonos unjoin %s failed (continuing): %s", d.player_name, exc)
             try:
+                _log_sonos(f"join {_speaker_label(d)} → {_speaker_label(master)}")
                 d.join(master)
             except Exception as exc:  # noqa: BLE001
                 _log.warning("Sonos join %s → %s failed: %s", d.player_name, master.player_name, exc)
@@ -497,6 +531,7 @@ class SonosService:
         removed: list[str] = []
         for d in devices:
             try:
+                _log_sonos(f"unjoin {_speaker_label(d)}")
                 d.unjoin()
             except Exception as exc:  # noqa: BLE001
                 _log.warning("Sonos unjoin %s failed: %s", d.player_name, exc)
@@ -504,6 +539,7 @@ class SonosService:
             removed.append(d.player_name or d.uid)
 
         names = ", ".join(sorted(removed))
+        _log_sonos(f"group remove [{names}]")
         return f"Sonos: removed {names} from group."
 
     def adjust_volume_selected(self, runtime: SonosRuntime, output_speaker_ids: list[str], delta: int) -> str:
@@ -520,6 +556,11 @@ class SonosService:
         if delta == 0:
             return "Sonos: volume delta was zero — no change."
 
+        sign = "+" if delta > 0 else ""
+        _log_sonos(
+            f"volume adjust {sign}{delta} "
+            f"speakers=[{', '.join(sorted(_speaker_label(d) for d in devices))}]"
+        )
         lines: list[str] = []
         for dev in devices:
             try:
@@ -531,9 +572,9 @@ class SonosService:
                 continue
             label = dev.player_name or dev.uid
             lines.append(f"{label} → {new_vol}%")
+            _log_sonos(f"volume {label}={new_vol}")
 
         names = "; ".join(sorted(lines))
-        sign = "+" if delta > 0 else ""
         return f"Sonos: volume {sign}{delta}% on {names}."
 
     def set_absolute_volumes(self, runtime: SonosRuntime, volumes: dict[str, int]) -> str:
@@ -553,6 +594,7 @@ class SonosService:
             seen_uid.add(dev.uid)
             vol = max(0, min(100, int(raw_vol)))
             try:
+                _log_sonos(f"volume {_speaker_label(dev)}={vol}")
                 dev.volume = vol
             except Exception as exc:  # noqa: BLE001
                 _log.warning("Sonos volume set failed for %s: %s", dev.player_name or dev.uid, exc)
@@ -591,12 +633,17 @@ class SonosService:
         if err:
             return None, err
         try:
+            playing_any = False
+            parts: list[str] = []
             for coord in coordinators:
                 coord.zone_group_state.poll(coord)
                 st = (coord.get_current_transport_info().get("current_transport_state") or "").upper()
+                label = _speaker_label(coord)
+                parts.append(f"{label}={st or '?'}")
                 if st in ("PLAYING", "TRANSITIONING"):
-                    return True, None
-            return False, None
+                    playing_any = True
+            _log_sonos(f"status [{' '.join(parts)}] playing={playing_any}")
+            return playing_any, None
         except Exception as exc:  # noqa: BLE001
             _log.warning("Sonos transport state query failed: %s", exc)
             return None, str(exc)

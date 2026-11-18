@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import re
-import time
 from urllib.parse import urlparse
 
 import logging
@@ -75,86 +74,6 @@ class PlaybackService:
             return f"{scheme}://{parsed.hostname}:{port}", None
         scheme = "https" if player.port == 443 else "http"
         return f"{scheme}://{raw_host}:{player.port or 32500}", None
-
-    def _send_companion_play(self, plexamp_base: str, *, auth_token: str, timeout: float) -> bool:
-        try:
-            response = plexamp_playback_command(
-                plexamp_base=plexamp_base,
-                token=auth_token,
-                action="play",
-                timeout=timeout,
-            )
-        except requests_exc.RequestException as exc:
-            _log.warning("Companion play command failed for %s: %s", plexamp_base, exc)
-            return False
-        if response.status_code != 200:
-            _log.warning(
-                "Companion play command HTTP %s for %s",
-                response.status_code,
-                plexamp_base,
-            )
-            return False
-        return True
-
-    def _companion_timeline_playing(self, plexamp_base: str, *, auth_token: str, timeout: float) -> bool:
-        try:
-            snap = plexamp_timeline_snapshot(
-                plexamp_base=plexamp_base,
-                token=auth_token,
-                timeout=timeout,
-            )
-        except Exception:  # noqa: BLE001
-            return False
-        return plexamp_timeline_implies_playing(snap.state if snap else None) is True
-
-    def _ensure_companion_playing(
-        self,
-        plexamp_base: str,
-        *,
-        auth_token: str,
-        timeout: float,
-        was_playing: bool = False,
-    ) -> str | None:
-        """
-        After createPlayQueue, confirm transport is running; send ``play`` only if needed.
-
-        Do **not** trust an immediate ``playing`` timeline — a warm Caldera/Verox often still
-        reports the previous track as playing for a beat, then finishes the queue swap and
-        stops. Waiting first avoids skipping ``play`` and leaving silence.
-
-        If createPlayQueue auto-starts (common on warm Plexamp), we still see playing after
-        the settle and skip ``play`` so we do not glitch the previous queue.
-        """
-        poll_timeout = min(timeout, 3.0)
-
-        # Let the queue swap settle before reading timeline (avoids stale "playing").
-        time.sleep(1.0)
-
-        for _ in range(3):
-            if self._companion_timeline_playing(plexamp_base, auth_token=auth_token, timeout=poll_timeout):
-                return None
-            time.sleep(0.75)
-
-        # Warm swap that stopped transport, or cold load that did not auto-start.
-        _log.info(
-            "Companion at %s idle after createPlayQueue (was_playing=%s); sending play",
-            plexamp_base,
-            was_playing,
-        )
-        self._send_companion_play(plexamp_base, auth_token=auth_token, timeout=timeout)
-
-        for _ in range(3):
-            time.sleep(0.75)
-            if self._companion_timeline_playing(plexamp_base, auth_token=auth_token, timeout=poll_timeout):
-                return None
-
-        # One retry only — avoid hammering fragile Wi-Fi players.
-        self._send_companion_play(plexamp_base, auth_token=auth_token, timeout=timeout)
-        time.sleep(0.75)
-        if self._companion_timeline_playing(plexamp_base, auth_token=auth_token, timeout=poll_timeout):
-            return None
-        _log.warning("Companion at %s did not confirm playing after createPlayQueue", plexamp_base)
-        return "Player did not confirm playing yet."
 
     def play(self, payload: PlayRequest, db: Session, *, auth_token: str) -> PlayResponse:
         player = db.get(PlexampPlayer, payload.player_id)
@@ -314,13 +233,8 @@ class PlaybackService:
 
         pms_host, pms_port, pms_protocol = parse_pms_host_port_protocol(plex_conn.base_url.strip().rstrip("/"))
 
-        # Snapshot before the queue swap so we can log warm vs cold paths.
-        was_playing = self._companion_timeline_playing(
-            plexamp_base,
-            auth_token=auth_token,
-            timeout=min(3.0, float(settings.plexamp_request_timeout_seconds)),
-        )
-
+        # Modern companion path: createPlayQueue alone loads the queue and starts playback
+        # (same as Desktop/Plexamp). A follow-up bare ``play`` can stutter a warm player.
         try:
             response = create_play_queue(
                 plexamp_base=plexamp_base,
@@ -350,13 +264,6 @@ class PlaybackService:
                 ),
             )
 
-        start_note = self._ensure_companion_playing(
-            plexamp_base,
-            auth_token=auth_token,
-            timeout=settings.plexamp_request_timeout_seconds,
-            was_playing=was_playing,
-        )
-
         output_note = self._audio_output.prepare_for_play(
             player,
             db,
@@ -367,8 +274,6 @@ class PlaybackService:
         title = getattr(item, "title", "") or getattr(item, "tag", "") or payload.media_id
         details_kind = f"{play_kind} (shuffled)" if shuffle_flag else play_kind
         parts = [f"Playing {details_kind}: {title!r} via {player.name}."]
-        if start_note:
-            parts.append(start_note)
         if output_note:
             parts.append(output_note)
         return PlayResponse(status="ok", details=" ".join(parts))

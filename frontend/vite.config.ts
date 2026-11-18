@@ -1,6 +1,6 @@
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vitest/config";
-import { inlineWebManifest } from "./plugins/inlineWebManifest";
+import { inlineWebManifest } from "./plugins/inlineWebManifest.ts";
 
 /** In Docker dev compose, set to http://api:8000 so Vite proxies to the API container. */
 const apiProxyTarget = process.env.VITE_API_PROXY ?? "http://127.0.0.1:8000";

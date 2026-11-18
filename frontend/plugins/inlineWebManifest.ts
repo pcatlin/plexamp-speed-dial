@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import type { Plugin } from "vite";
 
-const MANIFEST_PATH = resolve(__dirname, "../public/manifest.webmanifest");
+const MANIFEST_PATH = resolve(import.meta.dirname, "../public/manifest.webmanifest");
 const MANIFEST_LINK_RE = /<link rel="manifest" href="[^"]*"\s*\/?>/;
 
 /** Embed manifest as a data URL so a separate /manifest.webmanifest fetch is not required (Cloudflare Access, etc.). */
