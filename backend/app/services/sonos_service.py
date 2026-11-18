@@ -258,6 +258,58 @@ class SonosService:
             return device
         return grp.coordinator
 
+    @staticmethod
+    def _current_group_member_uids(device: SoCo) -> set[str]:
+        """Return UIDs of players in ``device``'s current zone group (solo if ungrouped)."""
+        device.zone_group_state.poll(device)
+        grp = device.group
+        if grp is None:
+            return {device.uid}
+        members = getattr(grp, "members", None)
+        if members:
+            return {m.uid for m in members if getattr(m, "uid", None)}
+        coord = getattr(grp, "coordinator", None)
+        if coord is not None and getattr(coord, "uid", None):
+            return {device.uid, coord.uid}
+        return {device.uid}
+
+    def _selection_already_grouped(self, targets: list[SoCo]) -> bool:
+        """True when every target shares one group whose members are exactly the selection."""
+        if not targets:
+            return False
+        want = {t.uid for t in targets}
+        coord_uids: set[str] = set()
+        for device in targets:
+            if self._current_group_member_uids(device) != want:
+                return False
+            coord_uids.add(self._group_coordinator(device).uid)
+        return len(coord_uids) == 1
+
+    @staticmethod
+    def _coordinator_line_in_state(coord: SoCo, line_src: SoCo) -> tuple[bool, bool]:
+        """Return ``(on_desired_line_in, transport_playing)`` for the group coordinator."""
+        try:
+            track = coord.get_current_track_info() or {}
+            uri = str(track.get("uri") or "").strip()
+            transport = coord.get_current_transport_info() or {}
+            state = str(transport.get("current_transport_state") or "").upper()
+        except Exception:  # noqa: BLE001
+            return False, False
+
+        if not uri.startswith("x-rincon-stream:"):
+            on_line = False
+        else:
+            stream_uid = uri.removeprefix("x-rincon-stream:").split("#", 1)[0]
+            want_uid, want_base = _normalize_sonos_uid(line_src.uid)
+            stream_full, stream_base = _normalize_sonos_uid(stream_uid)
+            on_line = bool(
+                stream_full
+                and want_uid
+                and (stream_full == want_uid or (want_base and stream_base == want_base))
+            )
+        playing = state in ("PLAYING", "TRANSITIONING")
+        return on_line, playing
+
     def group_selected_and_play_line_in(
         self,
         runtime: SonosRuntime,
@@ -318,24 +370,31 @@ class SonosService:
             f"source={_speaker_label(line_src)}"
         )
 
-        # Each selected player may still be in an old zone group (e.g. user unchecked one room).
-        # SoCo join() does not remove other members of that group — unjoin first so only the
-        # checked speakers end up in the new group before line-in / play.
-        for d in sorted(targets, key=lambda z: (z.uid or "")):
-            try:
-                _log_sonos(f"unjoin {_speaker_label(d)}")
-                d.unjoin()
-            except Exception as exc:  # noqa: BLE001
-                _log.warning("Sonos unjoin %s failed (continuing): %s", d.player_name, exc)
-
-        for d in targets:
-            if d.uid != master.uid:
+        # Skip unjoin/join when the selection already forms exactly one group. Otherwise
+        # unjoin first: SoCo join() does not drop other rooms still glued to a target.
+        if self._selection_already_grouped(targets):
+            _log_sonos(f"group already ok [{target_names}]")
+        else:
+            for d in sorted(targets, key=lambda z: (z.uid or "")):
                 try:
-                    _log_sonos(f"join {_speaker_label(d)} → {_speaker_label(master)}")
-                    d.join(master)
+                    _log_sonos(f"unjoin {_speaker_label(d)}")
+                    d.unjoin()
                 except Exception as exc:  # noqa: BLE001
-                    _log.warning("Sonos join %s → %s failed: %s", d.player_name, master.player_name, exc)
-                    raise
+                    _log.warning("Sonos unjoin %s failed (continuing): %s", d.player_name, exc)
+
+            for d in targets:
+                if d.uid != master.uid:
+                    try:
+                        _log_sonos(f"join {_speaker_label(d)} → {_speaker_label(master)}")
+                        d.join(master)
+                    except Exception as exc:  # noqa: BLE001
+                        _log.warning(
+                            "Sonos join %s → %s failed: %s",
+                            d.player_name,
+                            master.player_name,
+                            exc,
+                        )
+                        raise
 
         volume_note = ""
         if speaker_volumes:
@@ -343,14 +402,23 @@ class SonosService:
 
         coord = self._group_coordinator(master)
         try:
-            if coord.uid == line_src.uid:
-                _log_sonos(f"switch_to_line_in {_speaker_label(coord)}")
-                coord.switch_to_line_in()
+            on_line, playing = self._coordinator_line_in_state(coord, line_src)
+            if on_line and playing:
+                _log_sonos(
+                    f"line-in already ok {_speaker_label(coord)} ← {_speaker_label(line_src)}"
+                )
             else:
-                _log_sonos(f"switch_to_line_in {_speaker_label(coord)} ← {_speaker_label(line_src)}")
-                coord.switch_to_line_in(source=line_src)
-            _log_sonos(f"play {_speaker_label(coord)}")
-            coord.play()
+                if not on_line:
+                    if coord.uid == line_src.uid:
+                        _log_sonos(f"switch_to_line_in {_speaker_label(coord)}")
+                        coord.switch_to_line_in()
+                    else:
+                        _log_sonos(
+                            f"switch_to_line_in {_speaker_label(coord)} ← {_speaker_label(line_src)}"
+                        )
+                        coord.switch_to_line_in(source=line_src)
+                _log_sonos(f"play {_speaker_label(coord)}")
+                coord.play()
         except Exception as exc:  # noqa: BLE001
             _log.exception("Sonos line-in playback failed")
             raise RuntimeError(f"Sonos line-in failed: {exc}") from exc
@@ -495,9 +563,16 @@ class SonosService:
             f"group add master={_speaker_label(master)} "
             f"speakers=[{', '.join(sorted(_speaker_label(d) for d in to_add))}]"
         )
+        joined_any = False
         for d in to_add:
             if d.uid == master.uid:
                 continue
+            try:
+                if self._group_coordinator(d).uid == master.uid:
+                    continue
+            except Exception:  # noqa: BLE001
+                pass
+            joined_any = True
             try:
                 _log_sonos(f"unjoin {_speaker_label(d)}")
                 d.unjoin()
@@ -512,6 +587,9 @@ class SonosService:
 
         added_names = ", ".join(sorted((d.player_name or d.uid) for d in to_add))
         master_name = master.player_name or master.uid
+        if not joined_any and group_devs:
+            _log_sonos(f"group already ok master={_speaker_label(master)}")
+            return f"Sonos: {added_names} already in group with {master_name}."
         if group_devs:
             return f"Sonos: added {added_names} to group with {master_name}."
         if len(to_add) == 1:

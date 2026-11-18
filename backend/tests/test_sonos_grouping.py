@@ -9,13 +9,23 @@ from app.services.sonos_service import SonosService
 
 
 class _FakeGroup:
-    def __init__(self, coordinator: object) -> None:
+    def __init__(self, coordinator: object, members: set[object] | None = None) -> None:
         self.coordinator = coordinator
+        self.members = members if members is not None else {coordinator}
 
 
 class _FakeZoneState:
     def poll(self, device: object) -> None:  # noqa: ANN401
         return None
+
+
+def _bond(*devices: FakeSonosDevice, coordinator: FakeSonosDevice | None = None) -> None:
+    """Put devices into one fake zone group."""
+    master = coordinator or devices[0]
+    members = set(devices)
+    group = _FakeGroup(coordinator=master, members=members)
+    for device in devices:
+        device.group = group
 
 
 class FakeSonosDevice:
@@ -30,6 +40,8 @@ class FakeSonosDevice:
         self.join_targets: list[str] = []
         self.switch_calls: list[object | None] = []
         self.play_calls = 0
+        self.track_uri = ""
+        self.transport_state = "STOPPED"
         self._volume = volume
 
     @property
@@ -46,12 +58,27 @@ class FakeSonosDevice:
 
     def join(self, master: FakeSonosDevice, **kwargs: object) -> None:
         self.join_targets.append(master.uid)
-        self.group = _FakeGroup(coordinator=master)
+        members = set(getattr(master.group, "members", None) or {master})
+        members.add(self)
+        members.add(master)
+        group = _FakeGroup(coordinator=master, members=members)
+        for device in members:
+            if isinstance(device, FakeSonosDevice):
+                device.group = group
+
+    def get_current_track_info(self) -> dict[str, str]:
+        return {"uri": self.track_uri}
+
+    def get_current_transport_info(self) -> dict[str, str]:
+        return {"current_transport_state": self.transport_state}
 
     def switch_to_line_in(self, source: object | None = None, **kwargs: object) -> None:
+        src = source if source is not None else self
+        self.track_uri = f"x-rincon-stream:{getattr(src, 'uid', '')}"
         self.switch_calls.append(source)
 
     def play(self, **kwargs: object) -> None:
+        self.transport_state = "PLAYING"
         self.play_calls += 1
 
     def set_relative_volume(self, relative_volume: int) -> int:
@@ -76,7 +103,7 @@ def test_group_selected_unjoins_targets_before_joining(runtime: SonosRuntime, mo
     fridge = FakeSonosDevice("uid-fridge", "Kitchen Fridge")
 
     # Move is still a satellite of Bathroom from a prior session.
-    move.group = _FakeGroup(coordinator=bathroom)
+    _bond(bathroom, move, coordinator=bathroom)
 
     svc = SonosService()
 
@@ -112,6 +139,84 @@ def test_group_selected_unjoins_both_before_pairing(runtime: SonosRuntime, monke
     assert alpha.switch_calls and alpha.switch_calls[0] is fridge
 
 
+def test_group_selected_skips_unjoin_join_when_already_grouped(
+    runtime: SonosRuntime, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    alpha = FakeSonosDevice("uid-a", "Alpha Room")
+    beta = FakeSonosDevice("uid-b", "Beta Room")
+    fridge = FakeSonosDevice("uid-fridge", "Fridge Amp")
+    _bond(alpha, beta, coordinator=alpha)
+
+    svc = SonosService()
+    monkeypatch.setattr(svc, "discover_visible_zones", lambda rt: {alpha, beta, fridge})
+
+    svc.group_selected_and_play_line_in(runtime, ["uid-b", "uid-a"], line_in_speaker_id="uid-fridge")
+
+    assert alpha.unjoin_calls == 0
+    assert beta.unjoin_calls == 0
+    assert alpha.join_targets == []
+    assert beta.join_targets == []
+    assert alpha.play_calls == 1
+    assert alpha.switch_calls and alpha.switch_calls[0] is fridge
+
+
+def test_group_selected_skips_line_in_switch_when_already_playing_source(
+    runtime: SonosRuntime, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    alpha = FakeSonosDevice("uid-a", "Alpha Room")
+    beta = FakeSonosDevice("uid-b", "Beta Room")
+    fridge = FakeSonosDevice("uid-fridge", "Fridge Amp")
+    _bond(alpha, beta, coordinator=alpha)
+    alpha.track_uri = "x-rincon-stream:uid-fridge"
+    alpha.transport_state = "PLAYING"
+
+    svc = SonosService()
+    monkeypatch.setattr(svc, "discover_visible_zones", lambda rt: {alpha, beta, fridge})
+
+    svc.group_selected_and_play_line_in(runtime, ["uid-b", "uid-a"], line_in_speaker_id="uid-fridge")
+
+    assert alpha.switch_calls == []
+    assert alpha.play_calls == 0
+
+
+def test_group_selected_plays_without_switch_when_line_in_paused(
+    runtime: SonosRuntime, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    alpha = FakeSonosDevice("uid-a", "Alpha Room")
+    fridge = FakeSonosDevice("uid-fridge", "Fridge Amp")
+    _bond(alpha, coordinator=alpha)
+    alpha.track_uri = "x-rincon-stream:uid-fridge"
+    alpha.transport_state = "PAUSED_PLAYBACK"
+
+    svc = SonosService()
+    monkeypatch.setattr(svc, "discover_visible_zones", lambda rt: {alpha, fridge})
+
+    svc.group_selected_and_play_line_in(runtime, ["uid-a"], line_in_speaker_id="uid-fridge")
+
+    assert alpha.switch_calls == []
+    assert alpha.play_calls == 1
+
+
+def test_group_selected_regroups_when_extra_member_present(
+    runtime: SonosRuntime, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    alpha = FakeSonosDevice("uid-a", "Alpha Room")
+    beta = FakeSonosDevice("uid-b", "Beta Room")
+    patio = FakeSonosDevice("uid-p", "Patio")
+    fridge = FakeSonosDevice("uid-fridge", "Fridge Amp")
+    _bond(alpha, beta, patio, coordinator=alpha)
+
+    svc = SonosService()
+    monkeypatch.setattr(svc, "discover_visible_zones", lambda rt: {alpha, beta, patio, fridge})
+
+    svc.group_selected_and_play_line_in(runtime, ["uid-b", "uid-a"], line_in_speaker_id="uid-fridge")
+
+    assert alpha.unjoin_calls == 1
+    assert beta.unjoin_calls == 1
+    assert beta.join_targets == [alpha.uid]
+    assert alpha.play_calls == 1
+
+
 def test_group_selected_sets_speaker_volumes_before_play(
     runtime: SonosRuntime, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -137,9 +242,9 @@ def test_add_speakers_to_group_joins_onto_existing_coordinator(
     runtime: SonosRuntime, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     kitchen = FakeSonosDevice("uid-k", "Kitchen")
-    kitchen.group = _FakeGroup(coordinator=kitchen)
     dining = FakeSonosDevice("uid-d", "Dining")
     patio = FakeSonosDevice("uid-p", "Patio")
+    _bond(kitchen, dining, coordinator=kitchen)
 
     svc = SonosService()
     monkeypatch.setattr(svc, "discover_visible_zones", lambda rt: {kitchen, dining, patio})
@@ -149,6 +254,22 @@ def test_add_speakers_to_group_joins_onto_existing_coordinator(
     assert patio.join_targets == [kitchen.uid]
     assert "Patio" in msg
     assert "Kitchen" in msg
+
+
+def test_add_speakers_to_group_skips_already_joined(
+    runtime: SonosRuntime, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    kitchen = FakeSonosDevice("uid-k", "Kitchen")
+    patio = FakeSonosDevice("uid-p", "Patio")
+    _bond(kitchen, patio, coordinator=kitchen)
+
+    svc = SonosService()
+    monkeypatch.setattr(svc, "discover_visible_zones", lambda rt: {kitchen, patio})
+
+    msg = svc.add_speakers_to_group(runtime, ["uid-k"], ["uid-p"])
+    assert patio.unjoin_calls == 0
+    assert patio.join_targets == []
+    assert "already in group" in msg
 
 
 def test_add_speakers_to_empty_group_selects_single(
@@ -168,7 +289,7 @@ def test_remove_speakers_from_group_unjoins(
 ) -> None:
     kitchen = FakeSonosDevice("uid-k", "Kitchen")
     dining = FakeSonosDevice("uid-d", "Dining")
-    dining.group = _FakeGroup(coordinator=kitchen)
+    _bond(kitchen, dining, coordinator=kitchen)
 
     svc = SonosService()
     monkeypatch.setattr(svc, "discover_visible_zones", lambda rt: {kitchen, dining})
@@ -184,9 +305,8 @@ def test_adjust_volume_selected_applies_relative_step_to_each_selected_zone(
 ) -> None:
     """Each checked speaker gets a relative volume step (grouped rooms are not collapsed to coordinator-only)."""
     kitchen = FakeSonosDevice("uid-k", "Kitchen", volume=98)
-    kitchen.group = _FakeGroup(coordinator=kitchen)
     dining = FakeSonosDevice("uid-d", "Dining", volume=98)
-    dining.group = _FakeGroup(coordinator=kitchen)
+    _bond(kitchen, dining, coordinator=kitchen)
 
     svc = SonosService()
     monkeypatch.setattr(svc, "discover_visible_zones", lambda rt: {kitchen, dining})
