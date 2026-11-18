@@ -32,6 +32,18 @@ def test_timeline_snapshot_reads_track_metadata():
     assert snap.rating_key == "42"
 
 
+def test_timeline_snapshot_prefers_track_artist_over_album_artist():
+    xml = """<?xml version="1.0" encoding="UTF-8"?>
+<MediaContainer size="1">
+    <Timeline state="playing" type="music" itemType="music" title="Song" originalTitle="Featured Artist" grandparentTitle="Album Artist" parentTitle="Comp" ratingKey="7" />
+</MediaContainer>
+"""
+    snap = plexamp_client._timeline_snapshot_from_xml(xml)
+    assert snap is not None
+    assert snap.artist == "Featured Artist"
+    assert snap.album == "Comp"
+
+
 def test_timeline_state_reads_paused_music():
     xml = """<?xml version="1.0" encoding="UTF-8"?>
 <MediaContainer size="1">
@@ -141,18 +153,38 @@ def test_companion_get_logs_timestamped_request(monkeypatch, caplog):
 
     with caplog.at_level(logging.INFO, logger="app.services.plexamp_client"):
         plexamp_client.companion_get(
-            "http://verox.local:32500/player/timeline/poll?token=secret&type=music",
+            "http://verox.local:32500/player/playback/play?token=secret",
             timeout=1.0,
             headers={"Accept": "application/xml"},
         )
 
     joined = "\n".join(r.message for r in caplog.records)
-    assert "GET http://verox.local:32500/player/timeline/poll?token=<redacted>&type=music" in joined
+    assert "GET http://verox.local:32500/player/playback/play?token=<redacted>" in joined
     assert "status=200" in joined
     assert "duration_ms=" in joined
     assert "secret" not in joined
     assert "companion request" not in joined
     assert "companion throttle" not in joined
+
+
+def test_companion_get_skips_timeline_poll_logs(monkeypatch, caplog):
+    _clear_companion_throttle_state()
+    monkeypatch.setattr(plexamp_client.settings, "plexamp_min_request_interval_seconds", 0.0)
+
+    class FakeResp:
+        status_code = 200
+        text = ""
+
+    monkeypatch.setattr(plexamp_client.requests, "get", lambda *a, **k: FakeResp())
+
+    with caplog.at_level(logging.INFO, logger="app.services.plexamp_client"):
+        plexamp_client.companion_get(
+            "http://verox.local:32500/player/timeline/poll?token=secret&type=music",
+            timeout=1.0,
+            headers={"Accept": "application/xml"},
+        )
+
+    assert not [r for r in caplog.records if "timeline/poll" in r.message]
 
 
 def test_companion_get_throttles_second_request(monkeypatch):

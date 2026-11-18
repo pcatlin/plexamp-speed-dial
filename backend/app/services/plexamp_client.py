@@ -172,10 +172,11 @@ def companion_get(url: str, *, timeout: float, headers: dict[str, str] | None = 
     """
     GET a companion (Plexamp/Caldera) URL with per-host throttling and timestamped logging.
 
-    All outbound player HTTP should go through here so Verox/Caldera traffic is easy to audit.
+    Timeline polls are silent; playback/command traffic is logged for audit.
     """
     host_key = _companion_host_key(url)
     safe = _redact_token_query(url)
+    is_poll = "/player/timeline/poll" in url
     gap = float(getattr(settings, "plexamp_min_request_interval_seconds", 0.75) or 0.0)
     hdrs = headers if headers is not None else _plexamp_request_headers()
 
@@ -192,12 +193,14 @@ def companion_get(url: str, *, timeout: float, headers: dict[str, str] | None = 
             resp = requests.get(url, timeout=timeout, headers=hdrs)
         except Exception as exc:
             _host_last_request_mono[host_key] = time.monotonic()
-            duration_ms = (time.monotonic() - started) * 1000.0
-            _log.warning("%s GET %s error=%s duration_ms=%.0f", ts, safe, exc, duration_ms)
+            if not is_poll:
+                duration_ms = (time.monotonic() - started) * 1000.0
+                _log.warning("%s GET %s error=%s duration_ms=%.0f", ts, safe, exc, duration_ms)
             raise
         _host_last_request_mono[host_key] = time.monotonic()
-        duration_ms = (time.monotonic() - started) * 1000.0
-        _log.info("%s GET %s status=%s duration_ms=%.0f", ts, safe, resp.status_code, duration_ms)
+        if not is_poll:
+            duration_ms = (time.monotonic() - started) * 1000.0
+            _log.info("%s GET %s status=%s duration_ms=%.0f", ts, safe, resp.status_code, duration_ms)
         return resp
 
 
@@ -297,7 +300,8 @@ def _timeline_snapshot_from_element(el: ET.Element) -> TimelineSnapshot | None:
     return TimelineSnapshot(
         state=state,
         title=_attr(el, "title", "trackTitle"),
-        artist=_attr(el, "grandparentTitle", "artistTitle", "originalTitle"),
+        # Prefer track artist (originalTitle) over album artist (grandparentTitle).
+        artist=_attr(el, "originalTitle", "artistTitle", "grandparentTitle"),
         album=_attr(el, "parentTitle", "albumTitle"),
         rating_key=_rating_key_from_timeline(el),
     )

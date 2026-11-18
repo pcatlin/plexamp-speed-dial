@@ -688,7 +688,8 @@ class PlexService:
             if not title:
                 continue
             rating_key = getattr(item, "ratingKey", None)
-            artist = (getattr(item, "grandparentTitle", None) or getattr(item, "originalTitle", None) or "").strip() or None
+            # Prefer track artist (originalTitle) over album artist (grandparentTitle).
+            artist = (getattr(item, "originalTitle", None) or getattr(item, "grandparentTitle", None) or "").strip() or None
             album = (getattr(item, "parentTitle", None) or "").strip() or None
             return {
                 "title": title,

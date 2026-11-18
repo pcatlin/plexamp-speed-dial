@@ -634,15 +634,11 @@ class SonosService:
             return None, err
         try:
             playing_any = False
-            parts: list[str] = []
             for coord in coordinators:
                 coord.zone_group_state.poll(coord)
                 st = (coord.get_current_transport_info().get("current_transport_state") or "").upper()
-                label = _speaker_label(coord)
-                parts.append(f"{label}={st or '?'}")
                 if st in ("PLAYING", "TRANSITIONING"):
                     playing_any = True
-            _log_sonos(f"status [{' '.join(parts)}] playing={playing_any}")
             return playing_any, None
         except Exception as exc:  # noqa: BLE001
             _log.warning("Sonos transport state query failed: %s", exc)
