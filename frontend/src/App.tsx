@@ -459,6 +459,8 @@ function App() {
         type: "subscribe",
         speaker_ids: speakerIds,
         player_id: playerId,
+        // Slower than before — Caldera/Verox companion polls over Wi-Fi are fragile.
+        interval_ms: 5000,
         want_receiver: kind === "pioneer",
       }),
     );

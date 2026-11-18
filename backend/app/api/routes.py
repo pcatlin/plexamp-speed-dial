@@ -721,12 +721,13 @@ def _parse_playback_subscribe(payload: object) -> tuple[list[str], int | None, f
             player_id = int(raw_player)
         except (TypeError, ValueError):
             return None
-    interval_ms = payload.get("interval_ms", 2500)
+    # Default 5s — companion timeline polls on Caldera/Verox are expensive over Wi-Fi.
+    interval_ms = payload.get("interval_ms", 5000)
     try:
         interval_ms = int(interval_ms)
     except (TypeError, ValueError):
-        interval_ms = 2500
-    interval_ms = max(500, min(interval_ms, 30_000))
+        interval_ms = 5000
+    interval_ms = max(1500, min(interval_ms, 30_000))
     want_receiver = bool(payload.get("want_receiver"))
     return speaker_ids, player_id, interval_ms / 1000.0, want_receiver
 
@@ -737,7 +738,7 @@ async def playback_state_websocket(websocket: WebSocket) -> None:
     Stream combined Sonos + Plexamp playback snapshots over one connection (avoids REST polling spam).
 
     Client sends JSON: ``{"type": "subscribe", "speaker_ids": [...], "player_id": null|int,
-    "interval_ms"?: 500-30000, "want_receiver"?: bool}``.
+    "interval_ms"?: 1500-30000 (default 5000), "want_receiver"?: bool}``.
     Server pushes a Sonos/Plexamp snapshot immediately (same fast path for every play-to), then
     again each interval. Pioneer AVR status is a follow-up frame so eISCP latency cannot delay
     now-playing. Another ``subscribe`` mid-stream retargets immediately and abandons in-flight work.

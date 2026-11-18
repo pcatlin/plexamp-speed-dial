@@ -396,7 +396,7 @@ def test_playback_state_websocket_streams(client, monkeypatch):
     monkeypatch.setattr("app.api.routes.asyncio.sleep", no_sleep)
 
     with client.websocket_connect("/api/v1/playback-state/ws") as ws:
-        ws.send_json({"type": "subscribe", "speaker_ids": [], "player_id": None, "interval_ms": 500})
+        ws.send_json({"type": "subscribe", "speaker_ids": [], "player_id": None, "interval_ms": 1500})
         first = ws.receive_json()
         assert first["sonos"]["ok"] is True
         assert first["sonos"]["playing"] is False

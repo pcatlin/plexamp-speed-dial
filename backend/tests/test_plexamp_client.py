@@ -1,3 +1,5 @@
+import logging
+
 from app.services import plexamp_client
 
 MULTI_TIMELINE_XML = """<?xml version="1.0" encoding="UTF-8"?>
@@ -7,6 +9,13 @@ MULTI_TIMELINE_XML = """<?xml version="1.0" encoding="UTF-8"?>
     <Timeline state="stopped" type="video" itemType="video" />
 </MediaContainer>
 """
+
+
+def _clear_companion_throttle_state() -> None:
+    plexamp_client._host_last_request_mono.clear()
+    plexamp_client._host_locks.clear()
+    with plexamp_client._command_id_lock:
+        plexamp_client._command_id = 0
 
 
 def test_timeline_state_prefers_music_over_photo():
@@ -52,6 +61,7 @@ def test_playlist_playback_library_key_normalizes_paths():
 
 
 def test_create_play_queue_matches_desktop_query_shape(monkeypatch):
+    _clear_companion_throttle_state()
     captured: dict = {}
 
     class FakeResp:
@@ -64,6 +74,7 @@ def test_create_play_queue_matches_desktop_query_shape(monkeypatch):
         return FakeResp()
 
     monkeypatch.setattr(plexamp_client.requests, "get", fake_get)
+    monkeypatch.setattr(plexamp_client.settings, "plexamp_min_request_interval_seconds", 0.0)
 
     resp = plexamp_client.create_play_queue(
         plexamp_base="http://player.local:32500",
@@ -85,3 +96,109 @@ def test_create_play_queue_matches_desktop_query_shape(monkeypatch):
     assert "shuffle=0" in url
     assert "playlistID=25289" in url
     assert "playlists%2F25289%2Fitems" in url or "/playlists/25289/items" in url
+    assert "commandID=1" in url
+
+
+def test_command_id_increments_across_requests(monkeypatch):
+    _clear_companion_throttle_state()
+    monkeypatch.setattr(plexamp_client.settings, "plexamp_min_request_interval_seconds", 0.0)
+    urls: list[str] = []
+
+    class FakeResp:
+        status_code = 200
+        text = MULTI_TIMELINE_XML
+
+    def fake_get(url, timeout=None, headers=None):  # noqa: ANN001
+        urls.append(url)
+        return FakeResp()
+
+    monkeypatch.setattr(plexamp_client.requests, "get", fake_get)
+
+    plexamp_client.plexamp_playback_command(
+        plexamp_base="http://verox.local:32500",
+        token="tok",
+        action="play",
+        timeout=1.0,
+    )
+    plexamp_client.plexamp_timeline_snapshot(
+        plexamp_base="http://verox.local:32500",
+        token="tok",
+        timeout=1.0,
+    )
+    assert "commandID=1" in urls[0]
+    assert "commandID=2" in urls[1]
+
+
+def test_companion_get_logs_timestamped_request(monkeypatch, caplog):
+    _clear_companion_throttle_state()
+    monkeypatch.setattr(plexamp_client.settings, "plexamp_min_request_interval_seconds", 0.0)
+
+    class FakeResp:
+        status_code = 200
+        text = ""
+
+    monkeypatch.setattr(plexamp_client.requests, "get", lambda *a, **k: FakeResp())
+
+    with caplog.at_level(logging.INFO, logger="app.services.plexamp_client"):
+        plexamp_client.companion_get(
+            "http://verox.local:32500/player/timeline/poll?token=secret&type=music",
+            timeout=1.0,
+            headers={"Accept": "application/xml"},
+        )
+
+    joined = "\n".join(r.message for r in caplog.records)
+    assert "GET http://verox.local:32500/player/timeline/poll?token=<redacted>&type=music" in joined
+    assert "status=200" in joined
+    assert "duration_ms=" in joined
+    assert "secret" not in joined
+    assert "companion request" not in joined
+    assert "companion throttle" not in joined
+
+
+def test_companion_get_throttles_second_request(monkeypatch):
+    _clear_companion_throttle_state()
+    monkeypatch.setattr(plexamp_client.settings, "plexamp_min_request_interval_seconds", 0.2)
+    sleeps: list[float] = []
+    monkeypatch.setattr(plexamp_client.time, "sleep", lambda seconds: sleeps.append(seconds))
+
+    class FakeResp:
+        status_code = 200
+        text = ""
+
+    monkeypatch.setattr(plexamp_client.requests, "get", lambda *a, **k: FakeResp())
+
+    url = "http://verox.local:32500/player/playback/play?token=x"
+    plexamp_client.companion_get(url, timeout=1.0, headers={"Accept": "application/xml"})
+    plexamp_client.companion_get(url, timeout=1.0, headers={"Accept": "application/xml"})
+
+    assert sleeps, "expected throttle sleep before second request"
+    assert sleeps[0] > 0
+
+
+def test_timeline_snapshot_serializes_polls(monkeypatch):
+    _clear_companion_throttle_state()
+    monkeypatch.setattr(plexamp_client.settings, "plexamp_min_request_interval_seconds", 0.0)
+    urls: list[str] = []
+
+    class FakeResp:
+        def __init__(self, text: str) -> None:
+            self.status_code = 200
+            self.text = text
+
+    def fake_get(url, timeout=None, headers=None):  # noqa: ANN001
+        urls.append(url)
+        if "type=music" in url:
+            return FakeResp(MULTI_TIMELINE_XML)
+        return FakeResp("<MediaContainer/>")
+
+    monkeypatch.setattr(plexamp_client.requests, "get", fake_get)
+
+    snap = plexamp_client.plexamp_timeline_snapshot(
+        plexamp_base="http://verox.local:32500",
+        token="tok",
+        timeout=1.0,
+    )
+    assert snap is not None
+    assert snap.state == "playing"
+    assert len(urls) == 1
+    assert "type=music" in urls[0]

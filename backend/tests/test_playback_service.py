@@ -174,7 +174,7 @@ def test_playback_plexamp_resume_ok(db_session, monkeypatch):
 
 
 def test_playback_skips_play_when_already_playing_after_queue(db_session, monkeypatch):
-    """Warm player: createPlayQueue alone is enough — bare play would glitch the old playlist."""
+    """Warm player that keeps transporting after createPlayQueue — do not send bare play."""
     db_session.add(PlexCredential(auth_token="dummy-token", is_connected=True))
     db_session.commit()
     player = PlexampPlayer(name="Caldera", host="caldera.local", port=32500, is_active=True)
@@ -204,6 +204,48 @@ def test_playback_skips_play_when_already_playing_after_queue(db_session, monkey
     )
     assert result.status == "ok"
     assert play_actions == []
+    assert "did not confirm" not in result.details.lower()
+
+
+def test_playback_sends_play_when_warm_queue_swap_stops(db_session, monkeypatch):
+    """Warm Caldera: createPlayQueue often stops transport — must send play after settle."""
+    db_session.add(PlexCredential(auth_token="dummy-token", is_connected=True))
+    db_session.commit()
+    player = PlexampPlayer(name="Caldera", host="caldera.local", port=32500, is_active=True)
+    db_session.add(player)
+    db_session.commit()
+    db_session.refresh(player)
+
+    play_actions: list[str] = []
+    timeline_calls = {"n": 0}
+
+    def capture_play(**kwargs):  # noqa: ANN001
+        play_actions.append(kwargs["action"])
+        return _ok_response()
+
+    def warm_then_idle_until_play(**kwargs):  # noqa: ANN001
+        timeline_calls["n"] += 1
+        # Pre-queue snapshot: already playing.
+        if timeline_calls["n"] == 1:
+            return TimelineSnapshot(state="playing", rating_key="1")
+        # After settle, queue swap left the player idle (stale "playing" would have lied).
+        if not play_actions:
+            return TimelineSnapshot(state="stopped")
+        return TimelineSnapshot(state="playing", rating_key="100")
+
+    monkeypatch.setattr("app.services.playback_service.create_play_queue", lambda **kwargs: _ok_response())
+    monkeypatch.setattr("app.services.playback_service.plexamp_playback_command", capture_play)
+    monkeypatch.setattr("app.services.playback_service.plexamp_timeline_snapshot", warm_then_idle_until_play)
+    monkeypatch.setattr("app.services.playback_service.time.sleep", lambda _seconds: None)
+
+    service = PlaybackService(plex_service=FakePlexService(), sonos_service=FakeSonosService())
+    result = service.play(
+        PlayRequest(media_type="playlist", media_id="100", player_id=player.id, speaker_ids=[]),
+        db_session,
+        auth_token="dummy-token",
+    )
+    assert result.status == "ok"
+    assert play_actions == ["play"]
     assert "did not confirm" not in result.details.lower()
 
 
@@ -263,7 +305,7 @@ def test_playback_retries_play_when_timeline_stays_idle(db_session, monkeypatch)
 
     def idle_then_playing(**kwargs):  # noqa: ANN001
         timeline_calls["n"] += 1
-        # Stay idle until several play attempts have gone out.
+        # Stay idle until the retry play goes out.
         if play_actions.count("play") < 2:
             return TimelineSnapshot(state="stopped")
         return TimelineSnapshot(state="playing")
@@ -280,7 +322,7 @@ def test_playback_retries_play_when_timeline_stays_idle(db_session, monkeypatch)
         auth_token="dummy-token",
     )
     assert result.status == "ok"
-    assert play_actions.count("play") >= 2
+    assert play_actions.count("play") == 2
 
 
 def test_playback_sonos_stop_empty_returns_error(db_session):

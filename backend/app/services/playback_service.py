@@ -113,33 +113,44 @@ class PlaybackService:
         *,
         auth_token: str,
         timeout: float,
+        was_playing: bool = False,
     ) -> str | None:
         """
-        After createPlayQueue, start playback only if the companion is not already playing.
+        After createPlayQueue, confirm transport is running; send ``play`` only if needed.
 
-        Warm players often keep transporting through a queue swap; a bare ``play`` would
-        briefly continue the previous playlist. Cold Caldera/Plexamp may load a queue
-        without auto-starting — only then send ``play``. Returns an optional note when
-        playing could not be confirmed (createPlayQueue still succeeded).
+        Do **not** trust an immediate ``playing`` timeline — a warm Caldera/Verox often still
+        reports the previous track as playing for a beat, then finishes the queue swap and
+        stops. Waiting first avoids skipping ``play`` and leaving silence.
+
+        If createPlayQueue auto-starts (common on warm Plexamp), we still see playing after
+        the settle and skip ``play`` so we do not glitch the previous queue.
         """
         poll_timeout = min(timeout, 3.0)
 
-        # Give createPlayQueue a moment to report playing on its own (warm or auto-start).
+        # Let the queue swap settle before reading timeline (avoids stale "playing").
+        time.sleep(1.0)
+
         for _ in range(3):
             if self._companion_timeline_playing(plexamp_base, auth_token=auth_token, timeout=poll_timeout):
                 return None
-            time.sleep(0.2)
+            time.sleep(0.75)
 
+        # Warm swap that stopped transport, or cold load that did not auto-start.
+        _log.info(
+            "Companion at %s idle after createPlayQueue (was_playing=%s); sending play",
+            plexamp_base,
+            was_playing,
+        )
         self._send_companion_play(plexamp_base, auth_token=auth_token, timeout=timeout)
 
-        for attempt in range(3):
+        for _ in range(3):
+            time.sleep(0.75)
             if self._companion_timeline_playing(plexamp_base, auth_token=auth_token, timeout=poll_timeout):
                 return None
-            if attempt == 1:
-                self._send_companion_play(plexamp_base, auth_token=auth_token, timeout=timeout)
-            time.sleep(0.35)
 
+        # One retry only — avoid hammering fragile Wi-Fi players.
         self._send_companion_play(plexamp_base, auth_token=auth_token, timeout=timeout)
+        time.sleep(0.75)
         if self._companion_timeline_playing(plexamp_base, auth_token=auth_token, timeout=poll_timeout):
             return None
         _log.warning("Companion at %s did not confirm playing after createPlayQueue", plexamp_base)
@@ -303,6 +314,13 @@ class PlaybackService:
 
         pms_host, pms_port, pms_protocol = parse_pms_host_port_protocol(plex_conn.base_url.strip().rstrip("/"))
 
+        # Snapshot before the queue swap so we can log warm vs cold paths.
+        was_playing = self._companion_timeline_playing(
+            plexamp_base,
+            auth_token=auth_token,
+            timeout=min(3.0, float(settings.plexamp_request_timeout_seconds)),
+        )
+
         try:
             response = create_play_queue(
                 plexamp_base=plexamp_base,
@@ -336,6 +354,7 @@ class PlaybackService:
             plexamp_base,
             auth_token=auth_token,
             timeout=settings.plexamp_request_timeout_seconds,
+            was_playing=was_playing,
         )
 
         output_note = self._audio_output.prepare_for_play(

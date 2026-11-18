@@ -4,16 +4,38 @@ from __future__ import annotations
 
 import logging
 import re
+import threading
+import time
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from urllib.parse import urlencode, urlparse
 
 import requests
 import requests.exceptions as requests_exc
 
+from app.core.config import settings
+
 _log = logging.getLogger(__name__)
 
 _TIMELINE_TYPE_PRIORITY = ("music", "audio", "video", "photo")
+
+# Serialize + space out requests per companion host (fragile Wi-Fi players).
+_host_locks: dict[str, threading.RLock] = {}
+_host_last_request_mono: dict[str, float] = {}
+_host_locks_guard = threading.Lock()
+
+# Companion protocol expects an incrementing commandID per controller request.
+_command_id_lock = threading.Lock()
+_command_id = 0
+
+
+def next_command_id() -> str:
+    """Return the next unique companion commandID (1, 2, 3, …)."""
+    global _command_id
+    with _command_id_lock:
+        _command_id += 1
+        return str(_command_id)
 
 
 @dataclass(frozen=True)
@@ -126,6 +148,59 @@ def _redact_token_query(query: str) -> str:
     return re.sub(r"token=[^&]*", "token=<redacted>", query)
 
 
+def _utc_ts() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+
+
+def _companion_host_key(url_or_base: str) -> str:
+    parsed = urlparse(url_or_base if "://" in url_or_base else f"http://{url_or_base}")
+    host = parsed.hostname or "unknown"
+    port = parsed.port or 32500
+    return f"{host}:{port}"
+
+
+def _lock_for_companion_host(host_key: str) -> threading.RLock:
+    with _host_locks_guard:
+        lock = _host_locks.get(host_key)
+        if lock is None:
+            lock = threading.RLock()
+            _host_locks[host_key] = lock
+        return lock
+
+
+def companion_get(url: str, *, timeout: float, headers: dict[str, str] | None = None) -> requests.Response:
+    """
+    GET a companion (Plexamp/Caldera) URL with per-host throttling and timestamped logging.
+
+    All outbound player HTTP should go through here so Verox/Caldera traffic is easy to audit.
+    """
+    host_key = _companion_host_key(url)
+    safe = _redact_token_query(url)
+    gap = float(getattr(settings, "plexamp_min_request_interval_seconds", 0.75) or 0.0)
+    hdrs = headers if headers is not None else _plexamp_request_headers()
+
+    with _lock_for_companion_host(host_key):
+        if gap > 0:
+            last = _host_last_request_mono.get(host_key, 0.0)
+            wait = gap - (time.monotonic() - last)
+            if wait > 0:
+                time.sleep(wait)
+
+        started = time.monotonic()
+        ts = _utc_ts()
+        try:
+            resp = requests.get(url, timeout=timeout, headers=hdrs)
+        except Exception as exc:
+            _host_last_request_mono[host_key] = time.monotonic()
+            duration_ms = (time.monotonic() - started) * 1000.0
+            _log.warning("%s GET %s error=%s duration_ms=%.0f", ts, safe, exc, duration_ms)
+            raise
+        _host_last_request_mono[host_key] = time.monotonic()
+        duration_ms = (time.monotonic() - started) * 1000.0
+        _log.info("%s GET %s status=%s duration_ms=%.0f", ts, safe, resp.status_code, duration_ms)
+        return resp
+
+
 def create_play_queue(
     *,
     plexamp_base: str,
@@ -158,13 +233,13 @@ def create_play_queue(
         "address": pms_address,
         "port": str(pms_port),
         "shuffle": "1" if shuffle else "0",
-        "commandID": "1",
+        "commandID": next_command_id(),
     }
     if playlist_id is not None and str(playlist_id).strip():
         query_params["playlistID"] = str(playlist_id).strip()
     query = urlencode(query_params)
     url = f"{base}/player/playback/createPlayQueue?{query}"
-    resp = requests.get(url, timeout=timeout, headers=_plexamp_request_headers())
+    resp = companion_get(url, timeout=timeout)
     if resp.status_code != 200:
         _log.warning(
             "Plexamp createPlayQueue HTTP %s server_uri=%s",
@@ -183,11 +258,9 @@ def plexamp_playback_command(
 ) -> requests.Response:
     """Send a companion playback command to headless Plexamp (play, pause, skipNext, skipPrevious, stop, …)."""
     base = sanitize_plexamp_base(plexamp_base)
-    query = urlencode({"type": "audio", "commandID": 1, "token": token})
+    query = urlencode({"type": "audio", "commandID": next_command_id(), "token": token})
     url = f"{base}/player/playback/{action}?{query}"
-    safe = _redact_token_query(url)
-    _log.info("Plexamp playback %s GET %s", action, safe)
-    return requests.get(url, timeout=timeout, headers=_plexamp_request_headers())
+    return companion_get(url, timeout=timeout)
 
 
 def _timeline_element_type(el: ET.Element) -> str:
@@ -304,27 +377,24 @@ def plexamp_timeline_snapshot(
     """
     Poll companion ``/player/timeline/poll`` for music timeline state and track fields.
 
-    Tries music-typed and generic poll URLs in parallel and returns the first usable snapshot.
+    Tries music-typed first, then a generic poll only if needed (serialized, never parallel).
     """
-    from concurrent.futures import ThreadPoolExecutor, as_completed
-
     base = sanitize_plexamp_base(plexamp_base)
+    # Prefer music-typed poll; fall back to generic only if needed.
     param_variants = (
-        {"type": "music", "wait": "0", "commandID": "1", "token": token},
-        {"wait": "0", "commandID": "1", "token": token},
+        {"type": "music", "wait": "0", "token": token},
+        {"wait": "0", "token": token},
     )
 
-    def _poll_one(params: dict[str, str]) -> TimelineSnapshot | None:
+    for base_params in param_variants:
+        params = {**base_params, "commandID": next_command_id()}
         url = f"{base}/player/timeline/poll?{urlencode(params)}"
-        safe = _redact_token_query(url)
         try:
-            resp = requests.get(url, timeout=timeout, headers=_plexamp_request_headers())
-        except requests_exc.RequestException as exc:
-            _log.debug("Plexamp timeline poll transport error %s: %s", safe, exc)
-            return None
+            resp = companion_get(url, timeout=timeout)
+        except requests_exc.RequestException:
+            continue
         if resp.status_code != 200:
-            _log.debug("Plexamp timeline poll HTTP %s %s", resp.status_code, safe)
-            return None
+            continue
         snap = _timeline_snapshot_from_xml(resp.text or "")
         if snap and snap.state:
             return TimelineSnapshot(
@@ -334,19 +404,6 @@ def plexamp_timeline_snapshot(
                 album=snap.album,
                 rating_key=snap.rating_key,
             )
-        return None
-
-    with ThreadPoolExecutor(max_workers=2) as pool:
-        futures = [pool.submit(_poll_one, params) for params in param_variants]
-        for fut in as_completed(futures):
-            try:
-                snap = fut.result()
-            except Exception:  # noqa: BLE001
-                continue
-            if snap is not None:
-                for other in futures:
-                    other.cancel()
-                return snap
     return None
 
 

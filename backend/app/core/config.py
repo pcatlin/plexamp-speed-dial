@@ -31,6 +31,17 @@ class Settings(BaseSettings):
             "PLEXAMP_REQUEST_TIMEOUT_SECONDS",
         ),
     )
+    # Minimum gap between HTTP calls to the same companion host (Plexamp/Caldera).
+    # Helps avoid hammering fragile Wi-Fi players (e.g. Verox) with status polls.
+    plexamp_min_request_interval_seconds: float = Field(
+        default=0.75,
+        ge=0.0,
+        le=10.0,
+        validation_alias=AliasChoices(
+            "plexamp_min_request_interval_seconds",
+            "PLEXAMP_MIN_REQUEST_INTERVAL_SECONDS",
+        ),
+    )
 
     model_config = SettingsConfigDict(
         env_file=_DOTENV_FILES if _DOTENV_FILES else None,
