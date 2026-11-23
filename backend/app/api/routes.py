@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import require_plex_creds
 from app.db.database import Base, SessionLocal, engine, get_db
 from app.db.runtime_setup_migrate import (
+    ensure_amps_table_and_migrate_pioneer_configs,
     ensure_plexamp_player_audio_output_columns,
     ensure_plexamp_player_sonos_line_in_column,
     ensure_runtime_setup_columns,
@@ -24,10 +25,13 @@ from app.db.runtime_setup_migrate import (
     ensure_speed_dial_initial_volumes_column,
     ensure_speed_dial_sort_order_column,
 )
-from app.models import PlexCredential, PlexampPlayer, SonosGroupPreset, SpeedDialFavorite
+from app.models import Amp, PlexCredential, PlexampPlayer, SonosGroupPreset, SpeedDialFavorite
 from app.plexapi_identity import apply_stable_plexapi_headers, log_plex_account_linked
 from app.schemas.common import HealthResponse, IdResponse
 from app.schemas.domain import (
+    AmpCreate,
+    AmpPatch,
+    AmpRead,
     AudioOutput,
     AudioOutputPowerRequest,
     AudioOutputStatusResponse,
@@ -94,11 +98,35 @@ def _player_read(row: PlexampPlayer) -> PlayerRead:
     )
 
 
+def _amp_read(row: Amp) -> AmpRead:
+    return AmpRead(
+        id=row.id,
+        name=row.name,
+        host=row.host,
+        port=row.port,
+        input_code=row.input_code,
+    )
+
+
+def _ensure_pioneer_amp_exists(db: Session, audio: AudioOutput) -> None:
+    if audio.kind != "pioneer":
+        return
+    from app.services.audio_output.types import AudioOutput as InternalAudioOutput
+    from app.services.audio_output.types import parse_pioneer_config
+
+    try:
+        ref = parse_pioneer_config(InternalAudioOutput(kind=audio.kind, config=dict(audio.config)))
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if db.get(Amp, ref.amp_id) is None:
+        raise HTTPException(status_code=400, detail=f"Amp id {ref.amp_id} not found. Create it under Setup → Amps.")
+
+
 def _fetch_receiver_state(player_id: int, db: Session) -> ReceiverStateResponse:
     player = db.get(PlexampPlayer, player_id)
     if not player:
         return ReceiverStateResponse(ok=False, error="Player not found")
-    return audio_output_router.receiver_state(player)
+    return audio_output_router.receiver_state(player, db)
 
 
 def _fetch_sonos_playback_slice(speaker_ids: list[str]) -> PlaybackStateResponse:
@@ -210,6 +238,7 @@ def run_startup_tasks() -> None:
     ensure_speed_dial_sort_order_column(engine)
     ensure_plexamp_player_sonos_line_in_column(engine)
     ensure_plexamp_player_audio_output_columns(engine)
+    ensure_amps_table_and_migrate_pioneer_configs(engine)
     seed = SessionLocal()
     try:
         row = get_or_create_runtime_setup(seed)
@@ -565,12 +594,86 @@ def players(db: Session = Depends(get_db)) -> list[PlayerRead]:
     return [_player_read(row) for row in rows]
 
 
+@router.get("/amps", response_model=list[AmpRead])
+def list_amps(db: Session = Depends(get_db)) -> list[AmpRead]:
+    rows = db.query(Amp).order_by(Amp.id.asc()).all()
+    return [_amp_read(row) for row in rows]
+
+
+@router.post("/amps", response_model=IdResponse)
+def create_amp(payload: AmpCreate, db: Session = Depends(get_db)) -> IdResponse:
+    row = Amp(
+        name=payload.name,
+        host=payload.host,
+        port=payload.port,
+        input_code=payload.input_code,
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return IdResponse(id=row.id)
+
+
+@router.patch("/amps/{amp_id}", response_model=AmpRead)
+def patch_amp(amp_id: int, payload: AmpPatch, db: Session = Depends(get_db)) -> AmpRead:
+    row = db.get(Amp, amp_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Amp not found")
+    data = payload.model_dump(exclude_unset=True)
+    for key, value in data.items():
+        if value is not None:
+            setattr(row, key, value)
+    db.commit()
+    db.refresh(row)
+    return _amp_read(row)
+
+
+@router.delete("/amps/{amp_id}")
+def delete_amp(amp_id: int, db: Session = Depends(get_db)) -> dict[str, str]:
+    row = db.get(Amp, amp_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Amp not found")
+    in_use = 0
+    for player in db.query(PlexampPlayer).all():
+        ao = audio_output_from_player_row(player)
+        if ao.kind != "pioneer":
+            continue
+        try:
+            from app.services.audio_output.types import parse_pioneer_config
+
+            if parse_pioneer_config(ao).amp_id == amp_id:
+                in_use += 1
+        except Exception:  # noqa: BLE001
+            continue
+    if in_use:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Amp is used by {in_use} player(s). Reassign those players first.",
+        )
+    db.delete(row)
+    db.commit()
+    return {"message": "Amp deleted"}
+
+
+@router.post("/amps/{amp_id}/test", response_model=PlayResponse)
+def test_amp(amp_id: int, db: Session = Depends(get_db)) -> PlayResponse:
+    row = db.get(Amp, amp_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Amp not found")
+    try:
+        details = audio_output_router.test_amp(row)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return PlayResponse(status="ok", details=details)
+
+
 @router.post("/players", response_model=IdResponse)
 def create_player(payload: PlayerCreate, db: Session = Depends(get_db)) -> IdResponse:
     from app.services.audio_output.types import AudioOutput as InternalAudioOutput
 
     data = payload.model_dump()
     audio = AudioOutput.model_validate(data.pop("audio_output", {}) or {})
+    _ensure_pioneer_amp_exists(db, audio)
     row = PlexampPlayer(**data)
     apply_audio_output_to_row(
         row,
@@ -588,8 +691,15 @@ def patch_player(player_id: int, payload: PlayerPatch, db: Session = Depends(get
     if not row:
         raise HTTPException(status_code=404, detail="Player not found")
     data = payload.model_dump(exclude_unset=True)
+    if "name" in data and data["name"] is not None:
+        row.name = data["name"]
+    if "host" in data and data["host"] is not None:
+        row.host = data["host"]
+    if "port" in data and data["port"] is not None:
+        row.port = data["port"]
     if "audio_output" in data and data["audio_output"] is not None:
         audio = AudioOutput.model_validate(data["audio_output"])
+        _ensure_pioneer_amp_exists(db, audio)
         from app.services.audio_output.types import AudioOutput as InternalAudioOutput
 
         apply_audio_output_to_row(row, InternalAudioOutput(kind=audio.kind, config=dict(audio.config)))
@@ -871,7 +981,7 @@ def audio_output_status(player_id: int = Query(...), db: Session = Depends(get_d
     if output.kind != "pioneer":
         raise HTTPException(status_code=400, detail="Status is only available for Pioneer audio output.")
     try:
-        status = audio_output_router.pioneer_status(player)
+        status = audio_output_router.pioneer_status(player, db)
     except ValueError as exc:
         # Connection refused / timeout after frequent polls — not a bad request.
         return AudioOutputStatusResponse(ok=False, error=str(exc))
@@ -891,7 +1001,7 @@ def audio_output_volume(payload: AudioOutputVolumeRequest, db: Session = Depends
     if not player:
         raise HTTPException(status_code=404, detail="Player not found")
     try:
-        details = audio_output_router.adjust_volume(player, payload.delta)
+        details = audio_output_router.adjust_volume(player, db, payload.delta)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return PlayResponse(status="ok", details=details)
@@ -903,7 +1013,7 @@ def audio_output_power(payload: AudioOutputPowerRequest, db: Session = Depends(g
     if not player:
         raise HTTPException(status_code=404, detail="Player not found")
     try:
-        details = audio_output_router.set_power(player, on=payload.on)
+        details = audio_output_router.set_power(player, db, on=payload.on)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return PlayResponse(status="ok", details=details)
@@ -915,7 +1025,7 @@ def audio_output_test(payload: AudioOutputTestRequest, db: Session = Depends(get
     if not player:
         raise HTTPException(status_code=404, detail="Player not found")
     try:
-        details = audio_output_router.test_output(player)
+        details = audio_output_router.test_output(player, db)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return PlayResponse(status="ok", details=details)
@@ -966,7 +1076,8 @@ def _sonos_speaker_name_map(db: Session) -> dict[str, str]:
     return {str(s.id): s.name for s in speakers if getattr(s, "id", None)}
 
 
-def _pioneer_label_for_player(player: PlexampPlayer | None) -> str:
+def _pioneer_label_for_player(player: PlexampPlayer | None, db: Session) -> str:
+    """Friendly AVR label — prefer linked amp name, else host/IP."""
     if player is None:
         return "Pioneer AVR"
     ao = audio_output_from_player_row(player)
@@ -975,14 +1086,20 @@ def _pioneer_label_for_player(player: PlexampPlayer | None) -> str:
     try:
         from app.services.audio_output.types import parse_pioneer_config
 
-        cfg = parse_pioneer_config(ao)
+        ref = parse_pioneer_config(ao)
+        amp = db.get(Amp, ref.amp_id)
     except Exception:  # noqa: BLE001
         return "Pioneer AVR"
-    host = (cfg.host or "").strip()
+    if amp is None:
+        return "Pioneer AVR"
+    name = (amp.name or "").strip()
+    if name:
+        return name
+    host = (amp.host or "").strip()
     if not host:
         return "Pioneer AVR"
-    if cfg.port and cfg.port != 60128:
-        return f"{host}:{cfg.port}"
+    if amp.port and amp.port != 60128:
+        return f"{host}:{amp.port}"
     return host
 
 
@@ -1006,7 +1123,7 @@ def _speed_dial_row_to_read(
     description = format_speed_dial_play_description(
         player_name=(player.name if player else "") or f"Player {row.player_id}",
         output_kind=output_kind,
-        pioneer_label=_pioneer_label_for_player(player),
+        pioneer_label=_pioneer_label_for_player(player, db),
         speaker_ids=list(row.speaker_ids or []),
         speaker_names=names,
         initial_volumes=volumes,

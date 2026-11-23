@@ -28,6 +28,28 @@ class SonosOutputConfig(BaseModel):
 
 
 class PioneerOutputConfig(BaseModel):
+    """Player pioneer route — references a Setup → Amps row."""
+
+    amp_id: int
+
+    @field_validator("amp_id", mode="before")
+    @classmethod
+    def coerce_amp_id(cls, value: object) -> int:
+        try:
+            amp_id = int(value)  # type: ignore[arg-type]
+        except (TypeError, ValueError) as exc:
+            raise ValueError("amp_id must be a positive integer") from exc
+        if amp_id < 1:
+            raise ValueError("amp_id must be a positive integer")
+        return amp_id
+
+    def normalized(self) -> PioneerOutputConfig:
+        return PioneerOutputConfig(amp_id=self.amp_id)
+
+
+class PioneerConnection(BaseModel):
+    """Resolved ISCP connection details for a Pioneer amp."""
+
     host: str
     input_code: str
     port: int = 60128
@@ -47,8 +69,8 @@ class PioneerOutputConfig(BaseModel):
             raise ValueError("port must be between 1 and 65535.")
         return value
 
-    def normalized(self) -> PioneerOutputConfig:
-        return PioneerOutputConfig(
+    def normalized(self) -> PioneerConnection:
+        return PioneerConnection(
             host=self.host.strip(),
             input_code=self.input_code,
             port=self.port,
@@ -74,7 +96,11 @@ def apply_audio_output_to_row(row: object, output: AudioOutput) -> None:
     elif output.kind == "pioneer":
         parse_pioneer_config(output)
     row.audio_output_kind = output.kind
-    row.audio_output_config = dict(output.config)
+    if output.kind == "pioneer":
+        cfg = parse_pioneer_config(output)
+        row.audio_output_config = {"amp_id": cfg.amp_id}
+    else:
+        row.audio_output_config = dict(output.config)
     if output.kind == "sonos":
         sid = str(output.config.get("speaker_id") or "").strip()
         row.sonos_line_in_speaker_id = sid
@@ -88,3 +114,11 @@ def parse_sonos_config(output: AudioOutput) -> SonosOutputConfig:
 
 def parse_pioneer_config(output: AudioOutput) -> PioneerOutputConfig:
     return PioneerOutputConfig.model_validate(output.config).normalized()
+
+
+def pioneer_connection_from_amp(amp: object) -> PioneerConnection:
+    return PioneerConnection(
+        host=str(getattr(amp, "host", "") or ""),
+        input_code=str(getattr(amp, "input_code", "") or ""),
+        port=int(getattr(amp, "port", 60128) or 60128),
+    ).normalized()

@@ -28,13 +28,14 @@ export function formatSpeedDialPlayTarget(options: {
   pioneerLabel: string;
   speakers: Array<{ id: string; name: string }>;
 }): string {
-  const { speakerIds, initialVolumes, isPioneer, pioneerLabel, speakers } = options;
+  const { speakerIds, initialVolumes, isPioneer, speakers } = options;
 
   if (isPioneer) {
+    // Card already shows the player display name on its own line — only surface volume here.
     if (initialVolumes?.pioneer != null) {
-      return `${pioneerLabel} (${initialVolumes.pioneer}%)`;
+      return `${initialVolumes.pioneer}%`;
     }
-    return pioneerLabel;
+    return "Pioneer AVR";
   }
 
   const selected = speakers.filter((speaker) => speakerIds.includes(speaker.id));

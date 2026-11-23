@@ -1,18 +1,29 @@
 import { useEffect, useState } from "react";
-import type { AudioOutput, Player, RuntimeSettings, Speaker } from "./api";
+import type { Amp, AudioOutput, Player, RuntimeSettings, Speaker } from "./api";
 import { api } from "./api";
-import { audioOutputsEqual, defaultAudioOutput } from "./audioOutput";
+import { AmpFields, ampDraftFromAmp, type AmpDraft } from "./AmpFields";
+import { audioOutputsEqual, defaultAudioOutput, normalizePioneerInputCode } from "./audioOutput";
 import { PlayerAudioRouteFields, audioOutputFromPlayer } from "./PlayerAudioRouteFields";
 import { ConfirmDialog } from "./ConfirmDialog";
 
 const SETUP_SECTIONS = [
   { id: "plex", label: "Plex" },
   { id: "sonos", label: "Sonos" },
+  { id: "amps", label: "Amps" },
   { id: "plexamp", label: "Players" },
   { id: "webhooks", label: "Webhooks" },
 ] as const;
 
+const DEFAULT_AMP_DRAFT: AmpDraft = {
+  name: "",
+  host: "",
+  port: 60128,
+  input_code: "02",
+};
+
 type SetupSection = (typeof SETUP_SECTIONS)[number]["id"];
+
+const PLEXAMP_DEFAULT_PORT = 32500;
 
 function parsePlayerEndpoint(raw: string): { label: string; host: string; port: number } {
   const s = raw.trim();
@@ -22,7 +33,7 @@ function parsePlayerEndpoint(raw: string): { label: string; host: string; port: 
       const url = new URL(s);
       const host = url.hostname;
       if (!host) throw new Error("Missing hostname");
-      const port = url.port ? parseInt(url.port, 10) : 32500;
+      const port = url.port ? parseInt(url.port, 10) : PLEXAMP_DEFAULT_PORT;
       return { label: host, host, port };
     } catch {
       throw new Error("Invalid URL.");
@@ -30,14 +41,22 @@ function parsePlayerEndpoint(raw: string): { label: string; host: string; port: 
   }
   const first = s.split(/[/\s]/)[0] ?? "";
   if (first.includes(":")) {
-    const [maybeHost, portStr] = first.split(":");
+    const colon = first.lastIndexOf(":");
+    const maybeHost = first.slice(0, colon).trim();
+    const portStr = first.slice(colon + 1);
     const port = Number.parseInt(portStr ?? "", 10);
-    const host = (maybeHost ?? "").trim();
-    if (host && Number.isFinite(port) && port > 0 && port < 65536) {
-      return { label: host, host, port };
+    if (maybeHost && Number.isFinite(port) && port > 0 && port < 65536) {
+      return { label: maybeHost, host: maybeHost, port };
     }
   }
-  return { label: first, host: first, port: 32500 };
+  return { label: first, host: first, port: PLEXAMP_DEFAULT_PORT };
+}
+
+function playerHostField(player: { host: string; port: number }): string {
+  const host = (player.host || "").trim();
+  if (!host) return "";
+  if (player.port && player.port !== PLEXAMP_DEFAULT_PORT) return `${host}:${player.port}`;
+  return host;
 }
 
 type Props = {
@@ -45,6 +64,7 @@ type Props = {
   onClose: () => void;
   onPlayersUpdated: () => Promise<void>;
   onPlayerPatched?: (player: Player) => Promise<void>;
+  onAmpsUpdated?: () => Promise<void>;
   afterRuntimeSaved?: () => Promise<void>;
   /** Sync parent after Plex OAuth completes (reload library, etc.). */
   onPlexAuthRefresh?: () => Promise<void>;
@@ -56,6 +76,7 @@ export function SetupModal({
   onClose,
   onPlayersUpdated,
   onPlayerPatched,
+  onAmpsUpdated,
   afterRuntimeSaved,
   onPlexAuthRefresh,
   onToast,
@@ -77,15 +98,27 @@ export function SetupModal({
   const [newPlayerAudioOutput, setNewPlayerAudioOutput] = useState<AudioOutput>(defaultAudioOutput);
   const [sonosSpeakers, setSonosSpeakers] = useState<Speaker[]>([]);
   const [players, setPlayers] = useState<Player[]>([]);
+  const [amps, setAmps] = useState<Amp[]>([]);
+  const [ampDrafts, setAmpDrafts] = useState<Record<number, AmpDraft>>({});
+  const [newAmpDraft, setNewAmpDraft] = useState<AmpDraft>(DEFAULT_AMP_DRAFT);
   const [playerAudioDrafts, setPlayerAudioDrafts] = useState<Record<number, AudioOutput>>({});
+  const [playerNameDrafts, setPlayerNameDrafts] = useState<Record<number, string>>({});
+  const [playerHostDrafts, setPlayerHostDrafts] = useState<Record<number, string>>({});
   const [playerInput, setPlayerInput] = useState("");
   const [playerNameHint, setPlayerNameHint] = useState("");
-  const [testPlayerId, setTestPlayerId] = useState<number | null>(null);
+  const [testAmpId, setTestAmpId] = useState<number | null>(null);
   const [playerDeleteTarget, setPlayerDeleteTarget] = useState<{ id: number; name: string } | null>(null);
+  const [ampDeleteTarget, setAmpDeleteTarget] = useState<{ id: number; name: string } | null>(null);
+
+  const syncAmpState = (list: Amp[]) => {
+    setAmps(list);
+    setAmpDrafts(Object.fromEntries(list.map((amp) => [amp.id, ampDraftFromAmp(amp)] as const)));
+  };
 
   useEffect(() => {
     if (!open) {
       setPlayerDeleteTarget(null);
+      setAmpDeleteTarget(null);
       return;
     }
     let cancelled = false;
@@ -93,9 +126,10 @@ export function SetupModal({
     setActiveSection("plex");
     (async () => {
       try {
-        const [settings, plist, auth, spk] = await Promise.all([
+        const [settings, plist, alist, auth, spk] = await Promise.all([
           api.runtimeSettings(),
           api.players(),
+          api.amps(),
           api.authStatus(),
           api.speakers().catch(() => [] as Speaker[]),
         ]);
@@ -103,13 +137,17 @@ export function SetupModal({
         applySettings(settings);
         setSonosSpeakers(spk);
         setPlayers(plist);
+        syncAmpState(alist);
         setPlayerAudioDrafts(
           Object.fromEntries(plist.map((p) => [p.id, audioOutputFromPlayer(p)] as const)),
         );
+        setPlayerNameDrafts(Object.fromEntries(plist.map((p) => [p.id, p.name] as const)));
+        setPlayerHostDrafts(Object.fromEntries(plist.map((p) => [p.id, playerHostField(p)] as const)));
         setAuthConnected(auth.connected);
         setAuthUsername(auth.username ?? "");
         setPlayerInput("");
         setPlayerNameHint("");
+        setNewAmpDraft(DEFAULT_AMP_DRAFT);
       } catch (e) {
         onToast(e instanceof Error ? e.message : String(e));
       } finally {
@@ -149,13 +187,55 @@ export function SetupModal({
     });
     applySettings(saved);
 
+    let nextAmps = amps;
+    for (const amp of amps) {
+      const draft = ampDrafts[amp.id] ?? ampDraftFromAmp(amp);
+      const name = draft.name.trim();
+      const host = draft.host.trim();
+      const inputCode = normalizePioneerInputCode(draft.input_code);
+      if (!name || !host) continue;
+      const dirty =
+        name !== amp.name ||
+        host !== amp.host ||
+        draft.port !== amp.port ||
+        inputCode !== normalizePioneerInputCode(amp.input_code);
+      if (!dirty) continue;
+      const updated = await api.patchAmp(amp.id, {
+        name,
+        host,
+        port: draft.port,
+        input_code: inputCode,
+      });
+      nextAmps = nextAmps.map((row) => (row.id === amp.id ? updated : row));
+    }
+    syncAmpState(nextAmps);
+    await onAmpsUpdated?.().catch(() => undefined);
+
     let nextPlayers = players;
     for (const player of players) {
-      const draft = playerAudioDrafts[player.id];
-      if (!draft || audioOutputsEqual(audioOutputFromPlayer(player), draft)) {
+      const audioDraft = playerAudioDrafts[player.id];
+      const nameDraft = (playerNameDrafts[player.id] ?? player.name).trim();
+      const hostRaw = (playerHostDrafts[player.id] ?? playerHostField(player)).trim();
+      const audioDirty =
+        Boolean(audioDraft) && !audioOutputsEqual(audioOutputFromPlayer(player), audioDraft!);
+      const nameDirty = nameDraft !== player.name && nameDraft.length > 0;
+      let hostDirty = false;
+      let hostPatch: { host: string; port: number } | null = null;
+      if (hostRaw && hostRaw !== playerHostField(player)) {
+        const parsed = parsePlayerEndpoint(hostRaw);
+        if (parsed.host !== player.host || parsed.port !== player.port) {
+          hostDirty = true;
+          hostPatch = { host: parsed.host, port: parsed.port };
+        }
+      }
+      if (!audioDirty && !nameDirty && !hostDirty) {
         continue;
       }
-      const updated = await api.patchPlayer(player.id, { audio_output: draft });
+      const updated = await api.patchPlayer(player.id, {
+        ...(nameDirty ? { name: nameDraft } : {}),
+        ...(hostPatch ? hostPatch : {}),
+        ...(audioDirty ? { audio_output: audioDraft } : {}),
+      });
       nextPlayers = nextPlayers.map((p) => (p.id === player.id ? updated : p));
       await onPlayerPatched?.(updated);
     }
@@ -163,6 +243,8 @@ export function SetupModal({
     setPlayerAudioDrafts(
       Object.fromEntries(nextPlayers.map((p) => [p.id, audioOutputFromPlayer(p)] as const)),
     );
+    setPlayerNameDrafts(Object.fromEntries(nextPlayers.map((p) => [p.id, p.name] as const)));
+    setPlayerHostDrafts(Object.fromEntries(nextPlayers.map((p) => [p.id, playerHostField(p)] as const)));
 
     try {
       setSonosSpeakers(await api.speakers());
@@ -201,7 +283,13 @@ export function SetupModal({
         is_active: true,
         audio_output: newPlayerAudioOutput,
       });
-      setPlayers(await api.players());
+      const plist = await api.players();
+      setPlayers(plist);
+      setPlayerAudioDrafts(
+        Object.fromEntries(plist.map((p) => [p.id, audioOutputFromPlayer(p)] as const)),
+      );
+      setPlayerNameDrafts(Object.fromEntries(plist.map((p) => [p.id, p.name] as const)));
+      setPlayerHostDrafts(Object.fromEntries(plist.map((p) => [p.id, playerHostField(p)] as const)));
       setPlayerInput("");
       setPlayerNameHint("");
       setNewPlayerAudioOutput(defaultAudioOutput());
@@ -268,6 +356,74 @@ export function SetupModal({
     setPlayerAudioDrafts((current) => ({ ...current, [playerId]: audio_output }));
   };
 
+  const setPlayerNameDraft = (playerId: number, name: string) => {
+    setPlayerNameDrafts((current) => ({ ...current, [playerId]: name }));
+  };
+
+  const setPlayerHostDraft = (playerId: number, host: string) => {
+    setPlayerHostDrafts((current) => ({ ...current, [playerId]: host }));
+  };
+
+  const commitPlayerName = async (playerId: number) => {
+    const saved = players.find((p) => p.id === playerId);
+    if (!saved) return;
+    const nextName = (playerNameDrafts[playerId] ?? saved.name).trim();
+    if (!nextName) {
+      setPlayerNameDrafts((current) => ({ ...current, [playerId]: saved.name }));
+      return;
+    }
+    if (nextName === saved.name) {
+      setPlayerNameDrafts((current) => ({ ...current, [playerId]: saved.name }));
+      return;
+    }
+    setBusy(true);
+    try {
+      const updated = await api.patchPlayer(playerId, { name: nextName });
+      setPlayers((current) => current.map((p) => (p.id === playerId ? updated : p)));
+      setPlayerNameDrafts((current) => ({ ...current, [playerId]: updated.name }));
+      await onPlayerPatched?.(updated);
+    } catch (e) {
+      setPlayerNameDrafts((current) => ({ ...current, [playerId]: saved.name }));
+      onToast(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const commitPlayerHost = async (playerId: number) => {
+    const saved = players.find((p) => p.id === playerId);
+    if (!saved) return;
+    const raw = (playerHostDrafts[playerId] ?? playerHostField(saved)).trim();
+    if (!raw) {
+      setPlayerHostDrafts((current) => ({ ...current, [playerId]: playerHostField(saved) }));
+      return;
+    }
+    let parsed: { host: string; port: number };
+    try {
+      parsed = parsePlayerEndpoint(raw);
+    } catch (e) {
+      setPlayerHostDrafts((current) => ({ ...current, [playerId]: playerHostField(saved) }));
+      onToast(e instanceof Error ? e.message : String(e));
+      return;
+    }
+    if (parsed.host === saved.host && parsed.port === saved.port) {
+      setPlayerHostDrafts((current) => ({ ...current, [playerId]: playerHostField(saved) }));
+      return;
+    }
+    setBusy(true);
+    try {
+      const updated = await api.patchPlayer(playerId, { host: parsed.host, port: parsed.port });
+      setPlayers((current) => current.map((p) => (p.id === playerId ? updated : p)));
+      setPlayerHostDrafts((current) => ({ ...current, [playerId]: playerHostField(updated) }));
+      await onPlayerPatched?.(updated);
+    } catch (e) {
+      setPlayerHostDrafts((current) => ({ ...current, [playerId]: playerHostField(saved) }));
+      onToast(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const commitPlayerAudioOutput = async (playerId: number, audio_output: AudioOutput) => {
     const saved = players.find((p) => p.id === playerId);
     if (saved && audioOutputsEqual(audioOutputFromPlayer(saved), audio_output)) {
@@ -286,15 +442,95 @@ export function SetupModal({
     }
   };
 
-  const testPlayerAudioOutput = async (playerId: number) => {
-    setTestPlayerId(playerId);
+  const addAmp = async () => {
+    setBusy(true);
     try {
-      const result = await api.audioOutputTest(playerId);
+      const name = newAmpDraft.name.trim();
+      const host = newAmpDraft.host.trim();
+      if (!host) throw new Error("Enter a receiver IP or hostname.");
+      const displayName = name || host;
+      await api.createAmp({
+        name: displayName,
+        host,
+        port: newAmpDraft.port,
+        input_code: normalizePioneerInputCode(newAmpDraft.input_code),
+      });
+      syncAmpState(await api.amps());
+      setNewAmpDraft(DEFAULT_AMP_DRAFT);
+      await onAmpsUpdated?.();
+      onToast(`Added amp ${displayName}.`);
+    } catch (e) {
+      onToast(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const setAmpDraft = (ampId: number, draft: AmpDraft) => {
+    setAmpDrafts((current) => ({ ...current, [ampId]: draft }));
+  };
+
+  const commitAmpDraft = async (ampId: number, draft: AmpDraft) => {
+    const saved = amps.find((row) => row.id === ampId);
+    if (!saved) return;
+    const name = draft.name.trim();
+    const host = draft.host.trim();
+    const inputCode = normalizePioneerInputCode(draft.input_code);
+    if (!name || !host) {
+      setAmpDrafts((current) => ({ ...current, [ampId]: ampDraftFromAmp(saved) }));
+      return;
+    }
+    if (
+      name === saved.name &&
+      host === saved.host &&
+      draft.port === saved.port &&
+      inputCode === normalizePioneerInputCode(saved.input_code)
+    ) {
+      setAmpDrafts((current) => ({ ...current, [ampId]: ampDraftFromAmp(saved) }));
+      return;
+    }
+    setBusy(true);
+    try {
+      const updated = await api.patchAmp(ampId, {
+        name,
+        host,
+        port: draft.port,
+        input_code: inputCode,
+      });
+      setAmps((current) => current.map((row) => (row.id === ampId ? updated : row)));
+      setAmpDrafts((current) => ({ ...current, [ampId]: ampDraftFromAmp(updated) }));
+      await onAmpsUpdated?.();
+    } catch (e) {
+      setAmpDrafts((current) => ({ ...current, [ampId]: ampDraftFromAmp(saved) }));
+      onToast(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const testAmp = async (ampId: number) => {
+    setTestAmpId(ampId);
+    try {
+      const result = await api.ampTest(ampId);
       onToast(result.details);
     } catch (e) {
       onToast(e instanceof Error ? e.message : String(e));
     } finally {
-      setTestPlayerId(null);
+      setTestAmpId(null);
+    }
+  };
+
+  const removeAmp = async (id: number) => {
+    setBusy(true);
+    try {
+      await api.deleteAmp(id);
+      syncAmpState(await api.amps());
+      await onAmpsUpdated?.();
+      onToast("Removed amp.");
+    } catch (e) {
+      onToast(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -307,6 +543,8 @@ export function SetupModal({
       setPlayerAudioDrafts(
         Object.fromEntries(plist.map((p) => [p.id, audioOutputFromPlayer(p)] as const)),
       );
+      setPlayerNameDrafts(Object.fromEntries(plist.map((p) => [p.id, p.name] as const)));
+      setPlayerHostDrafts(Object.fromEntries(plist.map((p) => [p.id, playerHostField(p)] as const)));
       await onPlayersUpdated();
       onToast("Removed player.");
     } catch (e) {
@@ -451,63 +689,146 @@ export function SetupModal({
               </section>
             ) : null}
 
+            {activeSection === "amps" ? (
+              <section className="setupModalPage" aria-labelledby="setup-amps-title">
+                <h3 id="setup-amps-title">Amps</h3>
+                <p className="hint setupModalIntro">
+                  Pioneer (or compatible) AV receivers. Players with Pioneer AVR routing pick an amp from this list.
+                </p>
+                <div className="playerAddForm">
+                  <AmpFields
+                    idPrefix="new-amp"
+                    value={newAmpDraft}
+                    onChange={setNewAmpDraft}
+                    disabled={busy}
+                  />
+                  <div className="playerListItemFooter">
+                    <button type="button" className="nowrap" disabled={busy} onClick={() => void addAmp()}>
+                      Add amp
+                    </button>
+                  </div>
+                </div>
+
+                <div className="playerListDivider" role="separator" />
+                <h4 className="playerListHeading">Configured amps</h4>
+                {amps.length === 0 ? <p className="hint">No amps yet.</p> : null}
+                <ul className="playerList">
+                  {amps.map((amp) => (
+                    <li key={amp.id} className="playerListItem">
+                      <AmpFields
+                        idPrefix={`amp-${amp.id}`}
+                        value={ampDrafts[amp.id] ?? ampDraftFromAmp(amp)}
+                        onChange={(next) => setAmpDraft(amp.id, next)}
+                        onCommit={(next) => void commitAmpDraft(amp.id, next)}
+                        disabled={busy}
+                      />
+                      <div className="playerListItemFooter">
+                        <button
+                          type="button"
+                          className="danger nowrap"
+                          disabled={busy}
+                          onClick={() =>
+                            setAmpDeleteTarget({
+                              id: amp.id,
+                              name: (ampDrafts[amp.id]?.name ?? amp.name).trim() || amp.name,
+                            })
+                          }
+                        >
+                          Delete
+                        </button>
+                        <button
+                          type="button"
+                          className="nowrap"
+                          disabled={busy || testAmpId === amp.id}
+                          onClick={() => void testAmp(amp.id)}
+                        >
+                          {testAmpId === amp.id ? "Testing…" : "Test receiver"}
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
+
             {activeSection === "plexamp" ? (
               <section className="setupModalPage" aria-labelledby="setup-plexamp-title">
                 <h3 id="setup-plexamp-title">Players</h3>
                 <p className="hint setupModalIntro">
                   Hostname or IP of each Plexamp or Caldera player (companion port defaults to 32500). Playback uses the
-                  same createPlayQueue companion API for both. Route analog output through Sonos line-in, a Pioneer AV
-                  receiver, or none (player only).
+                  same createPlayQueue companion API for both. Route analog output through Sonos line-in, a Pioneer amp
+                  (configured under Amps), or none (player only).
                 </p>
-                <div className="inlineGrow">
-                  <label className="fieldLabel mb0 stretch">
-                    Add player
-                    <input
-                      type="text"
-                      className="textInput"
-                      placeholder="192.168.1.5 or http://kitchen.local"
-                      value={playerInput}
-                      onChange={(e) => {
-                        setPlayerInput(e.target.value);
-                        setPlayerNameHint("");
-                      }}
-                    />
-                  </label>
-                  <label className="fieldLabel mb0 stretch">
-                    Display name (optional)
-                    <input
-                      type="text"
-                      className="textInput"
-                      placeholder="Kitchen"
-                      value={playerNameHint}
-                      onChange={(e) => setPlayerNameHint(e.target.value)}
-                    />
-                  </label>
-                  <button type="button" className="nowrap" disabled={busy} onClick={() => void addPlayer()}>
-                    Add
-                  </button>
+                <div className="playerAddForm">
+                  <div className="inlineGrow">
+                    <label className="fieldLabel mb0 stretch">
+                      Add player
+                      <input
+                        type="text"
+                        className="textInput"
+                        placeholder="192.168.1.5 or http://kitchen.local"
+                        value={playerInput}
+                        onChange={(e) => {
+                          setPlayerInput(e.target.value);
+                          setPlayerNameHint("");
+                        }}
+                      />
+                    </label>
+                    <label className="fieldLabel mb0 stretch">
+                      Display name (optional)
+                      <input
+                        type="text"
+                        className="textInput"
+                        placeholder="Kitchen"
+                        value={playerNameHint}
+                        onChange={(e) => setPlayerNameHint(e.target.value)}
+                      />
+                    </label>
+                    <button type="button" className="nowrap" disabled={busy} onClick={() => void addPlayer()}>
+                      Add
+                    </button>
+                  </div>
+                  <PlayerAudioRouteFields
+                    idPrefix="new-player"
+                    value={newPlayerAudioOutput}
+                    onChange={setNewPlayerAudioOutput}
+                    sonosSpeakers={sonosSpeakers}
+                    amps={amps}
+                    disabled={busy}
+                  />
                 </div>
-                <PlayerAudioRouteFields
-                  idPrefix="new-player"
-                  value={newPlayerAudioOutput}
-                  onChange={setNewPlayerAudioOutput}
-                  sonosSpeakers={sonosSpeakers}
-                  disabled={busy}
-                />
+
+                <div className="playerListDivider" role="separator" />
+                <h4 className="playerListHeading">Configured players</h4>
+                {players.length === 0 ? <p className="hint">No players yet.</p> : null}
                 <ul className="playerList">
                   {players.map((p) => (
-                    <li key={p.id}>
-                      <span className="playerMeta">
-                        <strong>{p.name}</strong>
-                        <button
-                          type="button"
-                          className="danger nowrap"
-                          disabled={busy}
-                          onClick={() => setPlayerDeleteTarget({ id: p.id, name: p.name })}
-                        >
-                          Delete
-                        </button>
-                      </span>
+                    <li key={p.id} className="playerListItem">
+                      <div className="playerMeta">
+                        <label className="fieldLabel mb0 playerNameField">
+                          Display name
+                          <input
+                            type="text"
+                            className="textInput"
+                            value={playerNameDrafts[p.id] ?? p.name}
+                            disabled={busy}
+                            onChange={(e) => setPlayerNameDraft(p.id, e.target.value)}
+                            onBlur={() => void commitPlayerName(p.id)}
+                          />
+                        </label>
+                        <label className="fieldLabel mb0 playerHostField">
+                          IP or hostname
+                          <input
+                            type="text"
+                            className="textInput"
+                            placeholder="192.168.1.5 or host:32500"
+                            value={playerHostDrafts[p.id] ?? playerHostField(p)}
+                            disabled={busy}
+                            onChange={(e) => setPlayerHostDraft(p.id, e.target.value)}
+                            onBlur={() => void commitPlayerHost(p.id)}
+                          />
+                        </label>
+                      </div>
                       <div className="playerRouteCell">
                         <PlayerAudioRouteFields
                           idPrefix={`player-${p.id}`}
@@ -515,15 +836,28 @@ export function SetupModal({
                           onChange={(next) => setPlayerAudioDraft(p.id, next)}
                           onCommit={(next) => void commitPlayerAudioOutput(p.id, next)}
                           sonosSpeakers={sonosSpeakers}
+                          amps={amps}
                           disabled={busy}
-                          onTest={() => testPlayerAudioOutput(p.id)}
-                          testBusy={testPlayerId === p.id}
                         />
+                      </div>
+                      <div className="playerListItemFooter">
+                        <button
+                          type="button"
+                          className="danger nowrap playerDeleteBtn"
+                          disabled={busy}
+                          onClick={() =>
+                            setPlayerDeleteTarget({
+                              id: p.id,
+                              name: (playerNameDrafts[p.id] ?? p.name).trim() || p.name,
+                            })
+                          }
+                        >
+                          Delete
+                        </button>
                       </div>
                     </li>
                   ))}
                 </ul>
-                {players.length === 0 ? <p className="hint">No players yet.</p> : null}
               </section>
             ) : null}
 
@@ -601,6 +935,24 @@ export function SetupModal({
         const { id } = playerDeleteTarget;
         setPlayerDeleteTarget(null);
         void removePlayer(id);
+      }}
+    />
+    <ConfirmDialog
+      open={ampDeleteTarget !== null}
+      title="Are you sure?"
+      message={
+        ampDeleteTarget
+          ? `Remove amp “${ampDeleteTarget.name}”? Players still using it must be reassigned first.`
+          : ""
+      }
+      confirmLabel="Delete"
+      destructive
+      onCancel={() => setAmpDeleteTarget(null)}
+      onConfirm={() => {
+        if (!ampDeleteTarget) return;
+        const { id } = ampDeleteTarget;
+        setAmpDeleteTarget(null);
+        void removeAmp(id);
       }}
     />
     </>

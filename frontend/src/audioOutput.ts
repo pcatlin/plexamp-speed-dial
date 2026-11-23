@@ -1,4 +1,4 @@
-import type { AudioOutput, AudioOutputKind, Player } from "./api";
+import type { Amp, AudioOutput, AudioOutputKind, Player } from "./api";
 
 /** VSX-LX505 factory Input Assign: BD/DVD→HDMI1, GAME→HDMI2, CBL/SAT→HDMI3, STRM BOX→HDMI4. */
 export const PIONEER_INPUT_PRESETS: { label: string; code: string }[] = [
@@ -54,30 +54,37 @@ export function sonosSpeakerIdFromOutput(output: AudioOutput): string {
   return String(output.config.speaker_id ?? "").trim();
 }
 
-export function pioneerHostFromOutput(output: AudioOutput): string {
-  if (output.kind !== "pioneer") return "";
-  return String(output.config.host ?? "").trim();
+export function pioneerAmpIdFromOutput(output: AudioOutput): number | null {
+  if (output.kind !== "pioneer") return null;
+  const raw = output.config.amp_id;
+  const id = typeof raw === "number" ? raw : Number.parseInt(String(raw ?? ""), 10);
+  return Number.isFinite(id) && id >= 1 ? id : null;
 }
 
-export function pioneerInputCodeFromOutput(output: AudioOutput): string {
-  if (output.kind !== "pioneer") return PIONEER_INPUT_PRESETS[0]?.code ?? "10";
-  const raw = String(output.config.input_code ?? "").trim().toUpperCase();
-  const code = LEGACY_PIONEER_INPUT_CODES[raw] ?? raw;
-  if (PIONEER_INPUT_PRESETS.some((p) => p.code === code)) return code;
-  return code || "10";
+/** Prefer linked amp name, else player display name, else generic AVR label. */
+export function pioneerLabelForPlayer(player: Player | undefined, amps: Amp[] = []): string {
+  const ampId = pioneerAmpIdFromOutput(player?.audio_output ?? { kind: "none", config: {} });
+  if (ampId != null) {
+    const amp = amps.find((row) => row.id === ampId);
+    const ampName = (amp?.name ?? "").trim();
+    if (ampName) return ampName;
+    const host = ampHostField(amp).trim();
+    if (host) return host;
+  }
+  const name = (player?.name ?? "").trim();
+  if (name) return name;
+  return "Pioneer AVR";
 }
 
-export function pioneerPortFromOutput(output: AudioOutput): number {
-  if (output.kind !== "pioneer") return PIONEER_DEFAULT_ISCP_PORT;
-  const port = Number(output.config.port);
-  return Number.isFinite(port) && port > 0 ? port : PIONEER_DEFAULT_ISCP_PORT;
+export function normalizePioneerInputCode(raw: string): string {
+  const code = (LEGACY_PIONEER_INPUT_CODES[raw.trim().toUpperCase()] ?? raw.trim().toUpperCase()) || "10";
+  return code;
 }
 
-/** Host field value — includes `:port` only when not the default ISCP port. */
-export function pioneerHostFieldFromOutput(output: AudioOutput): string {
-  const host = pioneerHostFromOutput(output);
+export function ampHostField(amp: { host?: string; port?: number } | null | undefined): string {
+  const host = (amp?.host ?? "").trim();
   if (!host) return "";
-  const port = pioneerPortFromOutput(output);
+  const port = amp?.port ?? PIONEER_DEFAULT_ISCP_PORT;
   if (port !== PIONEER_DEFAULT_ISCP_PORT) return `${host}:${port}`;
   return host;
 }
@@ -119,8 +126,9 @@ export function parsePioneerHostField(raw: string): { host: string; port: number
 }
 
 export function presetLabelForCode(code: string): string {
-  const hit = PIONEER_INPUT_PRESETS.find((p) => p.code === code.toUpperCase());
-  return hit?.label ?? `Custom (${code})`;
+  const normalized = normalizePioneerInputCode(code);
+  const hit = PIONEER_INPUT_PRESETS.find((p) => p.code === normalized);
+  return hit?.label ?? `Custom (${normalized})`;
 }
 
 export function audioOutputsEqual(a: AudioOutput, b: AudioOutput): boolean {
@@ -129,6 +137,8 @@ export function audioOutputsEqual(a: AudioOutput, b: AudioOutput): boolean {
   const bConfig = b.config ?? {};
   const keys = new Set([...Object.keys(aConfig), ...Object.keys(bConfig)]);
   for (const key of keys) {
+    // Ignore legacy pioneer fields — amp_id is the source of truth.
+    if (key === "display_name" || key === "host" || key === "port" || key === "input_code") continue;
     if (String(aConfig[key] ?? "") !== String(bConfig[key] ?? "")) return false;
   }
   return true;
@@ -137,22 +147,16 @@ export function audioOutputsEqual(a: AudioOutput, b: AudioOutput): boolean {
 export function buildAudioOutput(
   kind: AudioOutputKind,
   sonosSpeakerId: string,
-  pioneerHost: string,
-  pioneerInputCode: string,
-  pioneerPort: number,
+  pioneerAmpId: number | null = null,
 ): AudioOutput {
   if (kind === "sonos") {
     return { kind, config: { speaker_id: sonosSpeakerId.trim() } };
   }
   if (kind === "pioneer") {
-    return {
-      kind,
-      config: {
-        host: pioneerHost.trim(),
-        input_code: pioneerInputCode.trim().toUpperCase(),
-        port: pioneerPort,
-      },
-    };
+    if (pioneerAmpId == null || pioneerAmpId < 1) {
+      return { kind, config: {} };
+    }
+    return { kind, config: { amp_id: pioneerAmpId } };
   }
   return { kind: "none", config: {} };
 }

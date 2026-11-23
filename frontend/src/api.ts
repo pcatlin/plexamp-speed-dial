@@ -54,6 +54,14 @@ export interface Player {
   audio_output: AudioOutput;
 }
 
+export interface Amp {
+  id: number;
+  name: string;
+  host: string;
+  port: number;
+  input_code: string;
+}
+
 export interface RuntimeSettings {
   plex_server_url: string;
   plex_ssl_verify: boolean;
@@ -258,8 +266,18 @@ export const api = {
     request<{ id: number }>("/sonos/group-presets", { method: "POST", body: JSON.stringify({ name, speaker_ids: speakerIds }) }),
   players: () => request<Player[]>("/players"),
   createPlayer: (payload: Omit<Player, "id">) => request<{ id: number }>("/players", { method: "POST", body: JSON.stringify(payload) }),
-  patchPlayer: (id: number, payload: { audio_output: AudioOutput }) =>
-    request<Player>(`/players/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
+  patchPlayer: (
+    id: number,
+    payload: { name?: string; host?: string; port?: number; audio_output?: AudioOutput },
+  ) => request<Player>(`/players/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
+  amps: () => request<Amp[]>("/amps"),
+  createAmp: (payload: Omit<Amp, "id">) =>
+    request<{ id: number }>("/amps", { method: "POST", body: JSON.stringify(payload) }),
+  patchAmp: (id: number, payload: Partial<Omit<Amp, "id">>) =>
+    request<Amp>(`/amps/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
+  deleteAmp: (id: number) => request<{ message: string }>(`/amps/${id}`, { method: "DELETE" }),
+  ampTest: (id: number) =>
+    request<{ status: string; details: string }>(`/amps/${id}/test`, { method: "POST", body: "{}" }),
   audioOutputVolume: (playerId: number, delta: number) =>
     request<{ status: string; details: string }>("/audio-output/volume", {
       method: "POST",

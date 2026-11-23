@@ -29,14 +29,18 @@ def format_speed_dial_play_description(
     if kind == "pioneer":
         label = (pioneer_label or "").strip() or "Pioneer AVR"
         pioneer_vol = volumes.get("pioneer")
+        # Avoid "Name · Name" when the AVR label is the player display name.
+        same_as_player = label.casefold() == player.casefold()
         if pioneer_vol is not None:
             try:
-                target = f"{label} ({int(pioneer_vol)}%)"
+                vol_suffix = f" ({int(pioneer_vol)}%)"
             except (TypeError, ValueError):
-                target = label
+                vol_suffix = ""
         else:
-            target = label
-        return f"{player} · {target}"
+            vol_suffix = ""
+        if same_as_player:
+            return f"{player}{vol_suffix}"
+        return f"{player} · {label}{vol_suffix}"
 
     ids = [str(sid) for sid in (speaker_ids or []) if sid]
     names = speaker_names or {}

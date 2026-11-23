@@ -66,9 +66,21 @@ describe("formatSpeedDialPlayTarget", () => {
         speakerIds: [],
         initialVolumes: { pioneer: 35 },
         isPioneer: true,
-        pioneerLabel: "Pioneer AVR",
+        pioneerLabel: "Living room",
         speakers,
       }),
-    ).toBe("Pioneer AVR (35%)");
+    ).toBe("35%");
+  });
+
+  it("shows generic AVR label when pioneer has no volume", () => {
+    expect(
+      formatSpeedDialPlayTarget({
+        speakerIds: [],
+        initialVolumes: null,
+        isPioneer: true,
+        pioneerLabel: "Living room",
+        speakers,
+      }),
+    ).toBe("Pioneer AVR");
   });
 });

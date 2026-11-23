@@ -3,6 +3,7 @@ import "./App.css";
 import {
   api,
   API_BASE,
+  Amp,
   InitialVolumes,
   MediaItem,
   NowPlayingTrack,
@@ -37,7 +38,7 @@ import {
   loadSpeedDialFilters,
   saveSpeedDialFilters,
 } from "./speedDialFilterStorage";
-import { favoriteMatchesSpeakerFilter, outputKindForPlayer, pioneerHostFieldFromOutput, presetLabelForCode } from "./audioOutput";
+import { favoriteMatchesSpeakerFilter, outputKindForPlayer, pioneerLabelForPlayer, presetLabelForCode } from "./audioOutput";
 import {
   buildInitialVolumes,
   DEFAULT_INITIAL_VOLUME,
@@ -84,10 +85,15 @@ type ReceiverStatus = {
   volume_muted: boolean;
 };
 
-function speedDialPlayTarget(favorite: SpeedDial, players: Player[], speakers: Speaker[]): string {
+function speedDialPlayTarget(
+  favorite: SpeedDial,
+  players: Player[],
+  speakers: Speaker[],
+  amps: Amp[],
+): string {
   const player = players.find((row) => row.id === favorite.player_id);
   const isPioneer = outputKindForPlayer(player) === "pioneer";
-  const pioneerLabel = pioneerHostFieldFromOutput(player?.audio_output ?? { kind: "none", config: {} }).trim() || "Pioneer AVR";
+  const pioneerLabel = pioneerLabelForPlayer(player, amps);
   return formatSpeedDialPlayTarget({
     speakerIds: favorite.speaker_ids,
     initialVolumes: favorite.initial_volumes,
@@ -129,6 +135,7 @@ function App() {
   const [setVolumesOnPlay, setSetVolumesOnPlay] = useState(() => initialPlayTo.setVolumesOnPlay);
   const [volumeEditor, setVolumeEditor] = useState<string | null>(null);
   const [players, setPlayers] = useState<Player[]>([]);
+  const [amps, setAmps] = useState<Amp[]>([]);
   const [selectedPlayer, setSelectedPlayer] = useState<number | null>(() => initialPlayTo.playerId);
   const [speedDial, setSpeedDial] = useState<SpeedDial[]>([]);
   const [speedDialDeleteTarget, setSpeedDialDeleteTarget] = useState<{ id: number; label: string } | null>(null);
@@ -177,10 +184,10 @@ function App() {
 
   const outputKind = outputKindForPlayer(selectedPlayerRow);
 
-  const pioneerAvrLabel = useMemo(() => {
-    const host = pioneerHostFieldFromOutput(selectedPlayerRow?.audio_output ?? { kind: "none", config: {} });
-    return host.trim() || "Pioneer AVR";
-  }, [selectedPlayerRow]);
+  const pioneerAvrLabel = useMemo(
+    () => pioneerLabelForPlayer(selectedPlayerRow, amps),
+    [selectedPlayerRow, amps],
+  );
 
   const filteredSpeedDial = useMemo(() => {
     return speedDial.filter((favorite) => {
@@ -358,13 +365,15 @@ function App() {
     try {
       const authStatus = await api.authStatus();
       setAuthConnected(authStatus.connected);
-      const [speakerRows, playerRows, speedDialRows] = await Promise.all([
+      const [speakerRows, playerRows, ampRows, speedDialRows] = await Promise.all([
         api.speakers(),
         api.players(),
+        api.amps().catch(() => [] as Amp[]),
         api.speedDial(),
       ]);
       applySpeakerList(speakerRows);
       await reloadPlayersSelection(playerRows);
+      setAmps(ampRows);
       setSpeedDial(speedDialRows);
       await reloadCollections(authStatus.connected);
       await loadWebhookBaseUrl();
@@ -1041,9 +1050,13 @@ function App() {
             const plist = await api.players();
             await reloadPlayersSelection(plist);
           }}
+          onAmpsUpdated={async () => {
+            setAmps(await api.amps());
+          }}
           afterRuntimeSaved={async () => {
             await reloadSpeakersOnly();
             await loadWebhookBaseUrl();
+            setAmps(await api.amps().catch(() => [] as Amp[]));
           }}
           onPlexAuthRefresh={refreshPlexAuthFromApi}
           onToast={showToast}
@@ -1352,8 +1365,9 @@ function App() {
                     key={favorite.id}
                     favorite={favorite}
                     editMode={speedDialDeleteMode}
-                    playTarget={speedDialPlayTarget(favorite, players, speakers)}
+                    playTarget={speedDialPlayTarget(favorite, players, speakers, amps)}
                     players={players}
+                    amps={amps}
                     speakers={speakers}
                     webhookBaseUrl={webhookBaseUrl}
                     showWebhookLink={webhooksEnabled && !webhookLinksHidden}

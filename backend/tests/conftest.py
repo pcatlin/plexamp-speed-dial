@@ -13,7 +13,9 @@ from sqlalchemy.pool import StaticPool
 
 from app.db.database import Base, get_db  # noqa: E402 — after env
 from app.main import app  # noqa: E402
-from app.models import RuntimeSetup  # noqa: E402
+from app.models import Amp, RuntimeSetup  # noqa: E402
+
+_ = Amp  # ensure amps table is registered on Base.metadata
 
 
 @pytest.fixture()

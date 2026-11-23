@@ -37,6 +37,19 @@ class PlexCredential(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now(), server_default=func.now(), nullable=False)
 
 
+class Amp(Base):
+    """Pioneer (or compatible) AV receiver configured from Setup → Amps."""
+
+    __tablename__ = "amps"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(255), nullable=False)
+    host = Column(String(255), nullable=False)
+    port = Column(Integer, nullable=False, default=60128)
+    input_code = Column(String(2), nullable=False, default="02")
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
 class PlexampPlayer(Base):
     __tablename__ = "plexamp_players"
 

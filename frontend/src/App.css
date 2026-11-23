@@ -466,9 +466,9 @@ button.favoritePlay {
   font-size: 0.9rem;
   font-weight: 600;
   color: #111827;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .favoriteEdit {
@@ -506,9 +506,9 @@ button.favoriteEditPlayTargetBtn {
   font-weight: 500;
   color: #4b5563;
   cursor: pointer;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 button.favoriteEditPlayTargetBtn:hover:not(:disabled) {
@@ -549,9 +549,9 @@ button.favoriteEditPlayTargetBtn:focus-visible {
   font-size: 0.72rem;
   line-height: 1.25;
   color: #6b7280;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 button.favoriteDelete {
@@ -1600,6 +1600,23 @@ button.smallBtn {
 
 .setupModalPanel {
   max-width: 760px;
+  max-height: calc(100vh - 2rem);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+}
+
+.setupModalPanel .modalHeader {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  flex-shrink: 0;
+  margin: -1rem -1.1rem 0;
+  padding: 1rem 1.1rem 0.75rem;
+  background: #fff;
+  border-bottom: 1px solid #e5e7eb;
 }
 
 .setupModalHeaderActions {
@@ -1614,7 +1631,14 @@ button.smallBtn {
   grid-template-columns: 9.5rem minmax(0, 1fr);
   gap: 1rem;
   align-items: start;
-  margin-top: 0.35rem;
+  margin-top: 0.85rem;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.setupModalPanel .modalCreditsFooter {
+  flex-shrink: 0;
 }
 
 .setupModalNav {
@@ -1772,35 +1796,70 @@ button.confirmDialogBtn {
   margin-top: 0.35rem;
 }
 
+.playerAddForm {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.playerListDivider {
+  height: 0;
+  margin: 1.35rem 0 1rem;
+  border: 0;
+  border-top: 1px solid #d1d5db;
+}
+
+.playerListHeading {
+  margin: 0 0 0.75rem;
+  font-size: 0.95rem;
+  font-weight: 650;
+  color: #374151;
+}
+
 .playerList {
   list-style: none;
-  margin: 0.75rem 0 0;
+  margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 1rem;
 }
 
-.playerList li {
+.playerListItem {
   display: flex;
   flex-direction: column;
   align-items: stretch;
   gap: 0.75rem;
-  padding: 0 0 1.5rem;
-  border-bottom: 1px solid #e5e7eb;
+  padding: 0.9rem 1rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #f9fafb;
 }
 
-.playerList li:last-child {
-  padding-bottom: 0;
-  border-bottom: none;
+.playerListItem .playerMeta {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: end;
+  gap: 0.5rem 0.75rem;
 }
 
-.playerList li .playerMeta {
+.playerListItem .playerNameField,
+.playerListItem .playerHostField {
+  min-width: 0;
+}
+
+.playerListItemFooter {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
   flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  padding-top: 0.15rem;
+}
+
+@media (max-width: 620px) {
+  .playerListItem .playerMeta {
+    grid-template-columns: 1fr;
+  }
 }
 
 .playerRouteCell {
@@ -1843,14 +1902,19 @@ button.confirmDialogBtn {
   min-width: 0;
 }
 
+.audioRoutePioneerDisplayName {
+  grid-column: 1 / -1;
+  grid-row: 1;
+}
+
 .audioRoutePioneerHost {
   grid-column: 1;
-  grid-row: 1;
+  grid-row: 2;
 }
 
 .audioRoutePioneerInput {
   grid-column: 2;
-  grid-row: 1;
+  grid-row: 2;
 }
 
 .audioRoutePioneerCustom {
@@ -1871,6 +1935,7 @@ button.confirmDialogBtn {
     grid-template-columns: 1fr;
   }
 
+  .audioRoutePioneerDisplayName,
   .audioRoutePioneerHost,
   .audioRoutePioneerInput,
   .audioRoutePioneerCustom,

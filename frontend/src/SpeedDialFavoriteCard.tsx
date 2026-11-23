@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 
-import type { InitialVolumes, Player, Speaker, SpeedDial } from "./api";
+import type { Amp, InitialVolumes, Player, Speaker, SpeedDial } from "./api";
 import { API_BASE, speedDialWebhookUrl } from "./api";
-import { outputKindForPlayer, pioneerHostFieldFromOutput } from "./audioOutput";
+import { outputKindForPlayer, pioneerLabelForPlayer } from "./audioOutput";
 import { copyTextToClipboard } from "./clipboard";
 import { IconGrip, IconLink, IconPlay, IconTrash } from "./icons";
 import { DEFAULT_INITIAL_VOLUME, buildSpeedDialInitialVolumes, hasSonosInitialVolumes, initialVolumesWithoutSonos, mergeSonosVolumes } from "./initialVolumes";
@@ -32,6 +32,7 @@ type SpeedDialFavoriteCardProps = {
   editMode: boolean;
   playTarget: string;
   players: Player[];
+  amps: Amp[];
   speakers: Speaker[];
   webhookBaseUrl: string;
   showWebhookLink: boolean;
@@ -105,6 +106,7 @@ export function SpeedDialFavoriteCard({
   editMode,
   playTarget,
   players,
+  amps,
   speakers,
   webhookBaseUrl,
   showWebhookLink,
@@ -135,8 +137,7 @@ export function SpeedDialFavoriteCard({
 
   const draftPlayTarget = useMemo(() => {
     const isPioneer = !draftIsSonosPlayer;
-    const pioneerLabel =
-      pioneerHostFieldFromOutput(draftPlayer?.audio_output ?? { kind: "none", config: {} }).trim() || "Pioneer AVR";
+    const pioneerLabel = pioneerLabelForPlayer(draftPlayer, amps);
     return formatSpeedDialPlayTarget({
       speakerIds: draftSpeakerIds,
       initialVolumes: buildCommitVolumes(
@@ -152,6 +153,7 @@ export function SpeedDialFavoriteCard({
   }, [
     draftIsSonosPlayer,
     draftPlayer,
+    amps,
     draftSpeakerIds,
     draftSonosVolumes,
     draftSetVolumesOnPlay,

@@ -299,6 +299,10 @@ def test_speed_dial_patch_player_to_pioneer_clears_sonos_speakers(client):
         "/api/v1/players",
         json={"name": "Kitchen", "host": "plexamp.local", "port": 32500, "is_active": True},
     ).json()["id"]
+    amp_id = client.post(
+        "/api/v1/amps",
+        json={"name": "Den AVR", "host": "10.0.0.9", "port": 60128, "input_code": "23"},
+    ).json()["id"]
     pioneer_player_id = client.post(
         "/api/v1/players",
         json={
@@ -306,7 +310,7 @@ def test_speed_dial_patch_player_to_pioneer_clears_sonos_speakers(client):
             "host": "den.local",
             "port": 32500,
             "is_active": True,
-            "audio_output": {"kind": "pioneer", "config": {"host": "10.0.0.9", "input_code": "23"}},
+            "audio_output": {"kind": "pioneer", "config": {"amp_id": amp_id}},
         },
     ).json()["id"]
 

@@ -232,6 +232,72 @@ def ensure_runtime_setup_webhook_flags_columns(engine: Engine) -> None:
                 _log.warning("runtime_setup migrate skipped/failed (%s): %s", stmt[:80], exc)
 
 
+def ensure_amps_table_and_migrate_pioneer_configs(engine: Engine) -> None:
+    """Create amps table (via metadata) and migrate legacy pioneer host/input configs to amp_id."""
+    from sqlalchemy.orm import sessionmaker
+
+    from app.models import Amp, PlexampPlayer
+    from app.models.entities import Amp as AmpModel
+
+    AmpModel.__table__.create(bind=engine, checkfirst=True)
+
+    insp = inspect(engine)
+    if "amps" not in insp.get_table_names() or "plexamp_players" not in insp.get_table_names():
+        return
+
+    Session = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
+    db = Session()
+    try:
+        for row in db.query(PlexampPlayer).all():
+            kind = (getattr(row, "audio_output_kind", None) or "none").strip().lower()
+            if kind != "pioneer":
+                continue
+            config = getattr(row, "audio_output_config", None)
+            if not isinstance(config, dict):
+                config = {}
+            existing_amp_id = config.get("amp_id")
+            try:
+                if existing_amp_id is not None and int(existing_amp_id) >= 1:
+                    # Already migrated; drop any leftover host fields.
+                    if set(config.keys()) - {"amp_id"}:
+                        row.audio_output_config = {"amp_id": int(existing_amp_id)}
+                    continue
+            except (TypeError, ValueError):
+                pass
+
+            host = str(config.get("host") or "").strip()
+            if not host:
+                # Unusable pioneer config — leave as-is for the UI to fix.
+                continue
+            try:
+                port = int(config.get("port") or 60128)
+            except (TypeError, ValueError):
+                port = 60128
+            if port < 1 or port > 65535:
+                port = 60128
+            raw_code = str(config.get("input_code") or "02").strip().upper()
+            if len(raw_code) != 2 or not all(c in "0123456789ABCDEF" for c in raw_code):
+                raw_code = "02"
+            name = (row.name or "").strip() or host
+            amp = Amp(name=name, host=host, port=port, input_code=raw_code)
+            db.add(amp)
+            db.flush()
+            row.audio_output_config = {"amp_id": amp.id}
+            _log.info(
+                "Migrated pioneer player %s (%s) → amp %s (%s)",
+                row.id,
+                row.name,
+                amp.id,
+                amp.host,
+            )
+        db.commit()
+    except Exception as exc:  # noqa: BLE001
+        db.rollback()
+        _log.warning("amps pioneer migration failed: %s", exc)
+    finally:
+        db.close()
+
+
 def ensure_speed_dial_sort_order_column(engine: Engine) -> None:
     """Add speed_dial_favorites.sort_order and backfill from existing id order."""
     insp = inspect(engine)

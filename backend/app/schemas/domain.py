@@ -95,6 +95,94 @@ class AudioOutput(BaseModel):
     config: dict[str, object] = Field(default_factory=dict)
 
 
+class AmpCreate(BaseModel):
+    name: str
+    host: str
+    port: int = 60128
+    input_code: str = "02"
+
+    @field_validator("name")
+    @classmethod
+    def validate_amp_name(cls, value: str) -> str:
+        text = (value or "").strip()
+        if not text:
+            raise ValueError("name must not be empty")
+        return text
+
+    @field_validator("host")
+    @classmethod
+    def validate_amp_host(cls, value: str) -> str:
+        text = (value or "").strip()
+        if not text:
+            raise ValueError("host must not be empty")
+        return text
+
+    @field_validator("port")
+    @classmethod
+    def validate_amp_port(cls, value: int) -> int:
+        if value < 1 or value > 65535:
+            raise ValueError("port must be between 1 and 65535")
+        return value
+
+    @field_validator("input_code")
+    @classmethod
+    def validate_amp_input_code(cls, value: str) -> str:
+        code = (value or "").strip().upper()
+        if len(code) != 2 or not all(c in "0123456789ABCDEF" for c in code):
+            raise ValueError("input_code must be a 2-character ISCP input code")
+        return code
+
+
+class AmpRead(AmpCreate):
+    id: int
+
+
+class AmpPatch(BaseModel):
+    name: str | None = None
+    host: str | None = None
+    port: int | None = None
+    input_code: str | None = None
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        text = value.strip()
+        if not text:
+            raise ValueError("name must not be empty")
+        return text
+
+    @field_validator("host")
+    @classmethod
+    def validate_host(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        text = value.strip()
+        if not text:
+            raise ValueError("host must not be empty")
+        return text
+
+    @field_validator("port")
+    @classmethod
+    def validate_port(cls, value: int | None) -> int | None:
+        if value is None:
+            return None
+        if value < 1 or value > 65535:
+            raise ValueError("port must be between 1 and 65535")
+        return value
+
+    @field_validator("input_code")
+    @classmethod
+    def validate_input_code(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        code = value.strip().upper()
+        if len(code) != 2 or not all(c in "0123456789ABCDEF" for c in code):
+            raise ValueError("input_code must be a 2-character ISCP input code")
+        return code
+
+
 class PlayerCreate(BaseModel):
     name: str
     host: str
@@ -110,7 +198,39 @@ class PlayerRead(PlayerCreate):
 class PlayerPatch(BaseModel):
     """Partial update for a companion player (Setup UI)."""
 
+    name: str | None = None
+    host: str | None = None
+    port: int | None = None
     audio_output: AudioOutput | None = None
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        text = value.strip()
+        if not text:
+            raise ValueError("name must not be empty")
+        return text
+
+    @field_validator("host")
+    @classmethod
+    def validate_host(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        text = value.strip()
+        if not text:
+            raise ValueError("host must not be empty")
+        return text
+
+    @field_validator("port")
+    @classmethod
+    def validate_port(cls, value: int | None) -> int | None:
+        if value is None:
+            return None
+        if value < 1 or value > 65535:
+            raise ValueError("port must be between 1 and 65535")
+        return value
 
 
 class AudioOutputVolumeRequest(BaseModel):

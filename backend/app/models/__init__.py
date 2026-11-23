@@ -1,4 +1,5 @@
 from app.models.entities import (
+    Amp,
     PlexCredential,
     PlexampPlayer,
     RuntimeSetup,
@@ -7,6 +8,7 @@ from app.models.entities import (
 )
 
 __all__ = [
+    "Amp",
     "PlexCredential",
     "PlexampPlayer",
     "RuntimeSetup",

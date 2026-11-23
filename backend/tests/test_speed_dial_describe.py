@@ -34,6 +34,17 @@ def test_description_pioneer_with_volume():
     assert text == "Caldera · 192.168.1.50 (35%)"
 
 
+def test_description_pioneer_uses_display_name_once():
+    text = format_speed_dial_play_description(
+        player_name="Living room",
+        output_kind="pioneer",
+        pioneer_label="Living room",
+        speaker_ids=[],
+        initial_volumes={"pioneer": 40},
+    )
+    assert text == "Living room (40%)"
+
+
 def test_description_no_speakers():
     text = format_speed_dial_play_description(
         player_name="Amp",
