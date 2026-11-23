@@ -44,6 +44,41 @@ def test_timeline_snapshot_prefers_track_artist_over_album_artist():
     assert snap.album == "Comp"
 
 
+def test_repair_mojibake_fixes_curly_apostrophe():
+    # UTF-8 bytes for U+2019 (’) mis-decoded as latin-1
+    latin1_mojibake = "It" + "\u00e2\u0080\u0099" + "s Now or Never"
+    assert plexamp_client.repair_mojibake(latin1_mojibake) == "It\u2019s Now or Never"
+    # Same bytes mis-decoded as cp1252 (â€™)
+    cp1252_mojibake = "It" + "\u00e2\u20ac\u2122" + "s Now or Never"
+    assert plexamp_client.repair_mojibake(cp1252_mojibake) == "It\u2019s Now or Never"
+    assert plexamp_client.repair_mojibake("Normal Title") == "Normal Title"
+
+
+def test_companion_response_text_decodes_utf8_without_charset():
+    class FakeResp:
+        content = "It\u2019s Now or Never".encode("utf-8")
+        headers = {"Content-Type": "application/xml"}
+
+    assert plexamp_client.companion_response_text(FakeResp()) == "It\u2019s Now or Never"
+
+
+def test_timeline_snapshot_reads_nested_track_metadata():
+    xml = """<?xml version="1.0" encoding="UTF-8"?>
+<MediaContainer size="1">
+    <Timeline state="playing" type="music" itemType="music">
+        <Track title="Daydreaming" grandparentTitle="Radiohead" parentTitle="A Moon Shaped Pool" ratingKey="42" key="/library/metadata/42" />
+    </Timeline>
+</MediaContainer>
+"""
+    snap = plexamp_client._timeline_snapshot_from_xml(xml)
+    assert snap is not None
+    assert snap.state == "playing"
+    assert snap.title == "Daydreaming"
+    assert snap.artist == "Radiohead"
+    assert snap.album == "A Moon Shaped Pool"
+    assert snap.rating_key == "42"
+
+
 def test_timeline_state_reads_paused_music():
     xml = """<?xml version="1.0" encoding="UTF-8"?>
 <MediaContainer size="1">
@@ -234,3 +269,4 @@ def test_timeline_snapshot_serializes_polls(monkeypatch):
     assert snap.state == "playing"
     assert len(urls) == 1
     assert "type=music" in urls[0]
+    assert "includeMetadata=1" in urls[0]

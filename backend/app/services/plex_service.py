@@ -672,24 +672,20 @@ class PlexService:
                     return True
             return False
 
-        for item in sessions:
+        def session_as_track(item: object) -> dict[str, str | None] | None:
             item_type = (getattr(item, "type", None) or getattr(item, "TAG", None) or "").strip().lower()
             if item_type and item_type not in ("track", "audio"):
                 # plexapi Track objects often have type="track"
                 if "track" not in item_type and item_type not in ("", "music"):
-                    continue
-            players = getattr(item, "players", None) or []
-            if not players:
-                single = getattr(item, "player", None)
-                players = [single] if single is not None else []
-            if not any(player_matches(p) for p in players if p is not None):
-                continue
+                    return None
             title = (getattr(item, "title", None) or "").strip()
             if not title:
-                continue
+                return None
             rating_key = getattr(item, "ratingKey", None)
             # Prefer track artist (originalTitle) over album artist (grandparentTitle).
-            artist = (getattr(item, "originalTitle", None) or getattr(item, "grandparentTitle", None) or "").strip() or None
+            artist = (
+                getattr(item, "originalTitle", None) or getattr(item, "grandparentTitle", None) or ""
+            ).strip() or None
             album = (getattr(item, "parentTitle", None) or "").strip() or None
             return {
                 "title": title,
@@ -697,6 +693,33 @@ class PlexService:
                 "album": album,
                 "rating_key": str(rating_key) if rating_key is not None else None,
             }
+
+        matched: list[dict[str, str | None]] = []
+        soft_music: list[dict[str, str | None]] = []
+        for item in sessions:
+            track = session_as_track(item)
+            if track is None:
+                continue
+            players = getattr(item, "players", None) or []
+            if not players:
+                single = getattr(item, "player", None)
+                players = [single] if single is not None else []
+            if any(player_matches(p) for p in players if p is not None):
+                matched.append(track)
+                continue
+            # Soft fallback when Caldera/Plexamp reports a different device title than Setup.
+            products = [
+                (getattr(p, "product", None) or "").strip().lower()
+                for p in players
+                if p is not None
+            ]
+            if any(("plexamp" in p) or ("caldera" in p) for p in products) or not products:
+                soft_music.append(track)
+
+        if matched:
+            return matched[0]
+        if len(soft_music) == 1:
+            return soft_music[0]
         return None
 
     def _plex_thumb_request_url(self, stored: str, token: str, conn: PlexConn) -> str:

@@ -27,6 +27,7 @@ from app.services.plexamp_client import (
     plexamp_playback_command,
     plexamp_timeline_implies_playing,
     plexamp_timeline_snapshot,
+    repair_mojibake,
 )
 from app.services.plex_service import PlexService
 from app.services.audio_output.router import AudioOutputRouter
@@ -495,9 +496,9 @@ class PlaybackService:
 
             if title:
                 now_playing = NowPlayingTrack(
-                    title=title,
-                    artist=artist,
-                    album=album,
+                    title=repair_mojibake(title) or title,
+                    artist=repair_mojibake(artist) if isinstance(artist, str) else artist,
+                    album=repair_mojibake(album) if isinstance(album, str) else album,
                     rating_key=rating_key,
                 )
 

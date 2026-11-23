@@ -112,6 +112,8 @@ function App() {
   }, []);
 
   const [authConnected, setAuthConnected] = useState(false);
+  /** False until first refreshAll finishes — avoids WS subscribe before players/speakers are loaded. */
+  const [bootstrapReady, setBootstrapReady] = useState(false);
   const initialPickMusic = loadPickMusicState();
   const initialPlayTo = loadPlayToState();
   const initialSectionExpanded = loadSectionExpanded();
@@ -353,14 +355,22 @@ function App() {
   };
 
   const refreshAll = async () => {
-    const authStatus = await api.authStatus();
-    setAuthConnected(authStatus.connected);
-    const [speakerRows, playerRows, speedDialRows] = await Promise.all([api.speakers(), api.players(), api.speedDial()]);
-    applySpeakerList(speakerRows);
-    await reloadPlayersSelection(playerRows);
-    setSpeedDial(speedDialRows);
-    await reloadCollections(authStatus.connected);
-    await loadWebhookBaseUrl();
+    try {
+      const authStatus = await api.authStatus();
+      setAuthConnected(authStatus.connected);
+      const [speakerRows, playerRows, speedDialRows] = await Promise.all([
+        api.speakers(),
+        api.players(),
+        api.speedDial(),
+      ]);
+      applySpeakerList(speakerRows);
+      await reloadPlayersSelection(playerRows);
+      setSpeedDial(speedDialRows);
+      await reloadCollections(authStatus.connected);
+      await loadWebhookBaseUrl();
+    } finally {
+      setBootstrapReady(true);
+    }
   };
 
   useEffect(() => {
@@ -467,9 +477,11 @@ function App() {
   }, []);
 
   // Keep one playback-state socket; retarget with subscribe when selection changes.
+  // Wait for bootstrap so the first subscribe uses the reconciled player/speakers
+  // (auth flips true before players load, which used to abandon the first snapshot).
   useEffect(() => {
     const url = playbackStateWebSocketUrl();
-    if (!url || !authConnected) {
+    if (!url || !authConnected || !bootstrapReady) {
       playbackWsRef.current?.close();
       playbackWsRef.current = null;
       setSonosPlaying(null);
@@ -480,17 +492,12 @@ function App() {
     }
 
     let cancelled = false;
-    const ws = new WebSocket(url);
-    playbackWsRef.current = ws;
+    let reconnectTimer: number | undefined;
+    let attempt = 0;
 
-    ws.onopen = () => {
-      if (cancelled) return;
-      sendPlaybackSubscribe(ws);
-    };
-    ws.onmessage = (ev) => {
-      if (cancelled) return;
+    const applySnapshot = (raw: string) => {
       try {
-        const data = JSON.parse(ev.data) as {
+        const data = JSON.parse(raw) as {
           player_id?: number | null;
           speaker_ids?: string[];
           sonos?: { ok?: boolean; playing?: boolean | null };
@@ -556,25 +563,48 @@ function App() {
         /* ignore malformed frame */
       }
     };
-    ws.onerror = () => {
+
+    const connect = () => {
       if (cancelled) return;
-      setSonosPlaying(null);
-      setPlexampPlaying(null);
-      setNowPlaying(null);
+      const ws = new WebSocket(url);
+      playbackWsRef.current = ws;
+
+      ws.onopen = () => {
+        if (cancelled) return;
+        attempt = 0;
+        sendPlaybackSubscribe(ws);
+      };
+      ws.onmessage = (ev) => {
+        if (cancelled) return;
+        applySnapshot(ev.data);
+      };
+      ws.onclose = () => {
+        if (playbackWsRef.current === ws) playbackWsRef.current = null;
+        if (cancelled) return;
+        const delayMs = Math.min(1000 * 2 ** attempt, 15_000);
+        attempt += 1;
+        reconnectTimer = window.setTimeout(connect, delayMs);
+      };
     };
+
+    connect();
+
     return () => {
       cancelled = true;
-      if (playbackWsRef.current === ws) playbackWsRef.current = null;
-      ws.close();
+      if (reconnectTimer !== undefined) window.clearTimeout(reconnectTimer);
+      const ws = playbackWsRef.current;
+      playbackWsRef.current = null;
+      ws?.close();
     };
-  }, [authConnected, applyReceiverSnapshot, sendPlaybackSubscribe]);
+  }, [authConnected, bootstrapReady, applyReceiverSnapshot, sendPlaybackSubscribe]);
 
-  // Clear stale player status as soon as the selected player changes.
+  // Clear stale player status as soon as the selected player changes (after bootstrap).
   useEffect(() => {
+    if (!bootstrapReady) return;
     setNowPlaying(null);
     setPlexampPlaying(null);
     if (outputKind !== "pioneer") setReceiverStatus(null);
-  }, [selectedPlayer, outputKind]);
+  }, [selectedPlayer, outputKind, bootstrapReady]);
 
   // Clear stale Sonos transport as soon as the speaker selection / output kind changes.
   useEffect(() => {
@@ -1316,7 +1346,7 @@ function App() {
                     : "Clear filters to reorder favorites."}
                 </p>
               ) : null}
-              <div className={`speedDialGrid${speedDialDeleteMode ? " speedDialGrid--deleteMode" : ""}`}>
+              <div className={`speedDialList${speedDialDeleteMode ? " speedDialList--deleteMode" : ""}`}>
                 {filteredSpeedDial.map((favorite) => (
                   <SpeedDialFavoriteCard
                     key={favorite.id}

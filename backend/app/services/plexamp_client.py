@@ -148,6 +148,47 @@ def _redact_token_query(query: str) -> str:
     return re.sub(r"token=[^&]*", "token=<redacted>", query)
 
 
+def companion_response_text(resp: requests.Response) -> str:
+    """
+    Decode companion HTTP bodies as UTF-8.
+
+    ``requests`` falls back to ISO-8859-1 when Content-Type omits charset, which
+    mojibakes curly quotes (``It's`` → ``Itâ€™s``). Plex/Caldera bodies are UTF-8.
+    """
+    raw = getattr(resp, "content", None)
+    if raw is None:
+        text = getattr(resp, "text", "") or ""
+        return repair_mojibake(text) or text
+    if not raw:
+        return ""
+    headers = getattr(resp, "headers", None) or {}
+    ctype = (headers.get("Content-Type") or "").lower()
+    match = re.search(r"charset=([^\s;]+)", ctype)
+    if match:
+        charset = match.group(1).strip("\"'")
+        try:
+            return raw.decode(charset)
+        except (LookupError, UnicodeDecodeError):
+            pass
+    return raw.decode("utf-8", errors="replace")
+
+
+def repair_mojibake(value: str | None) -> str | None:
+    """Undo common UTF-8-as-latin1/cp1252 mojibake in companion/PMS title strings."""
+    if not value:
+        return value
+    if not any(marker in value for marker in ("â", "Ã", "Â", "ð")):
+        return value
+    for encoding in ("latin-1", "cp1252"):
+        try:
+            fixed = value.encode(encoding).decode("utf-8")
+        except (UnicodeEncodeError, UnicodeDecodeError):
+            continue
+        if fixed != value:
+            return fixed
+    return value
+
+
 def _utc_ts() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
 
@@ -287,9 +328,18 @@ def _rating_key_from_timeline(el: ET.Element) -> str | None:
 
 def _attr(el: ET.Element, *names: str) -> str | None:
     for name in names:
-        value = (el.get(name) or "").strip()
+        value = repair_mojibake((el.get(name) or "").strip())
         if value:
             return value
+    return None
+
+
+def _nested_track_element(el: ET.Element) -> ET.Element | None:
+    """Return nested Track/Metadata under a Timeline when companions put fields there."""
+    for child in el:
+        tag = child.tag.split("}")[-1] if "}" in child.tag else child.tag
+        if tag in ("Track", "Metadata", "Video", "Photo"):
+            return child
     return None
 
 
@@ -297,24 +347,53 @@ def _timeline_snapshot_from_element(el: ET.Element) -> TimelineSnapshot | None:
     state = (el.get("state") or "").strip() or None
     if not state:
         return None
+    nested = _nested_track_element(el)
+    # Companion polls without includeMetadata often only return state; nested Track
+    # (includeMetadata=1) or attributes on Timeline carry the now-playing fields.
+    title = _attr(el, "title", "trackTitle") or ( _attr(nested, "title", "trackTitle") if nested is not None else None )
+    artist = _attr(el, "originalTitle", "artistTitle", "grandparentTitle") or (
+        _attr(nested, "originalTitle", "artistTitle", "grandparentTitle") if nested is not None else None
+    )
+    album = _attr(el, "parentTitle", "albumTitle") or (
+        _attr(nested, "parentTitle", "albumTitle") if nested is not None else None
+    )
+    rating_key = _rating_key_from_timeline(el) or (
+        _rating_key_from_timeline(nested) if nested is not None else None
+    )
     return TimelineSnapshot(
         state=state,
-        title=_attr(el, "title", "trackTitle"),
-        # Prefer track artist (originalTitle) over album artist (grandparentTitle).
-        artist=_attr(el, "originalTitle", "artistTitle", "grandparentTitle"),
-        album=_attr(el, "parentTitle", "albumTitle"),
-        rating_key=_rating_key_from_timeline(el),
+        title=title,
+        artist=artist,
+        album=album,
+        rating_key=rating_key,
     )
 
 
-def _timeline_snapshot_from_xml(text: str) -> TimelineSnapshot | None:
+def _timeline_snapshot_from_xml(text: str | bytes) -> TimelineSnapshot | None:
     """Parse Plex companion timeline XML, preferring the music timeline over photo/video entries."""
-    if not text or not text.strip():
-        return None
-    try:
-        root = ET.fromstring(text)
-    except ET.ParseError:
-        root = None
+    if isinstance(text, bytes):
+        if not text.strip():
+            return None
+        try:
+            root = ET.fromstring(text)
+        except ET.ParseError:
+            root = None
+        try:
+            text_str = text.decode("utf-8", errors="replace")
+        except Exception:  # noqa: BLE001
+            text_str = ""
+    else:
+        if not text or not text.strip():
+            return None
+        text_str = text
+        try:
+            # Parse via UTF-8 bytes so curly quotes are not latin-1 mangled.
+            root = ET.fromstring(text.encode("utf-8"))
+        except (ET.ParseError, UnicodeEncodeError):
+            try:
+                root = ET.fromstring(text)
+            except ET.ParseError:
+                root = None
 
     timelines: list[tuple[str, TimelineSnapshot]] = []
     if root is not None:
@@ -329,13 +408,13 @@ def _timeline_snapshot_from_xml(text: str) -> TimelineSnapshot | None:
     if not timelines:
         m = re.search(
             r'<Timeline[^>]*\btype="([^"]+)"[^>]*\bstate="([^"]+)"',
-            text,
+            text_str,
             re.IGNORECASE,
         )
         if m:
             timelines.append((m.group(1).strip().lower(), TimelineSnapshot(state=m.group(2).strip())))
         else:
-            m = re.search(r'<Timeline[^>]*\bstate="([^"]+)"', text, re.IGNORECASE)
+            m = re.search(r'<Timeline[^>]*\bstate="([^"]+)"', text_str, re.IGNORECASE)
             if m:
                 timelines.append(("", TimelineSnapshot(state=m.group(1).strip())))
 
@@ -350,7 +429,7 @@ def _timeline_snapshot_from_xml(text: str) -> TimelineSnapshot | None:
     return timelines[0][1]
 
 
-def _timeline_state_from_xml(text: str) -> str | None:
+def _timeline_state_from_xml(text: str | bytes) -> str | None:
     snap = _timeline_snapshot_from_xml(text)
     return snap.state if snap else None
 
@@ -385,9 +464,10 @@ def plexamp_timeline_snapshot(
     """
     base = sanitize_plexamp_base(plexamp_base)
     # Prefer music-typed poll; fall back to generic only if needed.
+    # includeMetadata=1 asks companions (Plexamp/Caldera) for title/artist/key fields.
     param_variants = (
-        {"type": "music", "wait": "0", "token": token},
-        {"wait": "0", "token": token},
+        {"type": "music", "wait": "0", "includeMetadata": "1", "token": token},
+        {"wait": "0", "includeMetadata": "1", "token": token},
     )
 
     for base_params in param_variants:
@@ -399,13 +479,13 @@ def plexamp_timeline_snapshot(
             continue
         if resp.status_code != 200:
             continue
-        snap = _timeline_snapshot_from_xml(resp.text or "")
+        snap = _timeline_snapshot_from_xml(companion_response_text(resp))
         if snap and snap.state:
             return TimelineSnapshot(
                 state=snap.state.lower(),
-                title=snap.title,
-                artist=snap.artist,
-                album=snap.album,
+                title=repair_mojibake(snap.title),
+                artist=repair_mojibake(snap.artist),
+                album=repair_mojibake(snap.album),
                 rating_key=snap.rating_key,
             )
     return None

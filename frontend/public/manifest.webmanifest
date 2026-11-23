@@ -5,8 +5,8 @@
   "description": "Plexamp playback with Sonos line-in from the browser.",
   "start_url": "/",
   "scope": "/",
-  "display": "minimal-ui",
-  "display_override": ["minimal-ui", "standalone", "browser"],
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui", "browser"],
   "theme_color": "#374151",
   "background_color": "#ecedf0",
   "icons": [
