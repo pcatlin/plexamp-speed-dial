@@ -14,6 +14,8 @@ type SonosVolumeMixerModalProps = {
   onSelectedSpeakerIdsChange: (speakerIds: string[]) => void;
   onSpeakersRefreshed: (speakers: Speaker[]) => void;
   onToast: (message: string) => void;
+  /** When false, skip the speakers API refresh (Storybook / static previews). Default true. */
+  refreshOnOpen?: boolean;
 };
 
 function sortSpeakersWithSelectedFirst(speakers: Speaker[], selectedSpeakerIds: string[]): Speaker[] {
@@ -47,6 +49,7 @@ export function SonosVolumeMixerModal({
   onSelectedSpeakerIdsChange,
   onSpeakersRefreshed,
   onToast,
+  refreshOnOpen = true,
 }: SonosVolumeMixerModalProps) {
   const [loading, setLoading] = useState(false);
   const [showAllSpeakers, setShowAllSpeakers] = useState(false);
@@ -56,8 +59,12 @@ export function SonosVolumeMixerModal({
   const pendingTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const fallbackVolumesRef = useRef(fallbackVolumes);
   const speakersRef = useRef(speakers);
+  const onSpeakersRefreshedRef = useRef(onSpeakersRefreshed);
+  const onToastRef = useRef(onToast);
   fallbackVolumesRef.current = fallbackVolumes;
   speakersRef.current = speakers;
+  onSpeakersRefreshedRef.current = onSpeakersRefreshed;
+  onToastRef.current = onToast;
 
   const visibleSpeakers = useMemo(() => {
     if (showAllSpeakers) {
@@ -101,13 +108,24 @@ export function SonosVolumeMixerModal({
 
   useEffect(() => {
     if (!open) return;
+
+    if (!refreshOnOpen) {
+      const next: Record<string, number> = {};
+      for (const speaker of speakersRef.current) {
+        next[speaker.id] = volumeForSpeaker(speaker, fallbackVolumesRef.current);
+      }
+      setLocalVolumes(next);
+      setLoading(false);
+      return;
+    }
+
     let cancelled = false;
     setLoading(true);
     api
       .speakers()
       .then((rows) => {
         if (cancelled) return;
-        onSpeakersRefreshed(rows);
+        onSpeakersRefreshedRef.current(rows);
         const next: Record<string, number> = {};
         for (const speaker of rows) {
           next[speaker.id] = volumeForSpeaker(speaker, fallbackVolumesRef.current);
@@ -116,7 +134,7 @@ export function SonosVolumeMixerModal({
       })
       .catch((error) => {
         if (cancelled) return;
-        onToast(error instanceof Error ? error.message : String(error));
+        onToastRef.current(error instanceof Error ? error.message : String(error));
         const next: Record<string, number> = {};
         for (const speaker of speakersRef.current) {
           next[speaker.id] = volumeForSpeaker(speaker, fallbackVolumesRef.current);
@@ -129,7 +147,7 @@ export function SonosVolumeMixerModal({
     return () => {
       cancelled = true;
     };
-  }, [open, onSpeakersRefreshed, onToast]);
+  }, [open, refreshOnOpen]);
 
   useEffect(() => {
     return () => {
@@ -143,6 +161,7 @@ export function SonosVolumeMixerModal({
   const commitVolume = useCallback(
     (speakerId: string, volume: number) => {
       onSpeakerVolumeChange(speakerId, volume);
+      if (!refreshOnOpen) return;
       const existing = pendingTimers.current.get(speakerId);
       if (existing) clearTimeout(existing);
       const timer = setTimeout(() => {
@@ -153,7 +172,7 @@ export function SonosVolumeMixerModal({
       }, 250);
       pendingTimers.current.set(speakerId, timer);
     },
-    [onSpeakerVolumeChange, onToast],
+    [onSpeakerVolumeChange, onToast, refreshOnOpen],
   );
 
   const handleVolumeChange = (speakerId: string, volume: number) => {
@@ -162,6 +181,7 @@ export function SonosVolumeMixerModal({
   };
 
   const refreshSpeakersQuietly = useCallback(async () => {
+    if (!refreshOnOpen) return;
     try {
       const rows = await api.speakers();
       onSpeakersRefreshed(rows);
@@ -173,16 +193,20 @@ export function SonosVolumeMixerModal({
     } catch {
       /* keep local list */
     }
-  }, [onSpeakersRefreshed]);
+  }, [onSpeakersRefreshed, refreshOnOpen]);
 
   const addSpeakerToGroup = useCallback(
     async (speaker: Speaker) => {
       setMembershipBusy(true);
       try {
-        const result = await api.sonosGroupAdd(selectedSpeakerIds, [speaker.id]);
-        onSelectedSpeakerIdsChange([...selectedSpeakerIds, speaker.id]);
-        onToast(result.details);
-        await refreshSpeakersQuietly();
+        if (refreshOnOpen) {
+          const result = await api.sonosGroupAdd(selectedSpeakerIds, [speaker.id]);
+          onSelectedSpeakerIdsChange([...selectedSpeakerIds, speaker.id]);
+          onToast(result.details);
+          await refreshSpeakersQuietly();
+        } else {
+          onSelectedSpeakerIdsChange([...selectedSpeakerIds, speaker.id]);
+        }
       } catch (error) {
         onToast(error instanceof Error ? error.message : String(error));
       } finally {
@@ -190,24 +214,28 @@ export function SonosVolumeMixerModal({
         setPendingAdd(null);
       }
     },
-    [selectedSpeakerIds, onSelectedSpeakerIdsChange, onToast, refreshSpeakersQuietly],
+    [selectedSpeakerIds, onSelectedSpeakerIdsChange, onToast, refreshSpeakersQuietly, refreshOnOpen],
   );
 
   const removeSpeakerFromGroup = useCallback(
     async (speaker: Speaker) => {
       setMembershipBusy(true);
       try {
-        const result = await api.sonosGroupRemove([speaker.id]);
-        onSelectedSpeakerIdsChange(selectedSpeakerIds.filter((id) => id !== speaker.id));
-        onToast(result.details);
-        await refreshSpeakersQuietly();
+        if (refreshOnOpen) {
+          const result = await api.sonosGroupRemove([speaker.id]);
+          onSelectedSpeakerIdsChange(selectedSpeakerIds.filter((id) => id !== speaker.id));
+          onToast(result.details);
+          await refreshSpeakersQuietly();
+        } else {
+          onSelectedSpeakerIdsChange(selectedSpeakerIds.filter((id) => id !== speaker.id));
+        }
       } catch (error) {
         onToast(error instanceof Error ? error.message : String(error));
       } finally {
         setMembershipBusy(false);
       }
     },
-    [selectedSpeakerIds, onSelectedSpeakerIdsChange, onToast, refreshSpeakersQuietly],
+    [selectedSpeakerIds, onSelectedSpeakerIdsChange, onToast, refreshSpeakersQuietly, refreshOnOpen],
   );
 
   const handleMembershipToggle = (speaker: Speaker, nextChecked: boolean) => {
