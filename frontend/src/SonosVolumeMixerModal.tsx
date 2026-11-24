@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, Speaker } from "./api";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { DEFAULT_INITIAL_VOLUME } from "./initialVolumes";
+import { VolumeStepperSlider } from "./VolumeStepperSlider";
 
 type SonosVolumeMixerModalProps = {
   open: boolean;
@@ -309,17 +310,12 @@ export function SonosVolumeMixerModal({
                   {speaker.source ? (
                     <span className="sonosVolumeMixerSource">{speaker.source}</span>
                   ) : null}
-                  <label className="sonosVolumeMixerSlider">
-                    <input
-                      type="range"
-                      min={0}
-                      max={100}
-                      value={volume}
-                      disabled={loading || !inGroup}
-                      onChange={(event) => handleVolumeChange(speaker.id, Number(event.target.value))}
-                    />
-                    <span className="sonosVolumeMixerValue">{volume}%</span>
-                  </label>
+                  <VolumeStepperSlider
+                    value={volume}
+                    disabled={loading || !inGroup}
+                    ariaLabel={`${speaker.name} volume`}
+                    onChange={(next) => handleVolumeChange(speaker.id, next)}
+                  />
                 </li>
               );
             })}

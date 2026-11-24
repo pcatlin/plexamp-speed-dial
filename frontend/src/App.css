@@ -1034,7 +1034,7 @@ button.pickGridBtn--pinned:active:not(:disabled) {
   left: 0;
   right: 0;
   min-width: 11rem;
-  padding: 0.65rem 0.75rem;
+  padding: 0.65rem 0.75rem 0.85rem;
   background: #fff;
   border: 1px solid #d1d5db;
   border-radius: 10px;
@@ -1046,7 +1046,7 @@ button.pickGridBtn--pinned:active:not(:disabled) {
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
-  margin-bottom: 0.45rem;
+  margin-bottom: 0.35rem;
 }
 
 .volumePopoverTitle {
@@ -1065,20 +1065,125 @@ button.pickGridBtn--pinned:active:not(:disabled) {
   padding: 0;
 }
 
-.volumePopoverSlider {
+/* Shared ±2 volume slider (Play To popover + Sonos mixer) */
+.volumeStepperSlider {
   display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
+  align-items: flex-end;
+  gap: 0.45rem;
 }
 
-.volumePopoverValue {
-  font-size: 0.82rem;
-  color: #4b5563;
+.volumeStepperBtn {
+  flex: 0 0 2.4rem;
+  width: 2.4rem;
+  height: 2.4rem;
+  padding: 0;
+  font-size: 1.2rem;
+  font-weight: 600;
+  line-height: 1;
 }
 
-.volumePopoverSlider input[type="range"] {
+.volumeStepperBtn:disabled {
+  opacity: 0.4;
+}
+
+.volumeStepperTrackWrap {
+  --vol-thumb: 2rem;
+  --vol-track: 0.85rem;
+  --vol-fill: #2d6cdf;
+  --vol-rest: #d1d5db;
+
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  padding-top: 1.15rem;
+}
+
+.volumeStepperBubble {
+  --vol-thumb-center: calc(
+    (var(--vol-thumb) / 2) + (100% - var(--vol-thumb)) * var(--vol-t, 0)
+  );
+
+  position: absolute;
+  top: 0;
+  left: var(--vol-thumb-center);
+  z-index: 1;
+  pointer-events: none;
+  padding: 0.1rem 0.3rem;
+  border-radius: 6px;
+  background: #fff;
+  color: #111827;
+  font-size: 0.7rem;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+  white-space: nowrap;
+  box-shadow: 0 1px 4px rgba(17, 24, 39, 0.12);
+  transform: translate(-50%, 0);
+}
+
+.volumeStepperRange {
+  --vol-thumb-center: calc(
+    (var(--vol-thumb) / 2) + (100% - var(--vol-thumb)) * var(--vol-t, 0)
+  );
+
+  display: block;
   width: 100%;
+  height: var(--vol-thumb);
   margin: 0;
+  padding: 0;
+  background: transparent;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.volumeStepperRange:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.volumeStepperRange::-webkit-slider-runnable-track {
+  height: var(--vol-track);
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    var(--vol-fill) 0%,
+    var(--vol-fill) var(--vol-thumb-center),
+    var(--vol-rest) var(--vol-thumb-center),
+    var(--vol-rest) 100%
+  );
+}
+
+.volumeStepperRange::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: var(--vol-thumb);
+  height: var(--vol-thumb);
+  margin-top: calc((var(--vol-track) - var(--vol-thumb)) / 2);
+  border-radius: 50%;
+  border: none;
+  background: #2d6cdf;
+  box-shadow: 0 2px 8px rgba(17, 24, 39, 0.25);
+}
+
+.volumeStepperRange::-moz-range-track {
+  height: var(--vol-track);
+  border-radius: 999px;
+  background: var(--vol-rest);
+}
+
+.volumeStepperRange::-moz-range-progress {
+  height: var(--vol-track);
+  border-radius: 999px;
+  background: var(--vol-fill);
+}
+
+.volumeStepperRange::-moz-range-thumb {
+  width: var(--vol-thumb);
+  height: var(--vol-thumb);
+  border: none;
+  border-radius: 50%;
+  background: #2d6cdf;
+  box-shadow: 0 2px 8px rgba(17, 24, 39, 0.25);
 }
 
 .sonosVolumeMixerModal {
@@ -1163,26 +1268,8 @@ button.pickGridBtn--pinned:active:not(:disabled) {
   line-height: 1.35;
 }
 
-.sonosVolumeMixerSlider {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.sonosVolumeMixerValue {
-  flex-shrink: 0;
-  min-width: 3rem;
-  font-size: 1.1rem;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  color: #111827;
-  text-align: right;
-}
-
-.sonosVolumeMixerSlider input[type="range"] {
-  flex: 1;
-  min-width: 0;
-  margin: 0;
+.sonosVolumeMixerRow .volumeStepperSlider {
+  margin-top: 0.25rem;
 }
 
 .playToVolumeToggle {
@@ -2278,6 +2365,30 @@ button.nowrap {
   .appToast {
     font-size: 1.05rem;
     padding: 0.9rem 1.15rem;
+  }
+
+  /* Play To volume popover: keep under the clicked control; width/left set in JS */
+  .pickGridCell,
+  .pickGrid {
+    overflow: visible;
+  }
+
+  .volumePopover {
+    position: absolute;
+    top: calc(100% + 0.25rem);
+    right: auto;
+    bottom: auto;
+    margin-left: 0;
+    max-width: none;
+    min-width: 0;
+    padding: 0.85rem 0.9rem 1rem;
+    z-index: 80;
+  }
+
+  .volumeStepperBtn {
+    flex-basis: 2.75rem;
+    width: 2.75rem;
+    height: 2.75rem;
   }
 }
 

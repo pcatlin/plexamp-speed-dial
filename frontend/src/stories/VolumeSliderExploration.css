@@ -1,0 +1,331 @@
+/* Storybook-only exploration styles — not used by the app. */
+
+.volExplore {
+  display: grid;
+  gap: 1.5rem;
+  max-width: 420px;
+}
+
+.volExploreCard {
+  padding: 0.85rem 1rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.volExploreCard h3 {
+  margin: 0 0 0.25rem;
+  font-size: 0.95rem;
+  color: #111827;
+}
+
+.volExploreCard p {
+  margin: 0 0 0.85rem;
+  font-size: 0.8rem;
+  color: #6b7280;
+  line-height: 1.35;
+}
+
+.volExploreRow {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.volExploreValue {
+  min-width: 3.25rem;
+  font-size: 1.15rem;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: #111827;
+}
+
+/* A — larger native range */
+.volExploreLargeRange {
+  flex: 1;
+  min-width: 0;
+  height: 2.75rem;
+  margin: 0;
+  accent-color: #2d6cdf;
+}
+
+.volExploreLargeRange::-webkit-slider-runnable-track {
+  height: 0.55rem;
+  border-radius: 999px;
+  background: #d1d5db;
+}
+
+.volExploreLargeRange::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 1.75rem;
+  height: 1.75rem;
+  margin-top: -0.6rem;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  background: #2d6cdf;
+  box-shadow: 0 2px 8px rgba(17, 24, 39, 0.25);
+}
+
+.volExploreLargeRange::-moz-range-track {
+  height: 0.55rem;
+  border-radius: 999px;
+  background: #d1d5db;
+}
+
+.volExploreLargeRange::-moz-range-thumb {
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  background: #2d6cdf;
+  box-shadow: 0 2px 8px rgba(17, 24, 39, 0.25);
+}
+
+/* B — stepper buttons */
+.volExploreStepBtn {
+  flex: 0 0 2.75rem;
+  width: 2.75rem;
+  height: 2.75rem;
+  padding: 0;
+  font-size: 1.35rem;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.volExploreStepBtn:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
+/* C — preset pills */
+.volExplorePresets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.volExplorePresets button {
+  min-width: 3.1rem;
+  min-height: 2.5rem;
+  padding: 0.4rem 0.55rem;
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* D — vertical sheet */
+.volExploreVertical {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0 0.25rem;
+}
+
+.volExploreVerticalValue {
+  font-size: 2rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #111827;
+}
+
+.volExploreVerticalRange {
+  writing-mode: vertical-lr;
+  direction: rtl;
+  width: 3rem;
+  height: 12rem;
+  margin: 0;
+  accent-color: #2d6cdf;
+}
+
+.volExploreVerticalRange::-webkit-slider-runnable-track {
+  width: 0.65rem;
+  border-radius: 999px;
+  background: #d1d5db;
+}
+
+.volExploreVerticalRange::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 2rem;
+  height: 2rem;
+  margin-left: -0.675rem;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  background: #2d6cdf;
+  box-shadow: 0 2px 8px rgba(17, 24, 39, 0.25);
+}
+
+.volExploreVerticalActions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.volExploreVerticalActions button {
+  min-width: 3.5rem;
+  min-height: 2.75rem;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+/* Current (baseline) */
+.volExploreCurrent input[type="range"] {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+}
+
+/* Preferred — current slider + compact ± steppers */
+.volExplorePreferred {
+  border-color: #93c5fd;
+  box-shadow: 0 0 0 1px #bfdbfe;
+}
+
+.volExplorePreferredBadge {
+  display: inline-block;
+  margin-bottom: 0.35rem;
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+  background: #dbeafe;
+  color: #1d4ed8;
+  font-size: 0.72rem;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.volExploreStepBtnCompact {
+  flex: 0 0 2.4rem;
+  width: 2.4rem;
+  height: 2.4rem;
+  padding: 0;
+  font-size: 1.2rem;
+  font-weight: 600;
+  line-height: 1;
+}
+
+/* Preferred range: ~2× default track + thumb
+   Keep input height === thumb size so WebKit centers the track in the control,
+   then offset the thumb by (track - thumb) / 2. */
+.volExploreRow:has(.volExplorePreferredWrap) {
+  align-items: flex-end;
+}
+
+.volExplorePreferredWrap {
+  --vol-thumb: 2rem;
+  --vol-track: 0.85rem;
+  --vol-fill: #2d6cdf;
+  --vol-rest: #d1d5db;
+
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  /* Room for the value label above the thumb */
+  padding-top: 1.15rem;
+}
+
+.volExplorePreferredBubble {
+  /* Thumb center travels inset by half the thumb width — match that path, not raw value%. */
+  --vol-thumb-center: calc(
+    (var(--vol-thumb) / 2) + (100% - var(--vol-thumb)) * var(--vol-t, 0)
+  );
+
+  position: absolute;
+  top: 0;
+  left: var(--vol-thumb-center);
+  z-index: 1;
+  pointer-events: none;
+  padding: 0.1rem 0.3rem;
+  border-radius: 6px;
+  background: #fff;
+  color: #111827;
+  font-size: 0.7rem;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+  white-space: nowrap;
+  box-shadow: 0 1px 4px rgba(17, 24, 39, 0.12);
+  /* Centered horizontally above the thumb */
+  transform: translate(-50%, 0);
+}
+
+.volExplorePreferredRange {
+  --vol-thumb-center: calc(
+    (var(--vol-thumb) / 2) + (100% - var(--vol-thumb)) * var(--vol-t, 0)
+  );
+
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  height: var(--vol-thumb);
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.volExplorePreferredRange::-webkit-slider-runnable-track {
+  height: var(--vol-track);
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    var(--vol-fill) 0%,
+    var(--vol-fill) var(--vol-thumb-center),
+    var(--vol-rest) var(--vol-thumb-center),
+    var(--vol-rest) 100%
+  );
+}
+
+.volExplorePreferredRange::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: var(--vol-thumb);
+  height: var(--vol-thumb);
+  margin-top: calc((var(--vol-track) - var(--vol-thumb)) / 2);
+  border-radius: 50%;
+  border: none;
+  background: #2d6cdf;
+  box-shadow: 0 2px 8px rgba(17, 24, 39, 0.25);
+}
+
+.volExplorePreferredRange::-moz-range-track {
+  height: var(--vol-track);
+  border-radius: 999px;
+  background: var(--vol-rest);
+}
+
+.volExplorePreferredRange::-moz-range-progress {
+  height: var(--vol-track);
+  border-radius: 999px;
+  background: var(--vol-fill);
+}
+
+.volExplorePreferredRange::-moz-range-thumb {
+  width: var(--vol-thumb);
+  height: var(--vol-thumb);
+  border: none;
+  border-radius: 50%;
+  background: #2d6cdf;
+  box-shadow: 0 2px 8px rgba(17, 24, 39, 0.25);
+}
+
+.volExploreStepBtnCompact:disabled {
+  opacity: 0.4;
+}
+
+.volExploreMixerList {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.volExploreMixerRow {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.volExploreMixerName {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #111827;
+}
