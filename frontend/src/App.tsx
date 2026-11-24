@@ -21,6 +21,7 @@ import { SonosVolumeMixerModal } from "./SonosVolumeMixerModal";
 import { SpeedDialFavoriteCard } from "./SpeedDialFavoriteCard";
 import { SpeedDialFilterPills } from "./SpeedDialFilterPills";
 import { VolumeEditorPopover } from "./VolumeEditorPopover";
+import { usePinchRotateVolume } from "./usePinchRotateVolume";
 import {
   loadSectionExpanded,
   saveSectionExpanded,
@@ -879,13 +880,13 @@ function App() {
     }
   };
 
-  const adjustReceiverVolume = async (delta: number) => {
+  const adjustReceiverVolume = async (delta: number, options?: { quiet?: boolean }) => {
     if (!selectedPlayer) {
-      showToast("Select a Plexamp player first.");
+      if (!options?.quiet) showToast("Select a Plexamp player first.");
       return;
     }
     const result = await api.audioOutputVolume(selectedPlayer, delta);
-    showToast(result.details);
+    if (!options?.quiet) showToast(result.details);
   };
 
   const toggleReceiverPower = async () => {
@@ -899,9 +900,9 @@ function App() {
     showToast(result.details);
   };
 
-  const adjustSonosVolume = async (delta: number) => {
+  const adjustSonosVolume = async (delta: number, options?: { quiet?: boolean }) => {
     if (selectedSpeakers.length === 0) {
-      showToast("Select at least one Sonos speaker to change volume.");
+      if (!options?.quiet) showToast("Select at least one Sonos speaker to change volume.");
       return;
     }
     const selected = new Set(selectedSpeakers);
@@ -913,8 +914,10 @@ function App() {
       }),
     );
     const result = await api.sonosVolumeAdjust(selectedSpeakers, delta);
-    showToast(result.details);
-    void reloadSpeakersOnly();
+    if (!options?.quiet) {
+      showToast(result.details);
+      void reloadSpeakersOnly();
+    }
   };
 
   const patchSpeedDialFavorite = async (
@@ -1020,19 +1023,55 @@ function App() {
     setSpeedDialSpeakerFilter((current) => (current === speakerId ? null : speakerId));
   };
 
-  if (route === "credits") {
-    return <CreditsPage />;
-  }
-
   const showPioneerControls = outputKind === "pioneer";
   const showSonosControls = !showPioneerControls && (outputKind === "sonos" || selectedSpeakers.length > 0);
   const showOutputControls = showPioneerControls || showSonosControls;
   const playbackActive = Boolean(plexampPlaying) || (showSonosControls && Boolean(sonosPlaying));
+  const pinchVolumeEnabled =
+    route === "app" &&
+    playbackActive &&
+    (showSonosControls || showPioneerControls) &&
+    !setupOpen &&
+    !sonosVolumeMixerOpen;
+
+  const appShellRef = useRef<HTMLDivElement>(null);
+  const { overlayVolume, gesturing } = usePinchRotateVolume(appShellRef, {
+    enabled: pinchVolumeEnabled,
+    getBaselineVolume: () => {
+      if (showSonosControls && selectedSonosVolumePercent != null) return selectedSonosVolumePercent;
+      return 50;
+    },
+    onVolumeDelta: (delta) => {
+      if (showPioneerControls) {
+        void adjustReceiverVolume(delta, { quiet: true }).catch(() => undefined);
+        return;
+      }
+      if (showSonosControls) {
+        void adjustSonosVolume(delta, { quiet: true }).catch(() => undefined);
+      }
+    },
+    onGestureEnd: () => {
+      if (showSonosControls) void reloadSpeakersOnly();
+    },
+  });
+
+  if (route === "credits") {
+    return <CreditsPage />;
+  }
 
   return (
     <>
       <Toast toast={toast} />
-      <div className="appShell">
+      {gesturing && overlayVolume != null ? (
+        <div className="pinchVolumeOverlay" aria-live="polite">
+          <div className="pinchVolumeOverlayValue">{overlayVolume}%</div>
+          <div className="pinchVolumeOverlayHint">Twist to adjust volume</div>
+        </div>
+      ) : null}
+      <div
+        ref={appShellRef}
+        className={`appShell${gesturing ? " appShell--pinchVolume" : ""}`}
+      >
         <div className="appMain">
         <header className="headerRow">
           <h1>Plexamp Speed Dial</h1>

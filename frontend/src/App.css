@@ -5,6 +5,44 @@
   padding: 1rem 1rem 5.5rem;
 }
 
+.appShell--pinchVolume {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.pinchVolumeOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 150;
+  display: grid;
+  place-content: center;
+  gap: 0.35rem;
+  pointer-events: none;
+  background: rgba(17, 24, 39, 0.28);
+}
+
+.pinchVolumeOverlayValue {
+  justify-self: center;
+  min-width: 5.5rem;
+  padding: 0.55rem 0.9rem;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.95);
+  color: #111827;
+  font-size: 2rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  box-shadow: 0 8px 28px rgba(15, 23, 42, 0.22);
+}
+
+.pinchVolumeOverlayHint {
+  justify-self: center;
+  color: #f9fafb;
+  font-size: 0.85rem;
+  font-weight: 500;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+}
+
 .appMain {
   min-width: 0;
 }
