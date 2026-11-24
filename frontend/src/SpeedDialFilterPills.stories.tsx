@@ -16,7 +16,7 @@ const speakerOptions: SpeedDialFilterOption<string>[] = mockSpeakers.map((speake
 
 function FilterPillsDemo() {
   const [playerId, setPlayerId] = useState<number | null>(1);
-  const [speakerId, setSpeakerId] = useState<string | null>(null);
+  const [speakerId, setSpeakerId] = useState<string | null>("s-kitchen");
 
   return (
     <div className="speedDialFiltersBody" style={{ maxWidth: 420 }}>
@@ -39,29 +39,53 @@ function FilterPillsDemo() {
   );
 }
 
-function PillStates() {
+function ClickedState() {
   return (
-    <div className="speedDialFilters">
-      <button type="button" className="speedDialFilterPill">
-        Unselected
-      </button>
-      <button type="button" className="speedDialFilterPill speedDialFilterPill--selected" aria-pressed>
-        Selected
-      </button>
+    <div style={{ display: "grid", gap: "1rem" }}>
+      <div>
+        <div style={{ marginBottom: "0.5rem", fontSize: "0.8rem", color: "#6b7280" }}>Unselected</div>
+        <div className="speedDialFilters">
+          <button type="button" className="speedDialFilterPill">
+            Kitchen Plexamp
+          </button>
+          <button type="button" className="speedDialFilterPill">
+            Bathroom
+          </button>
+        </div>
+      </div>
+      <div>
+        <div style={{ marginBottom: "0.5rem", fontSize: "0.8rem", color: "#6b7280" }}>Clicked</div>
+        <div className="speedDialFilters">
+          <button
+            type="button"
+            className="speedDialFilterPill speedDialFilterPill--selected"
+            aria-pressed
+          >
+            Kitchen Plexamp
+          </button>
+          <button
+            type="button"
+            className="speedDialFilterPill speedDialFilterPill--selected"
+            aria-pressed
+          >
+            Bathroom
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
 
 const meta = {
-  title: "SpeedDial/FilterPills",
+  title: "Primitives/Buttons/FilterPills",
   component: FilterPillsDemo,
 } satisfies Meta<typeof FilterPillsDemo>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const PlayersAndSpeakers: Story = {};
-
-export const PillStatesOnly: Story = {
-  render: () => <PillStates />,
+export const Clicked: Story = {
+  render: () => <ClickedState />,
 };
+
+export const PlayersAndSpeakers: Story = {};

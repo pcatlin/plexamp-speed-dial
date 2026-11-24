@@ -276,21 +276,22 @@ button.speedDialFilterPill {
 }
 
 button.speedDialFilterPill--selected {
-  border-color: #2563eb;
-  background: #2563eb;
+  border-color: #2558b8;
+  background: #2d6cdf;
   color: #fff;
 }
 
 button.speedDialFilterPill:hover:not(:disabled) {
   border-color: #9ca3af;
-  box-shadow: 0 2px 8px rgba(17, 24, 39, 0.1);
+  background: #ebebeb;
+  box-shadow: 0 3px 10px rgba(17, 24, 39, 0.12);
 }
 
-button.speedDialFilterPill--selected:hover {
+button.speedDialFilterPill--selected:hover:not(:disabled) {
   border-color: #1d4ed8;
-  background: #1d4ed8;
+  background: #2558b8;
   color: #fff;
-  box-shadow: 0 3px 10px rgba(37, 99, 235, 0.32);
+  box-shadow: 0 4px 12px rgba(45, 108, 223, 0.35);
 }
 
 .speedDialList {
@@ -1567,6 +1568,19 @@ button.smallBtn:hover:not(:disabled) {
   background: #f9fafb;
   border-color: #9ca3af;
   box-shadow: 0 2px 8px rgba(17, 24, 39, 0.08);
+}
+
+button.ghost.active {
+  background: #e5e7eb;
+  color: #111827;
+  border-color: #111827;
+}
+
+button.ghost.active:hover:not(:disabled) {
+  background: #d1d5db;
+  color: #111827;
+  border-color: #111827;
+  box-shadow: 0 4px 12px rgba(17, 24, 39, 0.18);
 }
 
 button.smallBtn {

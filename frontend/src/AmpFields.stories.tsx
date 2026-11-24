@@ -38,18 +38,3 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {};
-
-export const WithoutName: Story = {
-  args: { showName: false },
-};
-
-export const CustomInput: Story = {
-  args: {
-    initial: {
-      name: "Workshop",
-      host: "avr.local:60129",
-      port: 60129,
-      input_code: "55",
-    },
-  },
-};

@@ -31,7 +31,3 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {};
-
-export const HighVolume: Story = {
-  args: { title: "Den", initial: 72 },
-};
