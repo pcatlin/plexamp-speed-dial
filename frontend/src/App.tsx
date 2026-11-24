@@ -19,6 +19,7 @@ import { SetupModal } from "./SetupModal";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { SonosVolumeMixerModal } from "./SonosVolumeMixerModal";
 import { SpeedDialFavoriteCard } from "./SpeedDialFavoriteCard";
+import { SpeedDialFilterPills } from "./SpeedDialFilterPills";
 import { VolumeEditorPopover } from "./VolumeEditorPopover";
 import {
   loadSectionExpanded,
@@ -1299,46 +1300,23 @@ function App() {
               </summary>
               <div className="playToBody speedDialFiltersBody">
                 {players.length > 0 ? (
-                  <div className="speedDialFilterGroup">
-                    <div className="speedDialFilterLabel">Players</div>
-                    <div className="speedDialFilters" role="group" aria-label="Filter favorites by Plexamp player">
-                      {players.map((player) => {
-                        const selected = speedDialPlayerFilter === player.id;
-                        return (
-                          <button
-                            key={player.id}
-                            type="button"
-                            className={`speedDialFilterPill${selected ? " speedDialFilterPill--selected" : ""}`}
-                            aria-pressed={selected}
-                            onClick={() => toggleSpeedDialPlayerFilter(player.id)}
-                          >
-                            {player.name}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
+                  <SpeedDialFilterPills
+                    groupLabel="Players"
+                    options={players.map((player) => ({ id: player.id, label: player.name }))}
+                    selectedId={speedDialPlayerFilter}
+                    ariaLabel="Filter favorites by Plexamp player"
+                    onToggle={toggleSpeedDialPlayerFilter}
+                  />
                 ) : null}
                 {speakers.length > 0 ? (
-                  <div className="speedDialFilterGroup speedDialFilterGroupSpeakers">
-                    <div className="speedDialFilterLabel">Speakers</div>
-                    <div className="speedDialFilters" role="group" aria-label="Filter favorites by Sonos speaker">
-                      {speakers.map((speaker) => {
-                        const selected = speedDialSpeakerFilter === speaker.id;
-                        return (
-                          <button
-                            key={speaker.id}
-                            type="button"
-                            className={`speedDialFilterPill${selected ? " speedDialFilterPill--selected" : ""}`}
-                            aria-pressed={selected}
-                            onClick={() => toggleSpeedDialSpeakerFilter(speaker.id)}
-                          >
-                            {speaker.name}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
+                  <SpeedDialFilterPills
+                    groupLabel="Speakers"
+                    options={speakers.map((speaker) => ({ id: speaker.id, label: speaker.name }))}
+                    selectedId={speedDialSpeakerFilter}
+                    ariaLabel="Filter favorites by Sonos speaker"
+                    groupClassName="speedDialFilterGroupSpeakers"
+                    onToggle={toggleSpeedDialSpeakerFilter}
+                  />
                 ) : null}
               </div>
             </details>

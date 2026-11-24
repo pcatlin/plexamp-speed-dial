@@ -10,11 +10,12 @@ export function inlineWebManifest(): Plugin {
   return {
     name: "inline-web-manifest",
     transformIndexHtml(html) {
+      // Storybook (and other non-app HTML) has no app manifest link — leave it alone.
+      if (!MANIFEST_LINK_RE.test(html)) {
+        return html;
+      }
       const json = readFileSync(MANIFEST_PATH, "utf-8").trim();
       const dataUrl = `data:application/manifest+json;base64,${Buffer.from(json, "utf-8").toString("base64")}`;
-      if (!MANIFEST_LINK_RE.test(html)) {
-        throw new Error("index.html: expected <link rel=\"manifest\" …> to replace");
-      }
       return html.replace(MANIFEST_LINK_RE, `<link rel="manifest" href="${dataUrl}" />`);
     },
   };
