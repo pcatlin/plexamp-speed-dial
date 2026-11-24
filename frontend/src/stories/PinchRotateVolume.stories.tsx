@@ -7,7 +7,7 @@ function clampVolume(value: number) {
   return Math.max(0, Math.min(100, Math.round(value)));
 }
 
-function angleBetween(a: Touch, b: Touch) {
+function angleBetween(a: { clientX: number; clientY: number }, b: { clientX: number; clientY: number }) {
   return Math.atan2(b.clientY - a.clientY, b.clientX - a.clientX);
 }
 

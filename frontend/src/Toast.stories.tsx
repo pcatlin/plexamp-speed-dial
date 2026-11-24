@@ -72,5 +72,6 @@ export const Visible: Story = {
 
 /** Common success, progress, and validation toasts from the app. */
 export const Examples: Story = {
+  args: { toast: null },
   render: () => <ToastGallery />,
 };
