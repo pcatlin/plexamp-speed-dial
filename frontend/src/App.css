@@ -1103,11 +1103,15 @@ button.pickGridBtn--pinned:active:not(:disabled) {
   padding: 0;
 }
 
-/* Shared ±2 volume slider (Play To popover + Sonos mixer) */
+/* Shared ±1 volume slider (Play To popover + Sonos mixer) */
 .volumeStepperSlider {
   display: flex;
   align-items: flex-end;
   gap: 0.45rem;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-user-drag: none;
 }
 
 .volumeStepperBtn {
@@ -1172,6 +1176,9 @@ button.pickGridBtn--pinned:active:not(:disabled) {
   background: transparent;
   -webkit-appearance: none;
   appearance: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .volumeStepperRange:disabled {

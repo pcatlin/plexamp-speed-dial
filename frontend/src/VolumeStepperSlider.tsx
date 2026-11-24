@@ -1,5 +1,7 @@
 import type { CSSProperties } from "react";
 
+import { hapticForVolumeChange } from "./volumeHaptics";
+
 type Props = {
   value: number;
   onChange: (value: number) => void;
@@ -16,19 +18,24 @@ export function VolumeStepperSlider({
   value,
   onChange,
   ariaLabel = "Volume",
-  step = 2,
+  step = 1,
   disabled = false,
 }: Props) {
-  const nudge = (delta: number) => onChange(clampVolume(value + delta));
+  const setVolume = (next: number) => {
+    const clamped = clampVolume(next);
+    if (clamped === value) return;
+    hapticForVolumeChange(value, clamped);
+    onChange(clamped);
+  };
 
   return (
-    <div className="volumeStepperSlider">
+    <div className="volumeStepperSlider" onContextMenu={(event) => event.preventDefault()}>
       <button
         type="button"
         className="volumeStepperBtn"
         aria-label="Volume down"
         disabled={disabled || value <= 0}
-        onClick={() => nudge(-step)}
+        onClick={() => setVolume(value - step)}
       >
         −
       </button>
@@ -45,7 +52,8 @@ export function VolumeStepperSlider({
           disabled={disabled}
           aria-label={ariaLabel}
           aria-valuetext={`${value}%`}
-          onChange={(event) => onChange(Number(event.target.value))}
+          onChange={(event) => setVolume(Number(event.target.value))}
+          onContextMenu={(event) => event.preventDefault()}
         />
       </div>
       <button
@@ -53,7 +61,7 @@ export function VolumeStepperSlider({
         className="volumeStepperBtn"
         aria-label="Volume up"
         disabled={disabled || value >= 100}
-        onClick={() => nudge(step)}
+        onClick={() => setVolume(value + step)}
       >
         +
       </button>

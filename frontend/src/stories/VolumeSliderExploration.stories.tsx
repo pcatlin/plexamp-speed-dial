@@ -60,7 +60,7 @@ function PreferredSlider() {
       <span className="volExplorePreferredBadge">Preferred</span>
       <h3>Current slider + ± steppers</h3>
       <p>
-        Keep today’s native range for drag; add ±2 buttons for precise taps. Same layout as the mixer
+        Keep today’s native range for drag; add ±1 buttons for precise taps. Same layout as the mixer
         row, with compact step buttons.
       </p>
       <VolumeControl value={value} onChange={setValue} withSteppers />

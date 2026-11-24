@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
 
+import { hapticForVolumeChange } from "./volumeHaptics";
+
 function angleBetween(a: Touch, b: Touch) {
   return Math.atan2(b.clientY - a.clientY, b.clientX - a.clientX);
 }
@@ -112,6 +114,7 @@ export function usePinchRotateVolume(targetRef: RefObject<HTMLElement | null>, o
 
       const step = next - lastSentRef.current;
       if (step !== 0) {
+        hapticForVolumeChange(lastSentRef.current, next);
         lastSentRef.current = next;
         queueDelta(step);
       }
