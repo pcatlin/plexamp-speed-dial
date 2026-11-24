@@ -1,6 +1,11 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { useState } from "react";
+
+import { SpeedDialFilterPills } from "../SpeedDialFilterPills";
 
 function ButtonGallery() {
+  const [pillId, setPillId] = useState<string | null>("kitchen");
+
   return (
     <div style={{ display: "grid", gap: "1.25rem" }}>
       <div>
@@ -43,6 +48,30 @@ function ButtonGallery() {
           </button>
         </div>
       </div>
+      <div>
+        <div style={{ marginBottom: "0.5rem", fontSize: "0.8rem", color: "#6b7280" }}>Pills</div>
+        <SpeedDialFilterPills
+          options={[
+            { id: "kitchen", label: "Kitchen" },
+            { id: "bath", label: "Bathroom" },
+            { id: "den", label: "Den" },
+          ]}
+          selectedId={pillId}
+          ariaLabel="Example filter pills"
+          onToggle={(id) => setPillId((current) => (current === id ? null : id))}
+        />
+      </div>
+      <div>
+        <div style={{ marginBottom: "0.5rem", fontSize: "0.8rem", color: "#6b7280" }}>
+          Start / Add to speed dial
+        </div>
+        <div className="stickyActions">
+          <button type="button" className="primary">
+            Start
+          </button>
+          <button type="button">Add to speed dial</button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -56,4 +85,4 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const AllVariants: Story = {};
+export const All: Story = {};

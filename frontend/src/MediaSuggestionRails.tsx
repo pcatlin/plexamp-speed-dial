@@ -43,9 +43,10 @@ type RailProps = {
   items: MediaItem[];
   selectedId: string | null;
   onSelect: (item: MediaItem) => void;
+  artSrc: (item: MediaItem) => string;
 };
 
-function MediaSuggestionRail({ label, items, selectedId, onSelect }: RailProps) {
+function MediaSuggestionRail({ label, items, selectedId, onSelect, artSrc }: RailProps) {
   if (items.length === 0) return null;
 
   return (
@@ -66,7 +67,7 @@ function MediaSuggestionRail({ label, items, selectedId, onSelect }: RailProps) 
             >
               <img
                 className="albumSuggestionCover"
-                src={`${API_BASE}/media/art/${item.id}`}
+                src={artSrc(item)}
                 alt=""
                 loading="lazy"
                 decoding="async"
@@ -87,7 +88,11 @@ type Props = {
   loading?: boolean;
   loadingMessage?: string;
   emptyMessage?: string;
+  /** Override cover art URL (defaults to Plex media art endpoint). */
+  artSrc?: (item: MediaItem) => string;
 };
+
+const defaultArtSrc = (item: MediaItem) => `${API_BASE}/media/art/${item.id}`;
 
 export function MediaSuggestionRails({
   rails,
@@ -96,6 +101,7 @@ export function MediaSuggestionRails({
   loading,
   loadingMessage = "Loading suggestions…",
   emptyMessage = "No suggestions from Plex yet.",
+  artSrc = defaultArtSrc,
 }: Props) {
   if (loading) {
     return <p className="hint subtle">{loadingMessage}</p>;
@@ -115,6 +121,7 @@ export function MediaSuggestionRails({
           items={rail.items}
           selectedId={selectedId}
           onSelect={onSelect}
+          artSrc={artSrc}
         />
       ))}
     </div>

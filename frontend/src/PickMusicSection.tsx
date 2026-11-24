@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, API_BASE, MediaItem, type MediaSuggestions } from "./api";
+import { PickedMediaPreview } from "./PickedMediaPreview";
+import { TrackPreviewList } from "./TrackPreviewList";
 import { MediaSuggestionRails, mediaSuggestionRailsForFamily } from "./MediaSuggestionRails";
 import { IconChevronDown, IconShuffle } from "./icons";
 import { ARTIST_ORDER_OPTIONS, artistOrderModeDisabledWithRadio, type ArtistOrderMode } from "./artistOrder";
@@ -472,43 +474,15 @@ export function PickMusicSection({
       ) : null}
 
       {showArt && selectedMedia ? (
-        <div className="pickedArtWrap">
-          <img className="pickedArt" src={`${API_BASE}/media/art/${selectedMedia.id}`} alt="" loading="lazy" decoding="async" />
-          <div className="pickedArtMeta">
-            <div className="pickedArtTitle">{selectedMedia.title}</div>
-            {selectedMedia.subtitle ? <div className="pickedArtSub">{selectedMedia.subtitle}</div> : null}
-          </div>
-        </div>
+        <PickedMediaPreview
+          title={selectedMedia.title}
+          subtitle={selectedMedia.subtitle}
+          artUrl={`${API_BASE}/media/art/${selectedMedia.id}`}
+        />
       ) : null}
 
       {showArt && selectedMedia && (pickTab === "playlist" || pickTab === "album" || pickTab === "artist") ? (
-        <div className="trackPreviewShell">
-          <div className="fieldLabel">
-            Tracks
-            {!previewTracksLoading && previewTracks.length > 0 ? (
-              <span className="trackPreviewCount"> (showing {previewTracks.length})</span>
-            ) : null}
-          </div>
-          <div className="trackPreviewBody">
-            {previewTracksLoading ? (
-              <p className="hint subtle trackPreviewPlaceholder">Loading tracks…</p>
-            ) : previewTracks.length > 0 ? (
-              <ol className="trackPreviewList" aria-label="Tracks in this selection">
-                {previewTracks.map((track, index) => (
-                  <li key={track.id} className="trackPreviewRow">
-                    <span className="trackPreviewIdx">{index + 1}</span>
-                    <span className="trackPreviewCell">
-                      <span className="trackPreviewTitle">{track.title}</span>
-                      {track.subtitle ? <span className="trackPreviewSub">{track.subtitle}</span> : null}
-                    </span>
-                  </li>
-                ))}
-              </ol>
-            ) : (
-              <p className="hint subtle trackPreviewPlaceholder">No tracks returned for this item.</p>
-            )}
-          </div>
-        </div>
+        <TrackPreviewList tracks={previewTracks} loading={previewTracksLoading} />
       ) : null}
         </div>
       </details>

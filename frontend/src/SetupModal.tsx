@@ -5,14 +5,7 @@ import { AmpFields, ampDraftFromAmp, type AmpDraft } from "./AmpFields";
 import { audioOutputsEqual, defaultAudioOutput, normalizePioneerInputCode } from "./audioOutput";
 import { PlayerAudioRouteFields, audioOutputFromPlayer } from "./PlayerAudioRouteFields";
 import { ConfirmDialog } from "./ConfirmDialog";
-
-const SETUP_SECTIONS = [
-  { id: "plex", label: "Plex" },
-  { id: "sonos", label: "Sonos" },
-  { id: "amps", label: "Amps" },
-  { id: "plexamp", label: "Players" },
-  { id: "webhooks", label: "Webhooks" },
-] as const;
+import { SetupModalNav, type SetupSectionId } from "./SetupModalNav";
 
 const DEFAULT_AMP_DRAFT: AmpDraft = {
   name: "",
@@ -20,8 +13,6 @@ const DEFAULT_AMP_DRAFT: AmpDraft = {
   port: 60128,
   input_code: "02",
 };
-
-type SetupSection = (typeof SETUP_SECTIONS)[number]["id"];
 
 const PLEXAMP_DEFAULT_PORT = 32500;
 
@@ -83,7 +74,7 @@ export function SetupModal({
 }: Props) {
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [activeSection, setActiveSection] = useState<SetupSection>("plex");
+  const [activeSection, setActiveSection] = useState<SetupSectionId>("plex");
   const [authConnected, setAuthConnected] = useState(false);
   const [authUsername, setAuthUsername] = useState("");
   const [plexUrl, setPlexUrl] = useState("");
@@ -587,20 +578,11 @@ export function SetupModal({
         {loading ? <p className="hint">Loading…</p> : null}
 
         <div className="setupModalBody">
-          <nav className="setupModalNav" aria-label="Setup sections">
-            {SETUP_SECTIONS.map((section) => (
-              <button
-                key={section.id}
-                type="button"
-                className={`setupModalNavItem${activeSection === section.id ? " isActive" : ""}`}
-                aria-current={activeSection === section.id ? "page" : undefined}
-                disabled={busy || loading}
-                onClick={() => setActiveSection(section.id)}
-              >
-                {section.label}
-              </button>
-            ))}
-          </nav>
+          <SetupModalNav
+            activeSection={activeSection}
+            onSectionChange={setActiveSection}
+            disabled={busy || loading}
+          />
 
           <div className="setupModalContent">
             {activeSection === "plex" ? (

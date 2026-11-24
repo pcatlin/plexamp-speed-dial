@@ -4,7 +4,7 @@ export type SpeedDialFilterOption<T extends string | number = string | number> =
 };
 
 type Props<T extends string | number> = {
-  groupLabel: string;
+  groupLabel?: string;
   options: SpeedDialFilterOption<T>[];
   selectedId: T | null;
   onToggle: (id: T) => void;
@@ -22,7 +22,7 @@ export function SpeedDialFilterPills<T extends string | number>({
 }: Props<T>) {
   return (
     <div className={`speedDialFilterGroup${groupClassName ? ` ${groupClassName}` : ""}`}>
-      <div className="speedDialFilterLabel">{groupLabel}</div>
+      {groupLabel ? <div className="speedDialFilterLabel">{groupLabel}</div> : null}
       <div className="speedDialFilters" role="group" aria-label={ariaLabel}>
         {options.map((option) => {
           const selected = selectedId === option.id;
